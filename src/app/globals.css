@@ -1,26 +1,262 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
+
+@plugin "@tailwindcss/typography";
+
+@variant dark (&:is(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core */
+  --background: 30 20% 99%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  
+  /* Brand — Claude's warm orange */
+  --primary: 18 60% 55%;
+  --primary-foreground: 0 0% 100%;
+  --accent-claude: 18 65% 59%;
+  
+  /* Neutral */
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 18 60% 55%;
+  
+  /* Sidebar */
+  --sidebar: 30 15% 97%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-accent: 30 10% 93%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 18 60% 55%;
+  
+  /* Radius */
+  --radius: 0.625rem;
+  
+  /* Message bubbles */
+  --user-bubble: 30 20% 95%;
+  --assistant-bubble: 0 0% 100%;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --background: 240 10% 5%;
+  --foreground: 0 0% 96%;
+  --card: 240 10% 7%;
+  --card-foreground: 0 0% 96%;
+  --popover: 240 10% 7%;
+  --popover-foreground: 0 0% 96%;
+  
+  --primary: 18 65% 59%;
+  --primary-foreground: 240 10% 5%;
+  --accent-claude: 18 65% 59%;
+  
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 96%;
+  --destructive: 0 62.8% 50.6%;
+  --destructive-foreground: 0 0% 96%;
+  --border: 240 3.7% 18%;
+  --input: 240 3.7% 18%;
+  --ring: 18 65% 59%;
+  
+  --sidebar: 240 10% 6.5%;
+  --sidebar-foreground: 240 4.8% 75%;
+  --sidebar-accent: 240 3.7% 12%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-border: 240 3.7% 14%;
+  --sidebar-ring: 18 65% 59%;
+  
+  --user-bubble: 240 5% 12%;
+  --assistant-bubble: 240 10% 7%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── BASE ── */
+html {
+  height: 100%;
+  scrollbar-gutter: stable;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  overflow: hidden;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.25s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out;
+}
+
+/* ── TYPING DOTS ── */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── THINKING INDICATOR ── */
+.thinking-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ── CLAUDE BRANDING ── */
+.claude-gradient {
+  background: linear-gradient(135deg, hsl(18 65% 59%), hsl(28 80% 65%));
+  background-size: 200% 200%;
+  animation: gradient-shift 4s ease infinite;
+}
+
+.claude-glow {
+  box-shadow: 0 0 20px hsl(18 65% 59% / 0.15),
+              0 0 40px hsl(18 65% 59% / 0.05);
+}
+
+/* ── PROSE OVERRIDES (markdown) ── */
+.prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-code: hsl(var(--foreground));
+  --tw-prose-pre-bg: hsl(220 20% 10%);
+  --tw-prose-pre-code: hsl(0 0% 90%);
+  --tw-prose-quotes: hsl(var(--muted-foreground));
+  --tw-prose-quote-borders: hsl(var(--primary) / 0.4);
+  max-width: none !important;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.prose pre {
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+}
+
+.prose code::before, .prose code::after {
+  display: none;
+}
+
+.prose :where(code):not(:where(pre *)) {
+  background: hsl(var(--muted));
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+/* ── GLASS EFFECT ── */
+.glass {
+  background: hsl(var(--background) / 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── INPUT FOCUS ── */
+.input-glow:focus-within {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2),
+              0 0 20px hsl(var(--primary) / 0.05);
+}
+
+/* ── TOOL RESULT CARDS ── */
+.tool-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  transition: all 0.2s ease;
+}
+.tool-card:hover {
+  border-color: hsl(var(--primary) / 0.3);
+  box-shadow: 0 2px 12px hsl(var(--primary) / 0.08);
+}
+
+/* ── SELECTION ── */
+::selection {
+  background: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
 }
