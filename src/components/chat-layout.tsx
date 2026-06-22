@@ -7,10 +7,11 @@ import MessageArea from "./message-area";
 import ChatInput from "./chat-input";
 import AnimatedAvatar from "./animated-avatar";
 import SettingsModal from "./settings-modal";
+import { PomodoroProvider, usePomodoro } from "./pomodoro-context";
 import { ChatMessage, DEFAULT_MODEL } from "./types";
 import { ChatThread } from "./chat-types";
 import { me, logout as apiLogout, AuthUser } from "./auth";
-import { BookOpen, Code2, ListChecks, PenLine, Sparkles } from "lucide-react";
+import { BookOpen, Code2, ListChecks, PenLine, Sparkles, Play, Pause, RotateCcw } from "lucide-react";
 import {
   listChats,
   createChat,
@@ -60,7 +61,36 @@ async function fileToDataUrl(
   });
 }
 
-export default function ChatLayout() {
+function MiniPomodoroTimer() {
+  const { running, secondsLeft, mode, toggleRunning, switchMode } = usePomodoro();
+  if (!running && secondsLeft === (mode === "focus" ? 25 * 60 : 5 * 60)) return null;
+
+  const mins = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
+  const timeStr = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+  return (
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-[#222] shadow-lg border border-neutral-200 dark:border-neutral-800 rounded-full px-4 py-2 flex items-center gap-3 animate-fade-in transition-all">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{mode === "focus" ? "🧠" : "☕"}</span>
+        <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{timeStr}</span>
+      </div>
+      <div className="w-px h-4 bg-neutral-200 dark:bg-neutral-700" />
+      <button onClick={toggleRunning} className="text-neutral-500 hover:text-primary transition-colors">
+        {running ? <Pause size={16} /> : <Play size={16} />}
+      </button>
+      <button 
+        onClick={() => switchMode(mode === "focus" ? "break" : "focus")} 
+        className="text-neutral-500 hover:text-primary transition-colors"
+        title="Skip"
+      >
+        <RotateCcw size={14} />
+      </button>
+    </div>
+  );
+}
+
+function ChatLayoutInner() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [model, setModel] = useState(getInitialModel);
@@ -252,11 +282,14 @@ export default function ChatLayout() {
 
     let fullText = "";
 
+    const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
+
     await sendMessage({
       chatId: activeChatId,
       message: text,
       model,
       files: fileData,
+      studyMode,
       signal: controller.signal,
       onText: (chunk) => {
         fullText += chunk;
@@ -372,11 +405,14 @@ export default function ChatLayout() {
 
     let fullText = "";
 
+    const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
+
     await sendMessage({
       chatId: activeChatId,
       message: text,
       model,
       editMessageId: messageId,
+      studyMode,
       signal: controller.signal,
       onText: (chunk) => {
         fullText += chunk;
@@ -478,7 +514,8 @@ export default function ChatLayout() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[hsl(var(--background))]">
+    <div className="h-screen flex overflow-hidden bg-[hsl(var(--background))] relative">
+      <MiniPomodoroTimer />
       {/* Floating Avatar */}
       {showAvatar && (
         <div className="hidden lg:block fixed bottom-0 right-[-30px] xl:right-[-54px] w-[260px] xl:w-[330px] h-[400px] xl:h-[520px] z-10 pointer-events-none drop-shadow-2xl opacity-95 transition-all duration-500">
@@ -609,5 +646,13 @@ export default function ChatLayout() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function ChatLayout() {
+  return (
+    <PomodoroProvider>
+      <ChatLayoutInner />
+    </PomodoroProvider>
   );
 }

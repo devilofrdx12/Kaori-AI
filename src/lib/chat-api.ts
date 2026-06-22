@@ -103,6 +103,7 @@ export async function sendMessage({
   model,
   files,
   editMessageId,
+  studyMode,
   onText,
   onToolStart,
   onToolExecuting,
@@ -116,6 +117,7 @@ export async function sendMessage({
   model: string;
   files?: UploadFile[];
   editMessageId?: string;
+  studyMode?: boolean;
   onText: (text: string) => void;
   onToolStart?: (tool: string) => void;
   onToolExecuting?: (tool: string, input: unknown) => void;
@@ -132,7 +134,7 @@ export async function sendMessage({
         ...AJAX_HEADERS,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ chatId, message, model, files, editMessageId }),
+      body: JSON.stringify({ chatId, message, model, files, editMessageId, studyMode }),
       signal,
     });
 
@@ -146,7 +148,7 @@ export async function sendMessage({
             ...AJAX_HEADERS,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ chatId, message, model, files, editMessageId }),
+          body: JSON.stringify({ chatId, message, model, files, editMessageId, studyMode }),
           signal,
         });
       } else {

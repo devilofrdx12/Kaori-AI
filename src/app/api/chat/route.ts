@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { chatId, message, model, files, editMessageId } = await req.json();
+    const { chatId, message, model, files, editMessageId, studyMode } = await req.json();
 
     if (!chatId || !message) {
       return new Response(
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Dynamic system prompt ──
-    const systemPrompt = buildSystemPrompt();
+    const systemPrompt = buildSystemPrompt(studyMode === true);
 
     // ── Create streaming response ──
     const encoder = new TextEncoder();

@@ -214,7 +214,28 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     const urlParams = new URLSearchParams(window.location.search);
     const success = urlParams.get("success");
     const error = urlParams.get("error");
-    const message = success ? `Success: ${success}` : error ? `Error: ${error}` : "";
+
+    // Sanitise: only allow known safe messages from OAuth callbacks
+    const SAFE_SUCCESS: Record<string, string> = {
+      google_connected: "Google account connected successfully.",
+      spotify_connected: "Spotify account connected successfully.",
+    };
+    const SAFE_ERROR: Record<string, string> = {
+      google_failed: "Failed to connect Google account.",
+      spotify_failed: "Failed to connect Spotify account.",
+      oauth_cancelled: "OAuth flow was cancelled.",
+    };
+
+    let message = "";
+    if (success && SAFE_SUCCESS[success]) {
+      message = `Success: ${SAFE_SUCCESS[success]}`;
+    } else if (error && SAFE_ERROR[error]) {
+      message = `Error: ${SAFE_ERROR[error]}`;
+    } else if (success) {
+      message = "Success: Operation completed.";
+    } else if (error) {
+      message = "Error: Something went wrong.";
+    }
     if (!message) return;
 
     const timeoutId = window.setTimeout(() => {
@@ -520,17 +541,20 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         <div className="font-medium text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
                           Kaori Pro 
                           <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                            BETA
+                            {isPro ? "ACTIVE" : "FREE TIER"}
                           </span>
                         </div>
-                        <div className="text-sm text-neutral-500">Bypass chat rate limits (Test Mode).</div>
+                        <div className="text-sm text-neutral-500">{isPro ? "Unlimited messages and priority access." : "Upgrade for unlimited messages and premium features."}</div>
                       </div>
-                      <div 
-                        onClick={toggleProMode}
-                        className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${isPro ? 'bg-primary' : 'bg-neutral-200 dark:bg-neutral-700'}`}
-                      >
-                        <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${isPro ? 'right-1' : 'left-1'}`}></div>
-                      </div>
+                      {!isPro && (
+                        <button 
+                          className="px-4 py-2 bg-[hsl(var(--primary))] hover:brightness-110 text-white rounded-lg text-sm font-medium transition-colors cursor-not-allowed opacity-60"
+                          title="Coming soon"
+                          disabled
+                        >
+                          Upgrade
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

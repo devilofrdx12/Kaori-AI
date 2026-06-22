@@ -94,3 +94,45 @@ export async function checkChatRateLimit(
   });
   return { allowed: true, retryAfterSec: 0 };
 }
+
+/**
+ * Password reset rate limit: 5 requests per hour.
+ */
+export async function checkPasswordResetRateLimit(
+  bucket: string
+): Promise<{ allowed: boolean; retryAfterSec: number }> {
+  const db = await getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const WINDOW = 3600; // 1 hour
+  const MAX = 5;
+
+  const rows = mapRows<{ count: number; window_start: number }>(await db.execute({
+    sql: `SELECT count, window_start FROM rate_limits
+          WHERE user_id = 'anonymous' AND bucket = ?`,
+    args: [bucket],
+  }));
+  const row = rows[0];
+
+  if (!row || now - row.window_start > WINDOW) {
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO rate_limits (user_id, bucket, count, window_start)
+            VALUES ('anonymous', ?, 1, ?)`,
+      args: [bucket, now],
+    });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+
+  if (row.count >= MAX) {
+    return {
+      allowed: false,
+      retryAfterSec: WINDOW - (now - row.window_start),
+    };
+  }
+
+  await db.execute({
+    sql: `UPDATE rate_limits SET count = count + 1
+          WHERE user_id = 'anonymous' AND bucket = ?`,
+    args: [bucket],
+  });
+  return { allowed: true, retryAfterSec: 0 };
+}

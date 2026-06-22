@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Coffee, Brain, X, ChevronDown } from "lucide-react";
-
-type TimerMode = "focus" | "break";
+import { usePomodoro, TimerMode } from "./pomodoro-context";
 
 const PRESETS = {
   focus: [15, 25, 30, 45, 60],
@@ -11,14 +10,21 @@ const PRESETS = {
 };
 
 export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
-  const [mode, setMode] = useState<TimerMode>("focus");
-  const [focusMins, setFocusMins] = useState(25);
-  const [breakMins, setBreakMins] = useState(5);
-  const [secondsLeft, setSecondsLeft] = useState(25 * 60);
-  const [running, setRunning] = useState(false);
-  const [sessions, setSessions] = useState(0);
+  const {
+    mode,
+    focusMins,
+    breakMins,
+    secondsLeft,
+    running,
+    sessions,
+    toggleRunning,
+    reset,
+    switchMode,
+    setFocusMins,
+    setBreakMins,
+  } = usePomodoro();
+
   const [showPresets, setShowPresets] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const presetsRef = useRef<HTMLDivElement>(null);
 
   const totalSeconds = mode === "focus" ? focusMins * 60 : breakMins * 60;
@@ -34,64 +40,6 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, []);
-
-  const switchMode = useCallback(
-    (newMode: TimerMode) => {
-      setMode(newMode);
-      setRunning(false);
-      setSecondsLeft(newMode === "focus" ? focusMins * 60 : breakMins * 60);
-    },
-    [focusMins, breakMins]
-  );
-
-  // Timer tick
-  useEffect(() => {
-    if (!running) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
-
-    intervalRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          // Timer complete
-          setRunning(false);
-          if (mode === "focus") {
-            setSessions((s) => s + 1);
-            // Play a subtle notification sound
-            try {
-              const ctx = new AudioContext();
-              const osc = ctx.createOscillator();
-              const gain = ctx.createGain();
-              osc.connect(gain);
-              gain.connect(ctx.destination);
-              osc.frequency.value = 800;
-              gain.gain.value = 0.1;
-              osc.start();
-              osc.stop(ctx.currentTime + 0.3);
-            } catch {}
-            // Auto-switch to break
-            switchMode("break");
-          } else {
-            switchMode("focus");
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [running, mode, switchMode]);
-
-  const toggleRunning = () => setRunning((p) => !p);
-
-  const reset = () => {
-    setRunning(false);
-    setSecondsLeft(mode === "focus" ? focusMins * 60 : breakMins * 60);
-  };
 
   const formatTime = (s: number) => {
     const mins = Math.floor(s / 60);
@@ -156,10 +104,8 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
                   onClick={() => {
                     if (mode === "focus") {
                       setFocusMins(mins);
-                      if (!running) setSecondsLeft(mins * 60);
                     } else {
                       setBreakMins(mins);
-                      if (!running) setSecondsLeft(mins * 60);
                     }
                     setShowPresets(false);
                   }}

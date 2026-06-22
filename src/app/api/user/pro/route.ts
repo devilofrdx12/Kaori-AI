@@ -3,6 +3,11 @@ import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { updateUserProStatus } from "../../lib/db";
 import { logger } from "../../lib/logger";
 
+/**
+ * POST /api/user/pro — DISABLED
+ * Pro status should only be changed through a verified billing/admin flow,
+ * not an unauthenticated client toggle.
+ */
 export async function POST(req: NextRequest) {
   try {
     requireAjax(req);
@@ -18,31 +23,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  try {
-    const { isPro } = await req.json();
-
-    if (typeof isPro !== "boolean") {
-      return new Response(
-        JSON.stringify({ error: "isPro must be a boolean" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    await updateUserProStatus(user.id, isPro);
-    logger.info({ userId: user.id, isPro }, "Updated user pro status");
-
-    return new Response(JSON.stringify({ success: true, is_pro: isPro }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    logger.error({ err }, "Pro status update error");
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+  // SECURITY: Reject client-side Pro toggling.
+  // Pro status should only be set through a verified payment/admin flow.
+  logger.warn({ userId: user.id }, "Blocked unauthorized Pro toggle attempt");
+  return new Response(
+    JSON.stringify({ error: "Pro status cannot be changed from the client. Please upgrade through the billing portal." }),
+    { status: 403, headers: { "Content-Type": "application/json" } }
+  );
 }
 
 export async function GET(req: NextRequest) {

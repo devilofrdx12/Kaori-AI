@@ -342,6 +342,49 @@ export async function deleteUserRefreshTokens(userId: string) {
   await run("DELETE FROM refresh_tokens WHERE user_id = ?", [userId]);
 }
 
+// Password Reset Tokens
+
+export type DBPasswordResetToken = {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: number;
+};
+
+export async function insertPasswordResetToken(token: {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: number;
+}) {
+  await run(
+    `INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
+     VALUES (?, ?, ?, ?)`,
+    [token.id, token.user_id, token.token_hash, token.expires_at]
+  );
+}
+
+export async function findPasswordResetTokenByHash(
+  hash: string
+): Promise<DBPasswordResetToken | undefined> {
+  return getOne<DBPasswordResetToken>(
+    "SELECT * FROM password_reset_tokens WHERE token_hash = ?",
+    [hash]
+  );
+}
+
+export async function deletePasswordResetToken(id: string) {
+  await run("DELETE FROM password_reset_tokens WHERE id = ?", [id]);
+}
+
+export async function deleteUserPasswordResetTokens(userId: string) {
+  await run("DELETE FROM password_reset_tokens WHERE user_id = ?", [userId]);
+}
+
+export async function updateUserPassword(userId: string, passwordHash: string) {
+  await run("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
+}
+
 // OAuth Tokens
 
 export type DBOAuthToken = {
