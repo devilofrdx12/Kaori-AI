@@ -1,16 +1,27 @@
-import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut } from "lucide-react";
+import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, useDragControls } from "framer-motion";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
+import PomodoroTimer from "./pomodoro-timer";
+import SessionManager from "./session-manager";
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
 };
 
-type Tab = "appearance" | "model" | "accounts" | "usage" | "data";
+type Tab = "appearance" | "model" | "accounts" | "usage" | "focus" | "sessions" | "data";
+
+type UsageData = {
+  messagesToday: number;
+  dailySpendUsd: number;
+  dailyLimitUsd: number;
+  toolsUsed: number;
+  isPro: boolean;
+  messageLimit: number | null;
+};
 
 const AJAX_HEADERS: HeadersInit = {
   "X-Requested-With": "XMLHttpRequest",
@@ -67,6 +78,8 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const [model, setModel] = useState(() => getStoredValue("kaori_model", "gemini-2.5-flash"));
   const [studyMode, setStudyMode] = useState(() => getStoredValue("kaori_study_mode", "false") === "true");
   const [isPro, setIsPro] = useState(false);
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -78,6 +91,19 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
           }
         })
         .catch(console.error);
+
+      // Fetch real usage stats
+      setUsageLoading(true);
+      fetch("/api/user/usage", { headers: AJAX_HEADERS })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && typeof data.messagesToday === "number") {
+            setUsageData(data);
+            setIsPro(data.isPro);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setUsageLoading(false));
     }
   }, [isOpen]);
 
@@ -206,6 +232,8 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     { id: "model", label: "AI Model", icon: Cpu },
     { id: "accounts", label: "Connected Accounts", icon: LinkIcon },
     { id: "usage", label: "Usage", icon: Activity },
+    { id: "focus", label: "Focus Mode", icon: Timer },
+    { id: "sessions", label: "Sessions", icon: Shield },
     { id: "data", label: "Data & Privacy", icon: Database },
   ] as const;
 
@@ -456,28 +484,35 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Usage & Limits</h3>
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Monitor your API spend and limits.</p>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="text-sm text-neutral-500 mb-1">Messages Today</div>
-                      <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
-                        42 {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ 100</span>}
+                  {usageLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 size={20} className="animate-spin text-neutral-400" />
+                      <span className="ml-2 text-sm text-neutral-500">Loading usage data...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                        <div className="text-sm text-neutral-500 mb-1">Messages Today</div>
+                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                          {usageData?.messagesToday ?? 0} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ {usageData?.messageLimit ?? 100}</span>}
+                        </div>
+                      </div>
+                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                        <div className="text-sm text-neutral-500 mb-1">Daily Spend</div>
+                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                          ${(usageData?.dailySpendUsd ?? 0).toFixed(2)} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ ${(usageData?.dailyLimitUsd ?? 2).toFixed(2)}</span>}
+                        </div>
+                      </div>
+                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                        <div className="text-sm text-neutral-500 mb-1">Tools Used</div>
+                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{usageData?.toolsUsed ?? 0}</div>
+                      </div>
+                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                        <div className="text-sm text-neutral-500 mb-1">Est. Session Cost</div>
+                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">${(usageData?.dailySpendUsd ?? 0).toFixed(4)}</div>
                       </div>
                     </div>
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="text-sm text-neutral-500 mb-1">Daily Spend</div>
-                      <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
-                        $0.85 {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ $2.00</span>}
-                      </div>
-                    </div>
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="text-sm text-neutral-500 mb-1">Tools Used</div>
-                      <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">12</div>
-                    </div>
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="text-sm text-neutral-500 mb-1">Est. Session Cost</div>
-                      <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">$0.004</div>
-                    </div>
-                  </div>
+                  )}
 
                   <div className="mt-6 p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 space-y-4">
                     <div className="flex items-center justify-between">
@@ -498,6 +533,28 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* FOCUS MODE */}
+              {activeTab === "focus" && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Focus Mode</h3>
+                  <p className="text-neutral-500 dark:text-neutral-400 text-sm">Stay productive with the Pomodoro technique.</p>
+                  
+                  <div className="p-6 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                    <PomodoroTimer />
+                  </div>
+                </div>
+              )}
+
+              {/* SESSIONS */}
+              {activeTab === "sessions" && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Active Sessions</h3>
+                  <p className="text-neutral-500 dark:text-neutral-400 text-sm">Manage devices signed into your account.</p>
+                  
+                  <SessionManager />
                 </div>
               )}
 
