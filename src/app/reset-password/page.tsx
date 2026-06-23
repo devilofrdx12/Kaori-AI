@@ -3,17 +3,18 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, KeyRound, Lock, Mail, Sparkles } from "lucide-react";
 
 function ResetPasswordForm() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(() => searchParams.get("email") || "");
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,8 +22,15 @@ function ResetPasswordForm() {
     setError("");
     setMessage("");
 
-    if (!token) {
-      setError("Reset token is missing from the URL.");
+    const normalizedOtp = otp.replace(/\D/g, "");
+
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      setError("Enter the 6-digit reset code from your email.");
       return;
     }
 
@@ -42,7 +50,7 @@ function ResetPasswordForm() {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ email, otp: normalizedOtp, password }),
       });
 
       const data = await res.json();
@@ -62,20 +70,6 @@ function ResetPasswordForm() {
     }
   };
 
-  if (!token && !error) {
-    // If there is no token on initial load, show error immediately
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-        Invalid or missing reset token. Please request a new password reset.
-        <div className="mt-4">
-          <Link href="/forgot-password" className="font-medium hover:underline">
-            Go to Forgot Password
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       {message ? (
@@ -90,6 +84,41 @@ function ResetPasswordForm() {
               {error}
             </div>
           )}
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Email</span>
+            <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 focus-within:ring-2 focus-within:ring-[hsl(var(--primary)/0.25)]">
+              <Mail size={17} className="text-[hsl(var(--muted-foreground))]" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+                placeholder="you@example.com"
+              />
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium">Reset Code</span>
+            <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 focus-within:ring-2 focus-within:ring-[hsl(var(--primary)/0.25)]">
+              <KeyRound size={17} className="text-[hsl(var(--muted-foreground))]" />
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                autoComplete="one-time-code"
+                className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+                placeholder="6-digit code"
+              />
+            </div>
+          </label>
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium">New Password</span>
@@ -160,7 +189,7 @@ export default function ResetPasswordPage() {
               Create a new strong password.
             </h1>
             <p className="mt-5 text-base leading-7 text-[hsl(var(--muted-foreground))]">
-              Make sure your new password is at least 8 characters long and not easy to guess.
+              Enter the one-time code from your email and choose a password with at least 8 characters.
             </p>
           </div>
 
@@ -177,14 +206,14 @@ export default function ResetPasswordPage() {
               </div>
               <h1 className="text-3xl font-semibold tracking-tight">Reset Password</h1>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Enter your new credentials below.
+                Enter your email code and new password.
               </p>
             </div>
 
             <div className="mb-8 hidden lg:block">
               <h2 className="text-2xl font-semibold tracking-tight">Reset Password</h2>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Enter your new password to restore access.
+                Enter your reset code to restore access.
               </p>
             </div>
 

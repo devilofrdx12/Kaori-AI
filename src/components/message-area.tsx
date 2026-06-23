@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -19,6 +20,7 @@ export default function MessageArea({
   toolResults,
   streamingText,
   onEditSubmit,
+  bottomRef,
 }: {
   messages?: ChatMessage[];
   typing: boolean;
@@ -26,6 +28,7 @@ export default function MessageArea({
   toolResults?: { tool: string; result: string }[];
   streamingText?: string;
   onEditSubmit?: (messageId: string, newText: string) => void;
+  bottomRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -121,7 +124,7 @@ export default function MessageArea({
                 /* ── ASSISTANT MESSAGE ── */
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 mt-0.5 border border-[hsl(var(--border))]">
-                    <img src="/kaori-avatar.png" alt="Kaori" className="w-full h-full object-cover" />
+                    <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     {/* Tool results */}
@@ -199,6 +202,9 @@ export default function MessageArea({
 
         {/* Typing indicator */}
         {typing && !streamingText && !toolInProgress && <TypingIndicator />}
+
+        {/* Scroll anchor */}
+        <div ref={bottomRef} className="h-4" />
       </div>
     </div>
   );

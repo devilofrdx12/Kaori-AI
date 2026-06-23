@@ -9,6 +9,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const resetHref = `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +29,7 @@ export default function ForgotPasswordPage() {
       if (!res.ok) {
         setError(data.error || "Failed to request password reset.");
       } else {
-        setMessage(data.message || "If an account exists, a reset link has been sent.");
+        setMessage(data.message || "If an account exists, a reset code has been sent.");
       }
     } catch {
       setError("An unexpected error occurred. Please try again later.");
@@ -59,7 +60,7 @@ export default function ForgotPasswordPage() {
               Regain access to your secure workspace.
             </h1>
             <p className="mt-5 text-base leading-7 text-[hsl(var(--muted-foreground))]">
-              Enter your email address to receive a secure link to reset your password.
+              Enter your email address to receive a one-time code to reset your password.
             </p>
           </div>
 
@@ -76,20 +77,29 @@ export default function ForgotPasswordPage() {
               </div>
               <h1 className="text-3xl font-semibold tracking-tight">Forgot Password</h1>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                We'll send you a link to reset it.
+                We will send you a one-time code.
               </p>
             </div>
 
             <div className="mb-8 hidden lg:block">
               <h2 className="text-2xl font-semibold tracking-tight">Forgot Password</h2>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Enter your email to receive a reset link.
+                Enter your email to receive a reset code.
               </p>
             </div>
 
             {message ? (
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300">
-                {message}
+              <div className="space-y-4">
+                <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300">
+                  {message}
+                </div>
+                <Link
+                  href={resetHref}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[hsl(var(--primary))] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[hsl(var(--primary)/0.92)]"
+                >
+                  Enter Reset Code
+                  <ArrowRight size={16} />
+                </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -120,7 +130,7 @@ export default function ForgotPasswordPage() {
                   disabled={loading}
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[hsl(var(--primary))] text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[hsl(var(--primary)/0.92)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Sending..." : "Send Reset Link"}
+                  {loading ? "Sending..." : "Send Reset Code"}
                   {!loading && <ArrowRight size={16} />}
                 </button>
               </form>

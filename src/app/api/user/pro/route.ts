@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
-import { updateUserProStatus } from "../../lib/db";
 import { logger } from "../../lib/logger";
 
 /**

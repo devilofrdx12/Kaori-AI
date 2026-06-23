@@ -97,6 +97,7 @@ export default function ChatInput({
           <div className="flex gap-2 mb-2 px-1">
             {previewUrls.map((url, i) => (
               <div key={i} className="relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */}
                 <img
                   src={url}
                   alt=""

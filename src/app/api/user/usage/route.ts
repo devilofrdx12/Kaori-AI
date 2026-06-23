@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, mapRows } from "../../lib/db";
-
-function getUserIdFromRequest(req: NextRequest): string | null {
-  try {
-    const jwt = require("jsonwebtoken");
-    const token = req.cookies.get("token")?.value;
-    if (!token) return null;
-    const payload = jwt.verify(token, process.env.JWT_SECRET!);
-    return typeof payload === "object" ? payload.userId : null;
-  } catch {
-    return null;
-  }
-}
+import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 
 type UserRow = {
   daily_spend_usd: number;
@@ -23,12 +12,14 @@ type UserRow = {
  * GET /api/user/usage — fetch real usage stats for the current user
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get("X-Requested-With") !== "XMLHttpRequest") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    requireAjax(req);
+  } catch (err) {
+    if (err instanceof Response) return err;
   }
 
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -37,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Get user spend data
   const userResult = await db.execute({
     sql: "SELECT daily_spend_usd, spend_reset_date, is_pro FROM users WHERE id = ?",
-    args: [userId],
+    args: [sessionUser.id],
   });
   const user = mapRows<UserRow>(userResult)[0];
 
@@ -51,7 +42,7 @@ export async function GET(req: NextRequest) {
     sql: `SELECT COUNT(*) as count FROM messages m
           JOIN conversations c ON m.conversation_id = c.id
           WHERE c.user_id = ? AND m.role = 'user' AND m.created_at >= ?`,
-    args: [userId, todayStart],
+    args: [sessionUser.id, todayStart],
   });
   const messagesCount = mapRows<{ count: number }>(msgResult)[0]?.count || 0;
 
@@ -60,7 +51,7 @@ export async function GET(req: NextRequest) {
     sql: `SELECT COUNT(*) as count FROM messages m
           JOIN conversations c ON m.conversation_id = c.id
           WHERE c.user_id = ? AND m.role = 'tool' AND m.created_at >= ?`,
-    args: [userId, todayStart],
+    args: [sessionUser.id, todayStart],
   });
   const toolsUsed = mapRows<{ count: number }>(toolResult)[0]?.count || 0;
 

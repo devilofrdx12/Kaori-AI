@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye, EyeOff, Menu } from "lucide-react";
+import Image from "next/image";
 
 export default function ChatHeader({
   onToggleSidebar,
@@ -21,7 +22,7 @@ export default function ChatHeader({
         {!sidebarOpen && (
           <button
             onClick={onToggleSidebar}
-            className="h-9 w-9 grid place-items-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            className="h-11 w-11 grid place-items-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
           >
             <Menu size={18} />
           </button>
@@ -29,7 +30,7 @@ export default function ChatHeader({
 
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-[hsl(var(--border))]">
-            <img src="/kaori-avatar.png" alt="Kaori" className="w-full h-full object-cover" />
+            <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
           </div>
           <span className="font-semibold text-sm tracking-tight hidden sm:inline">Kaori</span>
         </div>

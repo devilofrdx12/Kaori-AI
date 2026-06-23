@@ -82,29 +82,38 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
       fetch("/api/user/pro", { headers: AJAX_HEADERS })
         .then((r) => r.json())
         .then((data) => {
-          if (data && typeof data.is_pro === "boolean") {
+          if (!cancelled && data && typeof data.is_pro === "boolean") {
             setIsPro(data.is_pro);
           }
         })
         .catch(console.error);
 
-      // Fetch real usage stats
       setUsageLoading(true);
       fetch("/api/user/usage", { headers: AJAX_HEADERS })
         .then((r) => r.json())
         .then((data) => {
-          if (data && typeof data.messagesToday === "number") {
+          if (!cancelled && data && typeof data.messagesToday === "number") {
             setUsageData(data);
             setIsPro(data.isPro);
           }
         })
         .catch(console.error)
-        .finally(() => setUsageLoading(false));
-    }
+        .finally(() => {
+          if (!cancelled) setUsageLoading(false);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -148,25 +157,6 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     const val = !studyMode;
     setStudyMode(val);
     localStorage.setItem("kaori_study_mode", String(val));
-  };
-
-  const toggleProMode = async () => {
-    try {
-      const val = !isPro;
-      setIsPro(val);
-      const res = await fetch("/api/user/pro", {
-        method: "POST",
-        headers: { ...AJAX_HEADERS, "Content-Type": "application/json" },
-        body: JSON.stringify({ isPro: val }),
-      });
-      if (!res.ok) {
-        setIsPro(!val); // Revert on failure
-        setStatusMsg("Failed to update Pro status.");
-      }
-    } catch (e: unknown) {
-      setIsPro(!isPro);
-      setStatusMsg(`Error updating Pro status: ${e instanceof Error ? e.message : "Unknown error"}`);
-    }
   };
 
   const handleExportData = async () => {

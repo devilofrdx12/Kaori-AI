@@ -79,7 +79,11 @@ export default function SessionManager() {
   }, []);
 
   useEffect(() => {
-    fetchSessions();
+    const timeoutId = window.setTimeout(() => {
+      fetchSessions();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [fetchSessions]);
 
   const revokeSession = async (sessionId: string) => {

@@ -88,7 +88,7 @@ async function executeToolCall(
       return `**${data.title}**\n\n${data.description ? `> ${data.description}\n\n` : ""}${data.content}`;
     }
     if (toolName === "open_application") {
-      return `Successfully sent command to client device to open ${toolInput.appName} at ${toolInput.url}. The user's device is now handling the request.`;
+      return `Successfully sent command to client device to open ${toolInput.appName} at ${toolInput.uriScheme}. The user's device is now handling the request.`;
     }
     
     if (toolName === "play_spotify") {

@@ -20,7 +20,7 @@ const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
 /**
  * POST /api/auth/refresh
- * Reads refresh_token cookie → validates against DB → issues new tokens.
+ * Reads kaori_refresh cookie → validates against DB → issues new tokens.
  * Rotates: deletes old refresh token, issues new one (prevents replay).
  */
 export async function POST(req: Request) {

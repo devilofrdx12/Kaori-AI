@@ -1,26 +1,49 @@
 import { NextResponse } from "next/server";
 import { findUserByEmail, insertPasswordResetToken, deleteUserPasswordResetTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
+import { validateEmail } from "../../../api/lib/validation";
 import { sendPasswordResetEmail } from "../../../../lib/emailService";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
+
+const RESET_CODE_TTL_SECONDS = 10 * 60;
+const PASSWORD_RESET_MESSAGE =
+  "If an account with that email exists, we have sent a password reset code.";
+
+function buildResetUrl(req: Request, email: string) {
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.headers.get("host");
+  const isLocalHost =
+    host?.startsWith("localhost") ||
+    host?.startsWith("127.0.0.1") ||
+    host?.startsWith("[::1]");
+  const protocol = forwardedProto || (isLocalHost ? "http" : "https");
+
+  const origin = host ? `${protocol}://${host}` : new URL(req.url).origin;
+  const resetUrl = new URL("/reset-password", origin);
+  resetUrl.searchParams.set("email", email);
+  return resetUrl.toString();
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const rawEmail = body.email;
 
-    if (!rawEmail || typeof rawEmail !== "string") {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    let email: string;
+    try {
+      email = validateEmail(rawEmail);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid email" },
+        { status: 400 }
+      );
     }
 
-    // Normalise email to prevent rate-limit bypass via casing tricks
-    const email = rawEmail.toLowerCase().trim();
-
-    // Rate Limiting: 3 requests per IP/Email per hour
+    // Rate limit per IP and email to reduce OTP spam without leaking accounts.
     const ip = req.headers.get("x-forwarded-for") || "unknown";
     const bucket = `forgot_password:${ip}:${email}`;
-    // 3600 seconds = 1 hour window
     const { allowed, retryAfterSec } = await checkPasswordResetRateLimit(bucket);
     
     if (!allowed) {
@@ -37,18 +60,16 @@ export async function POST(req: Request) {
     // response time indistinguishable from the "user found" path.
     if (!user) {
       await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
-      return NextResponse.json({ message: "If an account with that email exists, we have sent a reset link." });
+      return NextResponse.json({ message: PASSWORD_RESET_MESSAGE });
     }
 
-    // Invalidate any old tokens for this user
+    // Invalidate any old codes for this user.
     await deleteUserPasswordResetTokens(user.id);
 
-    // Generate secure token
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expiresAt = Math.floor(Date.now() / 1000) + 150; // 150 seconds (2.5 mins) from now
+    const otp = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const tokenHash = crypto.createHash("sha256").update(`${email}:${otp}`).digest("hex");
+    const expiresAt = Math.floor(Date.now() / 1000) + RESET_CODE_TTL_SECONDS;
 
-    // Insert into DB
     await insertPasswordResetToken({
       id: uuidv4(),
       user_id: user.id,
@@ -56,15 +77,11 @@ export async function POST(req: Request) {
       expires_at: expiresAt,
     });
 
-    // Send email with dynamic base URL based on request headers (works on all domains)
-    const protocol = req.headers.get("x-forwarded-proto") || "http";
-    const host = req.headers.get("host") || "localhost:3000";
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`;
-    const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+    const resetUrl = buildResetUrl(req, email);
     
-    await sendPasswordResetEmail(user.email, resetUrl);
+    await sendPasswordResetEmail(user.email, otp, resetUrl);
 
-    return NextResponse.json({ message: "If an account with that email exists, we have sent a reset link." });
+    return NextResponse.json({ message: PASSWORD_RESET_MESSAGE });
   } catch (error) {
     console.error("Forgot password error:", error);
     return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });

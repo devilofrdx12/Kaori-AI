@@ -42,6 +42,58 @@ function getInitialSidebarOpen() {
   return window.innerWidth >= 1024;
 }
 
+const BLOCKED_CUSTOM_URI_PROTOCOLS = new Set([
+  "about:",
+  "blob:",
+  "chrome:",
+  "chrome-extension:",
+  "data:",
+  "devtools:",
+  "edge:",
+  "file:",
+  "filesystem:",
+  "http:",
+  "https:",
+  "javascript:",
+  "vbscript:",
+]);
+
+function getSafeCustomUri(value: unknown) {
+  if (typeof value !== "string" || value.length > 2048) return null;
+
+  try {
+    const parsed = new URL(value);
+    const protocol = parsed.protocol.toLowerCase();
+    if (!/^[a-z][a-z0-9+.-]*:$/.test(protocol)) return null;
+    if (BLOCKED_CUSTOM_URI_PROTOCOLS.has(protocol)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function navigateToCustomUri(value: unknown) {
+  const uri = getSafeCustomUri(value);
+  if (!uri) return false;
+  window.location.href = uri;
+  return true;
+}
+
+function openSafeHttpsUrl(value: unknown) {
+  if (typeof value !== "string" || value.length > 2048) return false;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+
+    const opened = window.open(url.toString(), "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fileToDataUrl(
   file: File
 ): Promise<{ url: string; name: string; type: string; data: string }> {
@@ -306,10 +358,9 @@ function ChatLayoutInner() {
             uriScheme?: string;
             fallbackUrl?: string;
           };
-          if (uriScheme) {
-            window.location.href = uriScheme;
+          if (navigateToCustomUri(uriScheme)) {
             setTimeout(() => {
-              if (fallbackUrl) window.open(fallbackUrl, "_blank");
+              openSafeHttpsUrl(fallbackUrl);
             }, 1500);
           }
         }
@@ -320,13 +371,13 @@ function ChatLayoutInner() {
         if (tool === "play_spotify" && result.includes("spotify:")) {
           const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
           if (match) {
-            window.location.href = match[1];
+            navigateToCustomUri(match[1]);
           }
         }
         if (tool === "open_youtube" && result.includes("https://www.youtube.com")) {
           const match = result.match(/(https:\/\/www\.youtube\.com[^\s]*)/);
           if (match) {
-            window.open(match[1], "_blank");
+            openSafeHttpsUrl(match[1]);
           }
         }
       },
@@ -428,10 +479,9 @@ function ChatLayoutInner() {
             uriScheme?: string;
             fallbackUrl?: string;
           };
-          if (uriScheme) {
-            window.location.href = uriScheme;
+          if (navigateToCustomUri(uriScheme)) {
             setTimeout(() => {
-              if (fallbackUrl) window.open(fallbackUrl, "_blank");
+              openSafeHttpsUrl(fallbackUrl);
             }, 1500);
           }
         }
@@ -442,13 +492,13 @@ function ChatLayoutInner() {
         if (tool === "play_spotify" && result.includes("spotify:")) {
           const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
           if (match) {
-            window.location.href = match[1];
+            navigateToCustomUri(match[1]);
           }
         }
         if (tool === "open_youtube" && result.includes("https://www.youtube.com")) {
           const match = result.match(/(https:\/\/www\.youtube\.com[^\s]*)/);
           if (match) {
-            window.open(match[1], "_blank");
+            openSafeHttpsUrl(match[1]);
           }
         }
       },
@@ -614,9 +664,8 @@ function ChatLayoutInner() {
                   toolResults={toolResults}
                   onEditSubmit={handleEditSend}
                   streamingText={streamingText}
+                  bottomRef={bottomRef}
                 />
-
-                <div ref={bottomRef} />
 
                 <ChatInput
                   onSend={handleSend}

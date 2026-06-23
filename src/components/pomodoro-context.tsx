@@ -20,6 +20,19 @@ interface PomodoroContextType {
 
 const PomodoroContext = createContext<PomodoroContextType | null>(null);
 
+function getInitialSessionCount() {
+  if (typeof window === "undefined") return 0;
+
+  const stored = localStorage.getItem("kaori_pomodoro_sessions");
+  const storedDate = localStorage.getItem("kaori_pomodoro_date");
+  const today = new Date().toDateString();
+
+  if (storedDate !== today || !stored) return 0;
+
+  const parsed = parseInt(stored, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function usePomodoro() {
   const ctx = useContext(PomodoroContext);
   if (!ctx) throw new Error("usePomodoro must be used within PomodoroProvider");
@@ -61,27 +74,25 @@ function sendBrowserNotification(title: string, body: string) {
 
 export function PomodoroProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<TimerMode>("focus");
-  const [focusMins, setFocusMins] = useState(25);
-  const [breakMins, setBreakMins] = useState(5);
+  const [focusMins, setFocusMinsState] = useState(25);
+  const [breakMins, setBreakMinsState] = useState(5);
   const [secondsLeft, setSecondsLeft] = useState(25 * 60);
   const [running, setRunning] = useState(false);
-  const [sessions, setSessions] = useState(0);
+  const [sessions, setSessions] = useState(getInitialSessionCount);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialTitleRef = useRef<string | null>(null);
 
-  // Load persistent session count
+  // Keep local storage's day marker fresh without deriving React state in an effect.
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("kaori_pomodoro_sessions");
       const storedDate = localStorage.getItem("kaori_pomodoro_date");
       const today = new Date().toDateString();
-      if (storedDate === today && stored) {
-        setSessions(parseInt(stored, 10));
-      } else {
-        // Reset if it's a new day
+
+      if (storedDate !== today) {
         localStorage.setItem("kaori_pomodoro_date", today);
         localStorage.setItem("kaori_pomodoro_sessions", "0");
       }
+
       initialTitleRef.current = document.title;
     }
   }, []);
@@ -97,6 +108,20 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     setRunning(false);
     setSecondsLeft(newMode === "focus" ? focusMins * 60 : breakMins * 60);
   }, [focusMins, breakMins]);
+
+  const setFocusMins = useCallback((mins: number) => {
+    setFocusMinsState(mins);
+    if (!running && mode === "focus") {
+      setSecondsLeft(mins * 60);
+    }
+  }, [mode, running]);
+
+  const setBreakMins = useCallback((mins: number) => {
+    setBreakMinsState(mins);
+    if (!running && mode === "break") {
+      setSecondsLeft(mins * 60);
+    }
+  }, [mode, running]);
 
   // Request notification permission if not granted
   useEffect(() => {
@@ -156,13 +181,6 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     setRunning(false);
     setSecondsLeft(mode === "focus" ? focusMins * 60 : breakMins * 60);
   };
-
-  // Sync state when mins change while not running
-  useEffect(() => {
-    if (!running) {
-      setSecondsLeft(mode === "focus" ? focusMins * 60 : breakMins * 60);
-    }
-  }, [focusMins, breakMins, mode, running]);
 
   return (
     <PomodoroContext.Provider

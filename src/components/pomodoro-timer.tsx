@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, Coffee, Brain, X, ChevronDown } from "lucide-react";
-import { usePomodoro, TimerMode } from "./pomodoro-context";
+import { usePomodoro } from "./pomodoro-context";
 
 const PRESETS = {
   focus: [15, 25, 30, 45, 60],

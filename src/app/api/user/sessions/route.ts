@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, mapRows } from "../../lib/db";
-import crypto from "crypto";
-
-const AJAX_HEADERS: Record<string, string> = {
-  "Content-Type": "application/json",
-};
-
-function getUserIdFromRequest(req: NextRequest): string | null {
-  try {
-    const jwt = require("jsonwebtoken");
-    const token = req.cookies.get("token")?.value;
-    if (!token) return null;
-    const payload = jwt.verify(token, process.env.JWT_SECRET!);
-    return typeof payload === "object" ? payload.userId : null;
-  } catch {
-    return null;
-  }
-}
+import {
+  getRefreshTokenCookie,
+  getSessionUser,
+  hashRefreshToken,
+  requireAjax,
+} from "../../lib/auth-utils";
 
 type SessionRow = {
   id: string;
@@ -31,12 +20,14 @@ type SessionRow = {
  * GET /api/user/sessions — list active sessions for the current user
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get("X-Requested-With") !== "XMLHttpRequest") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    requireAjax(req);
+  } catch (err) {
+    if (err instanceof Response) return err;
   }
 
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
+  const user = await getSessionUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -48,15 +39,12 @@ export async function GET(req: NextRequest) {
           FROM refresh_tokens
           WHERE user_id = ? AND expires_at > ?
           ORDER BY created_at DESC`,
-    args: [userId, now],
+    args: [user.id, now],
   });
 
   // Hash the current refresh token cookie so we can identify which session is "this one"
-  const currentRefreshToken = req.cookies.get("refresh_token")?.value;
-  let currentTokenHash: string | null = null;
-  if (currentRefreshToken) {
-    currentTokenHash = crypto.createHash("sha256").update(currentRefreshToken).digest("hex");
-  }
+  const currentRefreshToken = await getRefreshTokenCookie();
+  const currentTokenHash = currentRefreshToken ? hashRefreshToken(currentRefreshToken) : null;
 
   const sessions = mapRows<SessionRow>(result).map((s) => {
     // Mask IPs for privacy: "192.168.1.42" -> "192.168.1.***"
@@ -88,12 +76,14 @@ export async function GET(req: NextRequest) {
  * Body: { sessionId: string }
  */
 export async function DELETE(req: NextRequest) {
-  if (req.headers.get("X-Requested-With") !== "XMLHttpRequest") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    requireAjax(req);
+  } catch (err) {
+    if (err instanceof Response) return err;
   }
 
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
+  const user = await getSessionUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -109,7 +99,7 @@ export async function DELETE(req: NextRequest) {
   // Only allow revoking sessions that belong to this user
   await db.execute({
     sql: "DELETE FROM refresh_tokens WHERE id = ? AND user_id = ?",
-    args: [sessionId, userId],
+    args: [sessionId, user.id],
   });
 
   return NextResponse.json({ ok: true });
