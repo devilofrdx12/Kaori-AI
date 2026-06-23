@@ -47,6 +47,7 @@ export default function RootLayout({
                 var hsl = colors[a] || colors['orange'];
                 document.documentElement.style.setProperty('--primary', hsl);
                 document.documentElement.style.setProperty('--ring', hsl);
+                document.documentElement.style.setProperty('--color-primary', 'hsl(' + hsl + ')');
               }
               
               var f = localStorage.getItem('kaori_font') || 'Kaori UI';
@@ -63,7 +64,8 @@ export default function RootLayout({
         `}}
         />
       </head>
-      <body className="bg-[#fafafa] dark:bg-[#111111] text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
+      <body className="bg-background text-on-surface font-body overflow-hidden transition-colors duration-300">
+        <div className="fixed inset-0 pointer-events-none opacity-40"></div>
         {children}
       </body>
     </html>

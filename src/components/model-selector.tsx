@@ -40,8 +40,8 @@ export default function ModelSelector({
         onClick={() => setOpen(!open)}
         className={
           minimal
-            ? "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors max-w-[160px]"
-            : "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+            ? "flex min-w-0 items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 max-w-[160px] active:scale-95"
+            : "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 active:scale-95"
         }
       >
         {!minimal && <div className="shrink-0">{getIcon(current)}</div>}
@@ -51,7 +51,7 @@ export default function ModelSelector({
 
       {open && (
         <div
-          className={`absolute ${direction === "up" ? "bottom-full mb-1" : "top-full mt-1"} left-0 w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-xl z-50 overflow-hidden animate-fade-in`}
+          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} left-0 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-white/70 dark:border-white/10 bg-white/90 dark:bg-neutral-950/92 backdrop-blur-2xl shadow-2xl z-50 overflow-hidden animate-fade-in`}
         >
           {MODEL_OPTIONS.map((m) => (
             <button
@@ -60,28 +60,28 @@ export default function ModelSelector({
                 onChange(m.id);
                 setOpen(false);
               }}
-              className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-[hsl(var(--muted))] transition-colors ${
-                m.id === model ? "bg-[hsl(var(--muted))]" : ""
+              className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-white/65 dark:hover:bg-white/10 transition-all duration-200 ${
+                m.id === model ? "bg-white/70 dark:bg-white/10" : ""
               }`}
             >
               <div className="mt-0.5 shrink-0">{getIcon(m)}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                  <span className="text-sm font-medium text-on-surface">
                     {m.label}
                   </span>
                   {m.badge && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">
                       {m.badge}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                <p className="text-xs text-secondary mt-0.5">
                   {m.description}
                 </p>
               </div>
               {m.id === model && (
-                <div className="w-2 h-2 rounded-full bg-[hsl(var(--primary))] mt-1.5 shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
               )}
             </button>
           ))}

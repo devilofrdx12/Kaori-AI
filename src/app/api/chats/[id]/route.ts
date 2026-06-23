@@ -103,39 +103,44 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    requireAjax(req);
-  } catch (err) {
-    if (err instanceof Response) return err;
-  }
+    try {
+      requireAjax(req);
+    } catch (err) {
+      if (err instanceof Response) return err;
+    }
 
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const body = await req.json();
-  const conv = await findConversation(id);
+    const { id } = await params;
+    const body = await req.json();
+    const conv = await findConversation(id);
 
-  if (!conv || conv.user_id !== user.id) {
-    return NextResponse.json({ error: "Chat not found" }, { status: 404 });
-  }
+    if (!conv || conv.user_id !== user.id) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+    }
 
-  if (body.title !== undefined) {
-    await updateConversationTitle(id, validateConversationTitle(body.title));
-  }
-  if (body.is_starred !== undefined) {
-    await toggleConversationStar(id, body.is_starred ? 1 : 0);
-  }
+    if (body.title !== undefined) {
+      await updateConversationTitle(id, validateConversationTitle(body.title));
+    }
+    if (body.is_starred !== undefined) {
+      await toggleConversationStar(id, body.is_starred ? 1 : 0);
+    }
 
-  const updated = (await findConversation(id))!;
-  return NextResponse.json({
-    id: updated.id,
-    title: updated.title,
-    isStarred: updated.is_starred === 1,
-    createdAt: new Date(updated.created_at * 1000).toISOString(),
-    updatedAt: new Date(updated.updated_at * 1000).toISOString(),
-  });
+    const updated = (await findConversation(id))!;
+    return NextResponse.json({
+      id: updated.id,
+      title: updated.title,
+      isStarred: updated.is_starred === 1,
+      createdAt: new Date(updated.created_at * 1000).toISOString(),
+      updatedAt: new Date(updated.updated_at * 1000).toISOString(),
+    });
+  } catch (error: any) {
+    console.error("PATCH chat error:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {

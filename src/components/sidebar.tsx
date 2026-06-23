@@ -57,7 +57,7 @@ export default function Sidebar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onToggle}
-            className="fixed inset-0 bg-black/30 z-30 lg:hidden"
+            className="fixed inset-0 bg-black/35 backdrop-blur-sm z-30 lg:hidden"
           />
         )}
       </AnimatePresence>
@@ -65,87 +65,88 @@ export default function Sidebar({
       {/* Sidebar panel */}
       <motion.aside
         initial={false}
-        animate={open ? { x: 0 } : { x: -288 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed left-0 top-0 z-40 h-screen w-72 bg-[#f8f8f8] dark:bg-[#1c1c1c] border-r border-[#e5e5e5] dark:border-[#2a2a2a] flex flex-col font-sans"
+        animate={open ? { x: 0 } : { x: "calc(-100% - 24px)" }}
+        transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.9 }}
+        className="fixed left-3 top-3 bottom-3 sm:left-4 sm:top-4 sm:bottom-4 z-40 w-[min(20rem,calc(100vw-1.5rem))] lg:w-72 bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[40px] rounded-[2rem] border border-white/40 dark:border-white/10 shadow-[0_8px_32px_hsl(220_30%_10%/0.08)] flex flex-col font-sans"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-6 pb-4">
-          <span className="font-serif text-2xl tracking-tight text-neutral-900 dark:text-neutral-100 font-medium">
+        <div className="flex items-center justify-between px-5 sm:px-6 pt-6 sm:pt-8 pb-4">
+          <span className="font-headline text-2xl tracking-tighter text-on-surface font-light">
             Kaori
           </span>
           <button
             onClick={onToggle}
-            className="text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 transition-colors"
+            className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 active:scale-90"
+            title="Close sidebar"
           >
             <PanelLeftClose size={18} strokeWidth={1.5} />
           </button>
         </div>
 
         {/* Main Nav Items */}
-        <div className="px-3 space-y-0.5 mt-2">
+        <div className="px-4 space-y-1 mt-2">
           <button 
             onClick={() => { onNewChat(); closeMobile(); }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800 transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface hover:bg-white/45 dark:hover:bg-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98] group"
           >
-            <MessageSquarePlus size={16} strokeWidth={1.5} />
-            New chat
+            <MessageSquarePlus size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform text-secondary" />
+            <span className="font-headline tracking-tight font-light">New chat</span>
           </button>
           <button 
             onClick={() => { onTabChange('chats'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'chats' ? 'bg-neutral-200/80 dark:bg-neutral-800 font-medium text-neutral-900 dark:text-neutral-100' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'chats' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
           >
-            <MessageSquare size={16} strokeWidth={1.5} />
-            Chats
+            <MessageSquare size={18} strokeWidth={1.5} className={activeTab === 'chats' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <span className="font-headline tracking-tight">Chats</span>
           </button>
           <button 
             onClick={() => { onTabChange('projects'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'projects' ? 'bg-neutral-200/80 dark:bg-neutral-800 font-medium text-neutral-900 dark:text-neutral-100' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'projects' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
           >
-            <Archive size={16} strokeWidth={1.5} />
-            Projects
+            <Archive size={18} strokeWidth={1.5} className={activeTab === 'projects' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <span className="font-headline tracking-tight">Projects</span>
           </button>
           <button 
             onClick={() => { onTabChange('artifacts'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'artifacts' ? 'bg-neutral-200/80 dark:bg-neutral-800 font-medium text-neutral-900 dark:text-neutral-100' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'artifacts' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
           >
-            <Blocks size={16} strokeWidth={1.5} />
-            Artifacts
+            <Blocks size={18} strokeWidth={1.5} className={activeTab === 'artifacts' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <span className="font-headline tracking-tight">Artifacts</span>
           </button>
           <button 
             onClick={() => { onTabChange('code'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'code' ? 'bg-neutral-200/80 dark:bg-neutral-800 font-medium text-neutral-900 dark:text-neutral-100' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/50 dark:hover:bg-neutral-800'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'code' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
           >
-            <Code size={16} strokeWidth={1.5} />
-            Code
+            <Code size={18} strokeWidth={1.5} className={activeTab === 'code' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <span className="font-headline tracking-tight">Code</span>
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 mt-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 mt-5 sm:mt-6">
           {/* Starred */}
           {chats.some(c => c.isStarred) && (
             <div className="mb-6">
-              <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              <div className="px-3 py-1.5 text-xs font-medium text-secondary uppercase tracking-widest">
                 Starred
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {chats.filter(c => c.isStarred).map(chat => {
                   const active = chat.id === activeChatId;
                   return (
                     <div
                       key={chat.id}
-                      className={`group relative flex items-center w-full rounded-lg transition-colors ${
+                      className={`group relative flex items-center w-full rounded-xl transition-all duration-300 ${
                         active
-                          ? "bg-[#efefef] dark:bg-[#2a2a2a]"
-                          : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800"
+                          ? "bg-white/60 dark:bg-white/10 shadow-sm"
+                          : "hover:bg-white/45 dark:hover:bg-white/10"
                       }`}
                     >
                       <button
                         onClick={() => { onSelectChat(chat.id); closeMobile(); }}
-                        className={`flex-1 text-left px-3 py-2 text-sm truncate ${
+                        className={`flex-1 text-left px-4 py-3 text-sm truncate font-headline ${
                           active
-                            ? "text-neutral-900 dark:text-neutral-100"
-                            : "text-neutral-700 dark:text-neutral-300"
+                            ? "text-on-surface font-medium"
+                            : "text-secondary font-light"
                         }`}
                       >
                         {chat.title}
@@ -155,7 +156,7 @@ export default function Sidebar({
                           e.stopPropagation();
                           onToggleStarChat(chat.id, false);
                         }}
-                        className="absolute right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-neutral-300/50 dark:hover:bg-neutral-700 text-yellow-500"
+                        className="absolute right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 text-yellow-500 active:scale-90"
                         title="Unstar chat"
                       >
                         <Star size={14} fill="currentColor" />
@@ -169,39 +170,39 @@ export default function Sidebar({
 
           {/* Recents */}
           <div>
-            <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+            <div className="px-3 py-1.5 text-xs font-medium text-secondary uppercase tracking-widest">
               Recents
             </div>
-            <div className="space-y-0.5 pb-4">
+            <div className="space-y-1 pb-4">
               {chats.slice(0, 10).map((chat) => {
                 const active = chat.id === activeChatId;
                 return (
                   <div
                     key={chat.id}
-                    className={`group relative flex items-center w-full rounded-lg transition-colors ${
+                    className={`group relative flex items-center w-full rounded-xl transition-all duration-300 ${
                       active
-                        ? "bg-[#efefef] dark:bg-[#2a2a2a]"
-                        : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800"
+                        ? "bg-white/60 dark:bg-white/10 shadow-sm"
+                        : "hover:bg-white/45 dark:hover:bg-white/10"
                     }`}
                   >
                     <button
                       onClick={() => { onSelectChat(chat.id); closeMobile(); }}
-                      className={`flex-1 text-left px-3 py-2 text-sm truncate ${
+                      className={`flex-1 text-left px-4 py-3 text-sm truncate font-headline ${
                         active
-                          ? "text-neutral-900 dark:text-neutral-100"
-                          : "text-neutral-700 dark:text-neutral-300"
+                          ? "text-on-surface font-medium"
+                          : "text-secondary font-light"
                       }`}
                     >
                       {chat.title}
                     </button>
-                    <div className="absolute right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                    <div className="absolute right-2 flex items-center opacity-0 group-hover:opacity-100 transition-all gap-0.5">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggleStarChat(chat.id, !chat.isStarred);
                         }}
-                        className={`p-1.5 rounded-md hover:bg-neutral-300/50 dark:hover:bg-neutral-700 ${
-                          chat.isStarred ? "text-yellow-500" : "text-neutral-500 hover:text-yellow-500"
+                        className={`p-1.5 rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 active:scale-90 transition-transform ${
+                          chat.isStarred ? "text-yellow-500" : "text-secondary hover:text-yellow-500"
                         }`}
                         title={chat.isStarred ? "Unstar chat" : "Star chat"}
                       >
@@ -212,7 +213,7 @@ export default function Sidebar({
                           e.stopPropagation();
                           onDeleteChat(chat.id);
                         }}
-                        className="p-1.5 rounded-md hover:bg-neutral-300/50 dark:hover:bg-neutral-700 text-neutral-500 hover:text-red-500"
+                        className="p-1.5 rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 text-secondary hover:text-red-500 active:scale-90 transition-all"
                         title="Delete chat"
                       >
                         <Trash2 size={14} />
@@ -222,32 +223,32 @@ export default function Sidebar({
                 );
               })}
               {chats.length === 0 && (
-                <div className="px-3 py-2 text-sm text-neutral-400 italic">No recent chats</div>
+                <div className="px-4 py-2 text-sm text-secondary italic font-light">No recent chats</div>
               )}
             </div>
           </div>
         </div>
 
         {/* User section */}
-        <div className="p-4">
+        <div className="p-4 mt-auto bg-white/42 dark:bg-white/5 border border-white/55 dark:border-white/10 rounded-2xl mx-4 mb-5 sm:mb-6">
           <button 
             onClick={() => { onOpenSettings(); closeMobile(); }}
-            className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded-xl hover:bg-neutral-200/50 dark:hover:bg-neutral-800 transition-colors group"
+            className="w-full flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-9 h-9 shrink-0 rounded-full bg-[#d66f8f] flex items-center justify-center text-white font-serif text-lg">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <div className="w-9 h-9 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-sm">bolt</span>
               </div>
               <div className="flex-1 min-w-0 text-left">
-                <div className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate">
-                  {user ? user.name : "Account"}
+                <div className="text-sm font-bold text-on-surface truncate">
+                  {user ? user.name : "Pro Plan"}
                 </div>
-                <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
-                  {user?.email || "Signed in"}
+                <div className="text-xs text-secondary truncate">
+                  {user?.email ? "85% credits remaining" : "Signed in"}
                 </div>
               </div>
             </div>
-            <ChevronDown size={16} className="text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 shrink-0" strokeWidth={1.5} />
+            <ChevronDown size={16} className="text-secondary group-hover:text-primary shrink-0 transition-colors" strokeWidth={1.5} />
           </button>
         </div>
       </motion.aside>

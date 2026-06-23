@@ -11,6 +11,12 @@ const PASSWORD_RESET_MESSAGE =
   "If an account with that email exists, we have sent a password reset code.";
 
 function buildResetUrl(req: Request, email: string) {
+  if (process.env.NEXT_PUBLIC_BASE_URL) {
+    const resetUrl = new URL("/reset-password", process.env.NEXT_PUBLIC_BASE_URL);
+    resetUrl.searchParams.set("email", email);
+    return resetUrl.toString();
+  }
+
   const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || req.headers.get("host");

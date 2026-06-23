@@ -14,6 +14,7 @@
     "@tursodatabase/serverless": "^1.2.3",
     "@types/nodemailer": "^8.0.1",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.40.0",
     "highlight.js": "^11.11.1",

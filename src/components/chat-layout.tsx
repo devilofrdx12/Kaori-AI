@@ -564,11 +564,11 @@ function ChatLayoutInner() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[hsl(var(--background))] relative">
+    <div className="h-dvh w-full flex overflow-hidden bg-[hsl(var(--background))] relative">
       <MiniPomodoroTimer />
       {/* Floating Avatar */}
       {showAvatar && (
-        <div className="hidden lg:block fixed bottom-0 right-[-30px] xl:right-[-54px] w-[260px] xl:w-[330px] h-[400px] xl:h-[520px] z-10 pointer-events-none drop-shadow-2xl opacity-95 transition-all duration-500">
+        <div className="hidden lg:block fixed bottom-0 right-0 2xl:right-6 w-[260px] 2xl:w-[320px] h-[400px] 2xl:h-[500px] z-[25] pointer-events-none opacity-95 transition-all duration-500">
           <AnimatedAvatar emotion={avatarEmotion} speaking={avatarSpeaking} />
         </div>
       )}
@@ -593,13 +593,12 @@ function ChatLayoutInner() {
 
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
-      {/* Main chat area */}
-      <main
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-          sidebarOpen ? "lg:ml-72" : "ml-0"
-        }`}
-      >
-        <ChatHeader
+      {/* Main chat area wrapper to prevent margin overflow */}
+      <div className={`transition-[padding] duration-300 ease-out h-full w-full lg:py-4 lg:pr-4 ${sidebarOpen ? "lg:pl-[312px]" : "lg:pl-4"}`}>
+        <main
+          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[40px] border border-white/40 dark:border-white/10 shadow-[0_8px_32px_hsl(220_30%_10%/0.08)] transition-[box-shadow,background-color] duration-300 ease-out lg:rounded-[2rem]"
+        >
+          <ChatHeader
           onToggleSidebar={() => setSidebarOpen((p) => !p)}
           sidebarOpen={sidebarOpen}
           showAvatar={showAvatar}
@@ -610,14 +609,14 @@ function ChatLayoutInner() {
           <>
             {isEmpty ? (
               <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-fade-in pb-12 sm:pb-24">
-                <div className="flex flex-col items-center text-center mb-8">
-                  <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary)/0.22)]">
-                    <Sparkles size={24} strokeWidth={1.8} />
+                <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
+                  <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white/70 dark:bg-white/5 text-primary neumorphic-inset glass-border transition-transform duration-300 hover:scale-105 shadow-[0_4px_24px_-4px_hsl(var(--primary)/0.2)]">
+                    <Sparkles size={24} strokeWidth={1.5} className="animate-pulse" />
                   </div>
-                  <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  <h1 className="text-2xl sm:text-4xl lg:text-5xl font-headline font-light tracking-tight text-on-surface text-balance">
                     {greeting}, {user?.name?.split(" ")[0] || "there"}
                   </h1>
-                  <p className="mt-3 max-w-xl text-sm sm:text-base text-neutral-500 dark:text-neutral-400">
+                  <p className="mt-3 sm:mt-4 max-w-xl text-sm sm:text-base text-secondary font-light leading-relaxed">
                     Start a focused chat, attach an image, or choose the best model for the task.
                   </p>
                 </div>
@@ -633,7 +632,7 @@ function ChatLayoutInner() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-3xl">
+                <div className="flex overflow-x-auto sm:flex-wrap items-center sm:justify-center gap-2.5 mt-5 w-[calc(100%+2rem)] sm:w-full max-w-3xl pb-2 px-4 sm:px-0 -mx-4 sm:mx-0 scrollbar-hide">
                   {[
                     { icon: Code2, text: "Code", prompt: "Help me write some code" },
                     { icon: Sparkles, text: "Create", prompt: "Help me create something new" },
@@ -646,7 +645,7 @@ function ChatLayoutInner() {
                       <button
                         key={i}
                         onClick={() => handleSend(chip.prompt, null)}
-                        className="flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 shadow-sm transition-all duration-300 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-95 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        className="shrink-0 flex h-11 items-center justify-center gap-2 rounded-[14px] bg-white/60 dark:bg-white/5 px-4 text-sm font-medium text-secondary glass-border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/90 hover:-translate-y-1 hover:scale-105 hover:text-on-surface hover:shadow-md active:-translate-y-0.5 active:scale-95 group"
                       >
                         <Icon size={16} className="text-neutral-500 dark:text-neutral-400" />
                         {chip.text}
@@ -693,7 +692,8 @@ function ChatLayoutInner() {
             </p>
           </div>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

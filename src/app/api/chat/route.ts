@@ -311,12 +311,16 @@ export async function POST(req: NextRequest) {
               response = await attemptStream(resolvedModel);
             } catch (err: any) {
               const errMsg = err.message || "";
-              if (errMsg.includes("quota") || errMsg.includes("Rate limit") || errMsg.includes("429")) {
+              const isRateLimit = errMsg.includes("quota") || errMsg.includes("Rate limit") || errMsg.includes("429");
+              const isOverloaded = errMsg.includes("503") || errMsg.includes("high demand") || errMsg.includes("UNAVAILABLE");
+
+              if (isRateLimit || isOverloaded) {
                 const fallbackModel = resolvedModel.startsWith("gemini-") ? "llama-3.3-70b-versatile" : "gemini-2.5-flash";
-                logger.warn({ userId: user.id, fallbackModel, originalModel: resolvedModel }, "Rate limit hit, triggering fallback");
+                const reason = isRateLimit ? "quota reached" : "model overloaded";
+                logger.warn({ userId: user.id, fallbackModel, originalModel: resolvedModel, reason }, "API unavailable, triggering fallback");
                 
                 controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: "text", text: "\n*(Warning: Primary AI quota reached. Automatically switching to backup AI provider...)*\n\n" })}\n\n`)
+                  encoder.encode(`data: ${JSON.stringify({ type: "text", text: `\n*(Warning: Primary AI ${reason}. Automatically switching to backup AI provider...)*\n\n` })}\n\n`)
                 );
                 
                 // Note: If the fallback also fails, it will just throw naturally and end the stream with the standard error handling.

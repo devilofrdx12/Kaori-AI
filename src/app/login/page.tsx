@@ -29,8 +29,8 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-      <div className="grid min-h-screen lg:grid-cols-[1fr_440px]">
+    <main className="min-h-dvh bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+      <div className="grid min-h-dvh lg:grid-cols-[1fr_440px]">
         <section className="hidden lg:flex flex-col justify-between border-r border-[hsl(var(--border))] bg-[hsl(var(--sidebar))] p-10">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary))] text-white shadow-sm">

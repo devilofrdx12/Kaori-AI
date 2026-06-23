@@ -25,7 +25,7 @@ export default function ToolResultCard({ toolName, result }: ToolResultProps) {
       : toolName;
 
   return (
-    <div className="tool-card px-3 py-2 my-2 text-xs">
+    <div className="tool-card px-3 py-2 my-2 text-xs bg-white/55 dark:bg-white/5">
       <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))] mb-1">
         {icon}
         <span className="font-medium uppercase tracking-wider">{label}</span>

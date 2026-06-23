@@ -16,23 +16,24 @@ export default function ChatHeader({
 }) {
 
   return (
-    <header className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] z-20">
+    <header className="h-14 sm:h-16 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-white/60 dark:border-white/10 bg-white/50 dark:bg-neutral-950/35 backdrop-blur-xl z-20">
       {/* Left side */}
       <div className="flex items-center gap-2">
         {!sidebarOpen && (
           <button
             onClick={onToggleSidebar}
-            className="h-11 w-11 grid place-items-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            title="Toggle Sidebar"
+            className="h-10 w-10 sm:h-11 sm:w-11 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 transition-all duration-200 text-secondary hover:text-on-surface hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
           >
             <Menu size={18} />
           </button>
         )}
 
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-[hsl(var(--border))]">
+          <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 border border-white/70 dark:border-white/10 shadow-sm">
             <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
           </div>
-          <span className="font-semibold text-sm tracking-tight hidden sm:inline">Kaori</span>
+          <span className="font-semibold text-sm tracking-tight hidden sm:inline text-on-surface">Kaori</span>
         </div>
       </div>
 
@@ -41,7 +42,7 @@ export default function ChatHeader({
       {/* Right side — toggle avatar */}
       <button
         onClick={onToggleAvatar}
-        className="h-9 w-9 grid place-items-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+        className="h-10 w-10 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 transition-all duration-200 text-secondary hover:text-on-surface hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
         title={showAvatar ? "Hide Kaori" : "Show Kaori"}
       >
         {showAvatar ? (

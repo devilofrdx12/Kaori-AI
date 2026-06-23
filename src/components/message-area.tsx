@@ -58,7 +58,7 @@ export default function MessageArea({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 sm:py-6">
       <div className="max-w-3xl mx-auto space-y-1">
         <AnimatePresence initial={false}>
           {allMessages.map((msg) => (
@@ -72,18 +72,20 @@ export default function MessageArea({
               {msg.role === "user" ? (
                 /* ── USER MESSAGE ── */
                 <div className="flex justify-end mb-4">
-                  <div className="max-w-[80%] flex items-start gap-2">
+                  <div className="max-w-[min(88%,44rem)] flex items-start gap-2">
                     {editingMessageId === msg.id ? (
-                      <div className="w-full flex flex-col gap-2 bg-[hsl(var(--card))] p-3 rounded-2xl border border-[hsl(var(--border))]">
+                      <div className="w-full flex flex-col gap-2 bg-white/62 dark:bg-white/5 p-4 rounded-2xl glass-border shadow-sm">
                         <textarea
+                          title="Edit message"
+                          placeholder="Edit message"
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
-                          className="w-full min-h-[100px] bg-transparent text-[hsl(var(--foreground))] text-sm resize-none outline-none"
+                          className="w-full min-h-[100px] bg-transparent text-on-surface text-sm resize-none outline-none font-body"
                         />
                         <div className="flex justify-end gap-2 mt-2">
                           <button 
                             onClick={() => setEditingMessageId(null)}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg hover:bg-white/55 dark:hover:bg-white/10 text-secondary transition-all active:scale-95"
                           >Cancel</button>
                           <button 
                             onClick={() => {
@@ -93,7 +95,7 @@ export default function MessageArea({
                               setEditingMessageId(null);
                             }}
                             disabled={!editText.trim() || editText === msg.content}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[hsl(var(--primary))] text-white disabled:opacity-50"
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-white disabled:opacity-50 neumorphic-raised active:scale-95 transition-all"
                           >Save & Submit</button>
                         </div>
                       </div>
@@ -105,18 +107,19 @@ export default function MessageArea({
                               setEditingMessageId(msg.id);
                               setEditText(msg.content);
                             }}
-                            className="p-1.5 rounded-full text-[hsl(var(--muted-foreground))] opacity-0 group-hover/user:opacity-100 hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-all"
+                            title="Edit"
+                            className="p-1.5 rounded-full text-secondary opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface transition-all active:scale-90"
                           >
                             <Pencil size={14} />
                           </button>
-                          <div className="px-4 py-3 rounded-2xl rounded-br-md bg-[hsl(var(--primary))] text-white text-sm leading-relaxed whitespace-pre-wrap">
+                          <div className="px-4 sm:px-5 py-3 rounded-2xl rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
                             {msg.content}
                           </div>
                         </div>
                       </div>
                     )}
-                    <div className="w-7 h-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
-                      <User size={14} className="text-[hsl(var(--muted-foreground))]" />
+                    <div className="w-7 h-7 rounded-full bg-white/40 dark:bg-black/40 flex items-center justify-center shrink-0 mt-0.5 glass-border">
+                      <User size={14} className="text-secondary" />
                     </div>
                   </div>
                 </div>
@@ -127,7 +130,6 @@ export default function MessageArea({
                     <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    {/* Tool results */}
                     {msg.toolResults?.map((tr, i) => (
                       <ToolResultCard
                         key={i}
@@ -136,41 +138,43 @@ export default function MessageArea({
                       />
                     ))}
 
-                    <div className="prose dark:prose-invert max-w-none">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
-                        components={{
-                          code: ({ className, children, ...rest }) => {
-                            const isBlock = /language-(\w+)/.test(className || "");
-                            if (isBlock) {
+                    <div className="bg-white/62 dark:bg-white/5 glass-border p-4 sm:p-5 rounded-2xl rounded-bl-md shadow-sm transition-colors duration-300">
+                      <div className="prose dark:prose-invert max-w-none">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
+                          components={{
+                            code: ({ className, children, ...rest }) => {
+                              const isBlock = /language-(\w+)/.test(className || "");
+                              if (isBlock) {
+                                return (
+                                  <CodeBlock className={className}>
+                                    {children}
+                                  </CodeBlock>
+                                );
+                              }
                               return (
-                                <CodeBlock className={className}>
-                                  {children}
-                                </CodeBlock>
+                                  <code
+                                    className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
+                                    {...rest}
+                                  >
+                                    {children}
+                                  </code>
                               );
-                            }
-                            return (
-                              <code
-                                className="bg-[#1e1e1e] text-[#f8a978] px-1.5 py-0.5 rounded-md text-sm font-mono border border-neutral-800"
-                                {...rest}
-                              >
-                                {children}
-                              </code>
-                            );
-                          },
-                          pre: ({ children }) => <>{children}</>,
-                        }}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
+                            },
+                            pre: ({ children }) => <>{children}</>,
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
 
                     {/* Copy button */}
                     {msg.id !== "__streaming__" && (
                       <button
                         onClick={() => copyMessage(msg.id, msg.content)}
-                        className="mt-2 flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-all duration-200 opacity-0 group-hover:opacity-100 hover:translate-x-0.5"
+                        className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface transition-all duration-200 opacity-0 group-hover:opacity-100 hover:translate-x-0.5 active:scale-95"
                       >
                         {copiedId === msg.id ? (
                           <>

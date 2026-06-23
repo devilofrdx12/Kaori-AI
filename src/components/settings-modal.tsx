@@ -55,6 +55,7 @@ function applyAccent(colorName: string) {
   const hsl = colors[colorName] || colors.orange;
   root.style.setProperty("--primary", hsl);
   root.style.setProperty("--ring", hsl);
+  root.style.setProperty("--color-primary", `hsl(${hsl})`);
 }
 
 function applyFont(f: string) {
@@ -249,27 +250,39 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-[1px] p-4 pointer-events-none">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      {/* Clickable backdrop */}
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[24px]" onClick={onClose} />
       <motion.div 
         drag 
         dragControls={dragControls}
         dragListener={false}
         dragMomentum={false}
         dragElastic={0}
-        className="relative w-full max-w-4xl h-[90vh] md:h-[80vh] flex flex-col md:flex-row bg-[#fafafa] dark:bg-[#111111] rounded-2xl shadow-2xl overflow-hidden border border-neutral-200 dark:border-neutral-800 pointer-events-auto"
+        className="relative w-full min-w-0 max-w-4xl h-[90dvh] md:h-[80dvh] bg-white/40 dark:bg-black/40 rounded-[2.5rem] glass-border neumorphic-raised flex flex-col md:flex-row overflow-hidden pointer-events-auto"
       >
+        {/* Close Button Pinned to Modal Top Right */}
+        <button 
+          onClick={onClose} 
+          aria-label="Close settings"
+          className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-white/20 z-[60] transition-all active:scale-90"
+        >
+          <X size={24} className="text-neutral-900 dark:text-neutral-100" />
+        </button>
+
         {/* Full-width Drag Handle */}
         <div 
-          className="absolute top-0 left-0 right-0 h-10 z-50 cursor-grab active:cursor-grabbing"
+          className="absolute top-0 left-0 right-16 h-10 z-50 cursor-grab active:cursor-grabbing"
           onPointerDown={(e) => dragControls.start(e)}
         />
         
         {/* Sidebar */}
-        <div className="w-full md:w-64 shrink-0 bg-white dark:bg-[#1c1c1c] border-b md:border-b-0 md:border-r border-neutral-200 dark:border-neutral-800 flex flex-col pt-10">
-          <div className="px-6 pb-4 md:pb-6 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 select-none">Settings</h2>
+        <div className="w-full md:w-72 shrink-0 flex flex-col pt-12 md:py-10 px-4 md:px-6 border-b md:border-b-0 md:border-r border-white/70 dark:border-neutral-800 min-w-0">
+          <div className="px-2 pb-4 md:mb-10 flex flex-col min-w-0">
+            <h2 className="text-2xl font-light tracking-tighter text-neutral-900 dark:text-neutral-100 select-none">Settings</h2>
+            <p className="text-xs text-neutral-500 mt-1 uppercase tracking-widest font-medium hidden md:block">Manage your AI environment</p>
           </div>
-          <nav className="flex-none md:flex-1 px-3 space-x-2 md:space-x-0 md:space-y-1 flex md:flex-col overflow-x-auto pb-4 md:pb-0 scrollbar-hide">
+          <nav className="flex-none md:flex-1 w-full min-w-0 space-x-2 md:space-x-0 md:space-y-1 flex md:flex-col overflow-x-auto pb-4 md:pb-0 scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -277,13 +290,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`shrink-0 md:w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  className={`shrink-0 md:w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
                     isActive 
-                      ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100" 
-                      : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-neutral-200"
+                      ? "bg-white/20 dark:bg-white/10 text-neutral-900 dark:text-neutral-100 font-medium scale-95 origin-left" 
+                      : "text-neutral-500 hover:bg-white/10 font-light tracking-tight"
                   }`}
                 >
-                  <Icon size={18} className={isActive ? "text-primary" : ""} />
+                  <Icon size={18} className={`${isActive ? "text-primary" : ""} group-hover:scale-110 transition-transform`} />
                   {tab.label}
                 </button>
               );
@@ -305,17 +318,12 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col relative bg-[#fafafa] dark:bg-[#111111]">
-          <button 
-            onClick={onClose} 
-            style={{ zIndex: 60 }}
+        <div className="flex-1 flex flex-col relative bg-transparent overflow-y-auto">
+          <header className="flex justify-between items-center w-full p-6 md:px-12 md:py-8 sticky top-0 bg-white/5 backdrop-blur-md z-20">
+            <h2 className="text-2xl md:text-3xl font-light tracking-tight text-neutral-900 dark:text-neutral-100">{tabs.find(t => t.id === activeTab)?.label}</h2>
+          </header>
 
-            className="absolute top-6 right-6 p-2 rounded-full text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
-          >
-            <X size={20} />
-          </button>
-
-          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+          <div className="px-8 md:px-12 pb-16 space-y-12">
             <div className="max-w-2xl mx-auto space-y-8">
               
               {statusMsg && (
@@ -326,67 +334,87 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
 
               {/* APPEARANCE */}
               {activeTab === "appearance" && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Appearance</h3>
-                  <p className="text-neutral-500 dark:text-neutral-400 text-sm">Customize how Kaori looks and feels.</p>
-                  
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="font-medium text-neutral-900 dark:text-neutral-100 mb-4">Theme</div>
-                      <div className="flex gap-3">
-                        {["Light", "Dark", "System"].map(t => {
-                          const isSelected = theme === t.toLowerCase();
-                          return (
-                            <button 
-                              key={t} 
-                              onClick={() => handleThemeChange(t.toLowerCase())}
-                              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${isSelected ? 'border-primary text-primary bg-primary/10' : 'border-neutral-200 dark:border-neutral-700 hover:border-primary'}`}
-                            >
-                              {t}
-                            </button>
-                          );
-                        })}
-                      </div>
+                <div className="space-y-12 animate-in fade-in zoom-in duration-500">
+                  {/* Theme */}
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-[0.2em]">Theme Selection</h3>
+                      <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">Adjust the visual tone of your workspace.</p>
                     </div>
-
-                    <div className="p-4 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="font-medium text-neutral-900 dark:text-neutral-100 mb-4">Accent Color</div>
-                      <div className="flex gap-3">
-                        {[
-                          { id: "blue", bg: "bg-blue-500" },
-                          { id: "purple", bg: "bg-purple-500" },
-                          { id: "pink", bg: "bg-pink-500" },
-                          { id: "green", bg: "bg-green-500" },
-                          { id: "orange", bg: "bg-orange-500" },
-                          { id: "indigo", bg: "bg-indigo-400" },
-                          { id: "black", bg: "bg-zinc-900 dark:bg-white" }
-                        ].map(c => (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      {["Light", "Dark", "System"].map(t => {
+                        const isSelected = theme === t.toLowerCase();
+                        return (
                           <button 
-                            key={c.id} 
-                            onClick={() => handleAccentChange(c.id)}
-                            className={`w-8 h-8 rounded-full ${c.bg} ring-2 transition-all ${accent === c.id ? 'ring-primary ring-offset-2 dark:ring-offset-[#111111]' : 'ring-transparent hover:ring-neutral-400'}`}>
+                            key={t} 
+                            onClick={() => handleThemeChange(t.toLowerCase())}
+                            className={`group aspect-[4/3] rounded-3xl glass-border p-6 flex flex-col items-center justify-center transition-all duration-300 active:scale-95 ${
+                              isSelected ? 'neumorphic-inset relative' : 'bg-white/10 hover:bg-white/20'
+                            }`}
+                          >
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                              isSelected ? 'bg-white dark:bg-neutral-800 neumorphic-raised' : 'bg-white/50 dark:bg-neutral-800/50 shadow-lg'
+                            }`}>
+                              <Palette size={20} className={isSelected ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'} />
+                            </div>
+                            <span className={`tracking-tight ${isSelected ? 'text-neutral-900 dark:text-neutral-100 font-medium' : 'text-neutral-600 dark:text-neutral-400 font-light'}`}>
+                              {t}
+                            </span>
+                            {isSelected && <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary animate-pulse" />}
                           </button>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
+                  </div>
 
-                    <div className="p-4 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
-                      <div className="font-medium text-neutral-900 dark:text-neutral-100 mb-4">Font Family</div>
-                      <div className="flex flex-wrap gap-3">
-                        {["Inter", "Roboto", "Outfit", "Playfair Display", "Kaori UI"].map(f => {
-                          const isSelected = font === f;
-                          const familyStyle = f === "Kaori UI" ? '"Poppins", "Inter", sans-serif' : `"${f}", sans-serif`;
-                          return (
-                            <button 
-                              key={f} 
-                              onClick={() => handleFontChange(f)}
-                              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${isSelected ? 'border-primary text-primary bg-primary/10' : 'border-neutral-200 dark:border-neutral-700 hover:border-primary'}`}
-                              style={{ fontFamily: familyStyle }}
-                            >
-                              {f}
-                            </button>
-                          );
-                        })}
+                  {/* Accent Color */}
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-[0.2em]">Accent Color</h3>
+                      <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">Personalize primary interaction colors.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-6 p-2">
+                        {[
+                        { id: "blue", bg: "bg-blue-500", glow: "soft-glow-blue" },
+                        { id: "purple", bg: "bg-purple-500", glow: "soft-glow-purple" },
+                        { id: "pink", bg: "bg-pink-500", glow: "soft-glow-pink" },
+                        { id: "teal", bg: "bg-teal-500", glow: "soft-glow-teal" },
+                        { id: "orange", bg: "bg-orange-500", glow: "" },
+                        { id: "indigo", bg: "bg-indigo-400", glow: "" },
+                        { id: "black", bg: "bg-zinc-900 dark:bg-white", glow: "" }
+                      ].map(c => (
+                        <button 
+                          key={c.id} 
+                          onClick={() => handleAccentChange(c.id)}
+                          aria-label={`${c.id} accent`}
+                          className={`w-10 h-10 rounded-full ${c.bg} transition-all hover:scale-110 active:scale-90 ${
+                            accent === c.id ? `ring-4 ring-white/60 dark:ring-white/20 ${c.glow}` : 'hover:' + c.glow
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Font Family */}
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-[0.2em]">Font Family</h3>
+                      <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">Choose a typeface that suits your reading style.</p>
+                    </div>
+                    <div className="max-w-md relative group">
+                      <select 
+                        value={font}
+                        title="Font Family Selection"
+                        aria-label="Font Family Selection"
+                        onChange={(e) => handleFontChange(e.target.value)}
+                        className="appearance-none w-full py-4 px-6 rounded-2xl bg-white/20 dark:bg-black/20 glass-border neumorphic-inset focus:ring-0 border-none text-neutral-900 dark:text-neutral-100 font-light transition-all cursor-pointer outline-none"
+                      >
+                        {["Inter", "Roboto", "Outfit", "Playfair Display", "Kaori UI"].map(f => (
+                          <option key={f} value={f} className="bg-[#e0e5ec] dark:bg-[#1c1c1c] text-neutral-900 dark:text-neutral-100">{f}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <Activity className="text-neutral-500 w-4 h-4" />
                       </div>
                     </div>
                   </div>
@@ -400,11 +428,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Configure default providers and advanced capabilities.</p>
                   
                   <div className="space-y-4">
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 space-y-4">
+                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Default Provider</label>
                         <select 
                           value={provider}
+                          title="Default Provider"
+                          aria-label="Default Provider"
                           onChange={(e) => handleProviderChange(e.target.value)}
                           className="w-full bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-primary/50"
                         >
@@ -416,6 +446,8 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Default Model</label>
                         <select 
                           value={model}
+                          title="Default Model"
+                          aria-label="Default Model"
                           onChange={(e) => handleModelChange(e.target.value)}
                           className="w-full bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-primary/50"
                         >
@@ -430,7 +462,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 space-y-4">
+                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
                       {/* Extended thinking removed since we aren't using Opus */}
                       <div className="flex items-center justify-between">
                         <div>
@@ -456,7 +488,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Allow Kaori to perform actions on your behalf.</p>
                   
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
                           G
@@ -471,7 +503,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       </a>
                     </div>
 
-                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-500">
                           S
@@ -502,30 +534,30 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                         <div className="text-sm text-neutral-500 mb-1">Messages Today</div>
                         <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                           {usageData?.messagesToday ?? 0} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ {usageData?.messageLimit ?? 100}</span>}
                         </div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                         <div className="text-sm text-neutral-500 mb-1">Daily Spend</div>
                         <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
                           ${(usageData?.dailySpendUsd ?? 0).toFixed(2)} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ ${(usageData?.dailyLimitUsd ?? 2).toFixed(2)}</span>}
                         </div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                         <div className="text-sm text-neutral-500 mb-1">Tools Used</div>
                         <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{usageData?.toolsUsed ?? 0}</div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                         <div className="text-sm text-neutral-500 mb-1">Est. Session Cost</div>
                         <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">${(usageData?.dailySpendUsd ?? 0).toFixed(4)}</div>
                       </div>
                     </div>
                   )}
 
-                  <div className="mt-6 p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 space-y-4">
+                  <div className="mt-6 p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
@@ -556,7 +588,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Focus Mode</h3>
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Stay productive with the Pomodoro technique.</p>
                   
-                  <div className="p-6 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800">
+                  <div className="p-6 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
                     <PomodoroTimer />
                   </div>
                 </div>
@@ -579,7 +611,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Manage your personal data and account.</p>
                   
                   <div className="space-y-4">
-                    <div className="p-5 rounded-2xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 space-y-4">
+                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export Conversations</div>

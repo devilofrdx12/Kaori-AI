@@ -90,22 +90,22 @@ export default function ChatInput({
   };
 
   return (
-    <div className="shrink-0 px-3 sm:px-4 pb-4 pt-2">
+    <div className="shrink-0 px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
       <div className="max-w-3xl mx-auto">
         {/* File previews */}
         {previewUrls.length > 0 && (
-          <div className="flex gap-2 mb-2 px-1">
+          <div className="flex flex-wrap gap-2 mb-2 px-1">
             {previewUrls.map((url, i) => (
               <div key={i} className="relative group">
                 {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */}
                 <img
                   src={url}
                   alt=""
-                  className="w-16 h-16 object-cover rounded-lg border border-neutral-200 dark:border-neutral-800"
+                  className="w-16 h-16 object-cover rounded-xl border border-white/70 dark:border-white/10 shadow-sm"
                 />
                 <button
                   onClick={() => removeFile(i)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neutral-800 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neutral-900 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-all active:scale-90"
                   title="Remove image"
                 >
                   <X size={12} />
@@ -116,11 +116,14 @@ export default function ChatInput({
         )}
 
         {/* Input Container */}
-        <div className="flex flex-col bg-white dark:bg-[#202020] rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm transition-all duration-300 focus-within:ring-4 focus-within:ring-[hsl(var(--primary)/0.15)] focus-within:border-[hsl(var(--primary)/0.4)] focus-within:shadow-md">
+        <div className="flex flex-col neumorphic-inset bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[20px] rounded-[1.5rem] border border-white/40 dark:border-white/10 transition-all duration-300 focus-within:ring-2 focus-within:ring-primary/30 focus-within:bg-white/60 dark:focus-within:bg-white/10 input-glow shadow-[0_4px_24px_-4px_hsl(220_30%_10%/0.05)]">
           
           <input
             ref={fileRef}
             type="file"
+            title="Upload image"
+            placeholder="Upload image"
+            aria-label="Upload image"
             accept="image/*"
             multiple
             onChange={handleFiles}
@@ -135,23 +138,23 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             placeholder={placeholder || "Reply to Kaori"}
             rows={1}
-            className="flex-1 w-full resize-none bg-transparent text-[15px] text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 outline-none px-4 pt-4 pb-2 min-h-[56px] max-h-[180px] leading-relaxed"
+            className="flex-1 w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pt-4 sm:pt-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70"
             disabled={disabled}
           />
 
           {/* Bottom Toolbar */}
-          <div className="flex items-center justify-between px-2 pb-2">
+          <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full">
             {/* Left: attach + model */}
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-1 min-w-0 flex-1">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="h-9 w-9 shrink-0 grid place-items-center rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors"
+                className="h-10 w-10 shrink-0 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95"
                 title="Attach file"
               >
                 <Plus size={20} strokeWidth={1.5} />
               </button>
 
-              <div className="relative z-10 min-w-0">
+              <div className="relative z-10 min-w-0 ml-1 max-w-[calc(100vw-7.5rem)] sm:max-w-none">
                 <ModelSelector 
                   model={model} 
                   onChange={onModelChange} 
@@ -162,31 +165,31 @@ export default function ChatInput({
             </div>
 
             {/* Right: voice + send */}
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
               <button
                 onClick={startVoice}
-                className={`h-8 w-8 shrink-0 grid place-items-center rounded-lg transition-colors ${
+                className={`h-10 w-10 shrink-0 grid place-items-center rounded-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95 ${
                   listening
                     ? "text-red-400 bg-red-400/10 animate-pulse"
-                    : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50"
+                    : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised"
                 }`}
                 title="Voice input"
               >
                 <Mic size={18} strokeWidth={1.5} />
               </button>
               <button
-                className="h-8 w-8 shrink-0 grid place-items-center rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors"
+                className="h-10 w-10 shrink-0 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95"
                 title="Voice mode"
               >
                 <AudioLines size={18} strokeWidth={1.5} />
               </button>
 
-              <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+              <div className="w-px h-6 bg-white/40 dark:bg-white/10 mx-1" />
 
               {disabled ? (
                 <button
                   onClick={onStop}
-                  className="h-8 w-8 shrink-0 grid place-items-center rounded-[10px] bg-neutral-200 dark:bg-neutral-800 text-neutral-500 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                  className="h-10 w-10 shrink-0 grid place-items-center rounded-xl neumorphic-raised bg-white/55 dark:bg-white/10 text-secondary transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
                   title="Stop generating"
                 >
                   <Square size={14} className="fill-current" />
@@ -194,18 +197,18 @@ export default function ChatInput({
               ) : (
                 <button
                   onClick={handleSend}
-                  disabled={!value.trim() && !files.length}
-                  className="h-8 w-8 shrink-0 grid place-items-center rounded-[10px] bg-[#d96b41] text-white disabled:opacity-50 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 disabled:text-neutral-400 dark:disabled:text-neutral-500 transition-colors"
+                  disabled={disabled || (!value.trim() && !files.length)}
+                  className="h-10 w-10 shrink-0 grid place-items-center rounded-xl bg-primary text-white shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 hover:shadow-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:hover:shadow-sm active:-translate-y-0.5 active:scale-95"
                   title="Send message"
                 >
-                  <ArrowUp size={16} strokeWidth={2.5} />
+                  <ArrowUp size={18} strokeWidth={2.5} />
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        <p className="text-[11px] text-center text-neutral-400 dark:text-neutral-500 mt-3 font-medium">
+        <p className="text-[11px] text-center text-secondary mt-3 sm:mt-4 font-light tracking-wide px-3">
           Kaori can make mistakes. Please verify important information.
         </p>
       </div>
