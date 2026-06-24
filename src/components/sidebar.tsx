@@ -65,9 +65,9 @@ export default function Sidebar({
       {/* Sidebar panel */}
       <motion.aside
         initial={false}
-        animate={open ? { x: 0 } : { x: "calc(-100% - 24px)" }}
-        transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.9 }}
-        className="fixed left-3 top-3 bottom-3 sm:left-4 sm:top-4 sm:bottom-4 z-40 w-[min(20rem,calc(100vw-1.5rem))] lg:w-72 bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[40px] rounded-[2rem] border border-white/40 dark:border-white/10 shadow-[0_8px_32px_hsl(220_30%_10%/0.08)] flex flex-col font-sans"
+        animate={open ? { x: 0, scale: 1 } : { x: "calc(-100% - 24px)", scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
+        className="fixed left-3 top-3 bottom-3 sm:left-4 sm:top-4 sm:bottom-4 z-40 w-[min(20rem,calc(100vw-1.5rem))] lg:w-72 glass-panel shadow-[0_16px_48px_-12px_hsl(var(--primary)/0.2)] flex flex-col font-sans"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 pt-6 sm:pt-8 pb-4">
@@ -76,7 +76,7 @@ export default function Sidebar({
           </span>
           <button
             onClick={onToggle}
-            className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 active:scale-90"
+            className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 active-press hover-lift"
             title="Close sidebar"
           >
             <PanelLeftClose size={18} strokeWidth={1.5} />
@@ -87,37 +87,37 @@ export default function Sidebar({
         <div className="px-4 space-y-1 mt-2">
           <button 
             onClick={() => { onNewChat(); closeMobile(); }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface hover:bg-white/45 dark:hover:bg-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98] group"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] text-on-surface hover:bg-white/45 dark:hover:bg-white/10 active-press hover-lift group"
           >
-            <MessageSquarePlus size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform text-secondary" />
+            <MessageSquarePlus size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] text-secondary" />
             <span className="font-headline tracking-tight font-light">New chat</span>
           </button>
           <button 
             onClick={() => { onTabChange('chats'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'chats' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'chats' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <MessageSquare size={18} strokeWidth={1.5} className={activeTab === 'chats' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <MessageSquare size={18} strokeWidth={1.5} className={activeTab === 'chats' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
             <span className="font-headline tracking-tight">Chats</span>
           </button>
           <button 
             onClick={() => { onTabChange('projects'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'projects' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'projects' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Archive size={18} strokeWidth={1.5} className={activeTab === 'projects' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <Archive size={18} strokeWidth={1.5} className={activeTab === 'projects' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
             <span className="font-headline tracking-tight">Projects</span>
           </button>
           <button 
             onClick={() => { onTabChange('artifacts'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'artifacts' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'artifacts' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Blocks size={18} strokeWidth={1.5} className={activeTab === 'artifacts' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <Blocks size={18} strokeWidth={1.5} className={activeTab === 'artifacts' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
             <span className="font-headline tracking-tight">Artifacts</span>
           </button>
           <button 
             onClick={() => { onTabChange('code'); closeMobile(); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group ${activeTab === 'code' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm scale-105 -translate-y-1' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light hover:-translate-y-1 hover:scale-105 active:-translate-y-0.5 active:scale-[0.98]'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'code' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Code size={18} strokeWidth={1.5} className={activeTab === 'code' ? 'text-primary' : 'group-hover:scale-110 transition-transform'} />
+            <Code size={18} strokeWidth={1.5} className={activeTab === 'code' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
             <span className="font-headline tracking-tight">Code</span>
           </button>
         </div>
@@ -135,7 +135,7 @@ export default function Sidebar({
                   return (
                     <div
                       key={chat.id}
-                      className={`group relative flex items-center w-full rounded-xl transition-all duration-300 ${
+                      className={`group relative flex items-center w-full rounded-[1.25rem] transition-colors duration-300 ${
                         active
                           ? "bg-white/60 dark:bg-white/10 shadow-sm"
                           : "hover:bg-white/45 dark:hover:bg-white/10"
@@ -156,7 +156,7 @@ export default function Sidebar({
                           e.stopPropagation();
                           onToggleStarChat(chat.id, false);
                         }}
-                        className="absolute right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 text-yellow-500 active:scale-90"
+                        className="absolute right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all rounded-xl hover:bg-white/60 dark:hover:bg-neutral-700 text-yellow-500 active-press"
                         title="Unstar chat"
                       >
                         <Star size={14} fill="currentColor" />
@@ -179,7 +179,7 @@ export default function Sidebar({
                 return (
                   <div
                     key={chat.id}
-                    className={`group relative flex items-center w-full rounded-xl transition-all duration-300 ${
+                    className={`group relative flex items-center w-full rounded-[1.25rem] transition-colors duration-300 ${
                       active
                         ? "bg-white/60 dark:bg-white/10 shadow-sm"
                         : "hover:bg-white/45 dark:hover:bg-white/10"
@@ -201,7 +201,7 @@ export default function Sidebar({
                           e.stopPropagation();
                           onToggleStarChat(chat.id, !chat.isStarred);
                         }}
-                        className={`p-1.5 rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 active:scale-90 transition-transform ${
+                        className={`p-1.5 rounded-xl hover:bg-white/60 dark:hover:bg-neutral-700 active-press transition-colors ${
                           chat.isStarred ? "text-yellow-500" : "text-secondary hover:text-yellow-500"
                         }`}
                         title={chat.isStarred ? "Unstar chat" : "Star chat"}
@@ -213,7 +213,7 @@ export default function Sidebar({
                           e.stopPropagation();
                           onDeleteChat(chat.id);
                         }}
-                        className="p-1.5 rounded-md hover:bg-white/60 dark:hover:bg-neutral-700 text-secondary hover:text-red-500 active:scale-90 transition-all"
+                        className="p-1.5 rounded-xl hover:bg-white/60 dark:hover:bg-neutral-700 text-secondary hover:text-red-500 active-press transition-colors"
                         title="Delete chat"
                       >
                         <Trash2 size={14} />
@@ -230,27 +230,27 @@ export default function Sidebar({
         </div>
 
         {/* User section */}
-        <div className="p-4 mt-auto bg-white/42 dark:bg-white/5 border border-white/55 dark:border-white/10 rounded-2xl mx-4 mb-5 sm:mb-6">
-          <button 
-            onClick={() => { onOpenSettings(); closeMobile(); }}
-            className="w-full flex items-center justify-between gap-3 group"
-          >
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-9 h-9 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-sm">bolt</span>
+        <button 
+          onClick={() => { onOpenSettings(); closeMobile(); }}
+          className="mt-auto mx-4 mb-5 sm:mb-6 flex items-center justify-between gap-3 group active-press hover-lift p-4 rounded-3xl glass-panel border-none shadow-none bg-white/20 dark:bg-white/5 hover:bg-white/30 dark:hover:bg-white/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="text-primary font-bold text-lg font-headline">
+                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <div className="text-sm font-bold text-on-surface truncate">
+                {user ? user.name : "Pro Plan"}
               </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="text-sm font-bold text-on-surface truncate">
-                  {user ? user.name : "Pro Plan"}
-                </div>
-                <div className="text-xs text-secondary truncate">
-                  {user?.email ? "85% credits remaining" : "Signed in"}
-                </div>
+              <div className="text-xs text-secondary truncate">
+                {user?.email ? "85% credits remaining" : "Signed in"}
               </div>
             </div>
-            <ChevronDown size={16} className="text-secondary group-hover:text-primary shrink-0 transition-colors" strokeWidth={1.5} />
-          </button>
-        </div>
+          </div>
+          <ChevronDown size={18} className="text-secondary group-hover:text-primary shrink-0 transition-colors" strokeWidth={1.5} />
+        </button>
       </motion.aside>
     </>
   );

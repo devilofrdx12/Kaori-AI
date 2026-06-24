@@ -33,11 +33,11 @@ function parseUserAgent(ua: string): { device: string; browser: string; icon: ty
   }
 
   // Detect OS
-  if (lower.includes("windows")) device += " · Windows";
-  else if (lower.includes("mac")) device += " · macOS";
-  else if (lower.includes("linux")) device += " · Linux";
-  else if (lower.includes("android")) device += " · Android";
-  else if (lower.includes("iphone") || lower.includes("ipad")) device += " · iOS";
+  if (lower.includes("windows")) device += " - Windows";
+  else if (lower.includes("mac")) device += " - macOS";
+  else if (lower.includes("linux")) device += " - Linux";
+  else if (lower.includes("android")) device += " - Android";
+  else if (lower.includes("iphone") || lower.includes("ipad")) device += " - iOS";
 
   // Detect browser
   if (lower.includes("chrome") && !lower.includes("edg")) browser = "Chrome";
@@ -117,7 +117,7 @@ export default function SessionManager() {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="p-3 rounded-xl text-sm bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400">
+        <div className="settings-glass-danger rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-700 backdrop-blur-xl dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
       )}
@@ -136,14 +136,14 @@ export default function SessionManager() {
             return (
               <div
                 key={session.id}
-                className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 group transition-all hover:border-neutral-300 dark:hover:border-neutral-700"
+                className="settings-glass-card group flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl transition-all hover:bg-white/40 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/45 dark:border-white/10 dark:bg-white/[0.06]">
                     <DeviceIcon size={18} className="text-neutral-500 dark:text-neutral-400" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                         {device}
                       </span>
@@ -153,11 +153,11 @@ export default function SessionManager() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
                       <span>{browser}</span>
-                      <span>·</span>
+                      <span>-</span>
                       <span>{session.ip}</span>
-                      <span>·</span>
+                      <span>-</span>
                       <span>{formatRelativeTime(session.createdAt)}</span>
                     </div>
                   </div>
@@ -167,7 +167,7 @@ export default function SessionManager() {
                   <button
                     onClick={() => revokeSession(session.id)}
                     disabled={revoking === session.id}
-                    className="p-2 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                    className="self-start rounded-xl p-2 text-neutral-400 opacity-100 transition-all hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 sm:self-center sm:opacity-0 sm:group-hover:opacity-100"
                     title="Revoke session"
                   >
                     {revoking === session.id ? (

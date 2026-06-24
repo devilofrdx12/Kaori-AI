@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import Sidebar from "./sidebar";
 import ChatHeader from "./chat-header";
 import MessageArea from "./message-area";
@@ -26,8 +27,7 @@ import {
 type AvatarEmotion = "idle" | "happy" | "shy" | "caring" | "thinking" | "surprised";
 
 function getInitialModel() {
-  if (typeof window === "undefined") return DEFAULT_MODEL;
-  return localStorage.getItem("kaori_model") || DEFAULT_MODEL;
+  return DEFAULT_MODEL;
 }
 
 function getTimeGreeting() {
@@ -122,7 +122,7 @@ function MiniPomodoroTimer() {
   const timeStr = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-[#222] shadow-lg border border-neutral-200 dark:border-neutral-800 rounded-full px-4 py-2 flex items-center gap-3 animate-fade-in transition-all">
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-full px-4 py-2 flex items-center gap-3 animate-fade-in transition-all">
       <div className="flex items-center gap-2">
         <span className="text-lg">{mode === "focus" ? "🧠" : "☕"}</span>
         <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{timeStr}</span>
@@ -160,6 +160,15 @@ function ChatLayoutInner() {
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const storedModel = localStorage.getItem("kaori_model");
+      if (storedModel) setModel(storedModel);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   // Init: check auth + load chats
   useEffect(() => {
@@ -596,7 +605,7 @@ function ChatLayoutInner() {
       {/* Main chat area wrapper to prevent margin overflow */}
       <div className={`transition-[padding] duration-300 ease-out h-full w-full lg:py-4 lg:pr-4 ${sidebarOpen ? "lg:pl-[312px]" : "lg:pl-4"}`}>
         <main
-          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[40px] border border-white/40 dark:border-white/10 shadow-[0_8px_32px_hsl(220_30%_10%/0.08)] transition-[box-shadow,background-color] duration-300 ease-out lg:rounded-[2rem]"
+          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden glass-panel lg:rounded-[2rem]"
         >
           <ChatHeader
           onToggleSidebar={() => setSidebarOpen((p) => !p)}
@@ -610,7 +619,7 @@ function ChatLayoutInner() {
             {isEmpty ? (
               <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-fade-in pb-12 sm:pb-24">
                 <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
-                  <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white/70 dark:bg-white/5 text-primary neumorphic-inset glass-border transition-transform duration-300 hover:scale-105 shadow-[0_4px_24px_-4px_hsl(var(--primary)/0.2)]">
+                  <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl glass-panel text-primary transition-transform duration-300 hover:scale-105">
                     <Sparkles size={24} strokeWidth={1.5} className="animate-pulse" />
                   </div>
                   <h1 className="text-2xl sm:text-4xl lg:text-5xl font-headline font-light tracking-tight text-on-surface text-balance">
@@ -621,7 +630,7 @@ function ChatLayoutInner() {
                   </p>
                 </div>
                 
-                <div className="w-full relative z-20">
+                <motion.div layoutId="chat-input-container" className="w-full relative z-20">
                   <ChatInput
                     onSend={handleSend}
                     disabled={typing}
@@ -630,7 +639,7 @@ function ChatLayoutInner() {
                     onModelChange={setModel}
                     placeholder="How can I help you today?"
                   />
-                </div>
+                </motion.div>
 
                 <div className="flex overflow-x-auto sm:flex-wrap items-center sm:justify-center gap-2.5 mt-5 w-[calc(100%+2rem)] sm:w-full max-w-3xl pb-2 px-4 sm:px-0 -mx-4 sm:mx-0 scrollbar-hide">
                   {[
@@ -645,7 +654,7 @@ function ChatLayoutInner() {
                       <button
                         key={i}
                         onClick={() => handleSend(chip.prompt, null)}
-                        className="shrink-0 flex h-11 items-center justify-center gap-2 rounded-[14px] bg-white/60 dark:bg-white/5 px-4 text-sm font-medium text-secondary glass-border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/90 hover:-translate-y-1 hover:scale-105 hover:text-on-surface hover:shadow-md active:-translate-y-0.5 active:scale-95 group"
+                        className="shrink-0 flex h-11 items-center justify-center gap-2 rounded-[1.25rem] glass-panel px-4 text-sm font-medium text-secondary hover-lift active-press hover:text-on-surface group"
                       >
                         <Icon size={16} className="text-neutral-500 dark:text-neutral-400" />
                         {chip.text}
@@ -666,14 +675,16 @@ function ChatLayoutInner() {
                   bottomRef={bottomRef}
                 />
 
-                <ChatInput
-                  onSend={handleSend}
-                  disabled={typing}
-                  onStop={handleStop}
-                  model={model}
-                  onModelChange={setModel}
-                  placeholder="Reply to Kaori"
-                />
+                <motion.div layoutId="chat-input-container" className="w-full shrink-0">
+                  <ChatInput
+                    onSend={handleSend}
+                    disabled={typing}
+                    onStop={handleStop}
+                    model={model}
+                    onModelChange={setModel}
+                    placeholder="Reply to Kaori"
+                  />
+                </motion.div>
               </>
             )}
           </>

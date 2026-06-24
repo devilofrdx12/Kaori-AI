@@ -55,14 +55,14 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
   return (
     <div className="space-y-6">
       {/* Mode Toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <button
             onClick={() => switchMode("focus")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
               mode === "focus"
                 ? "bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary)/0.3)]"
-                : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                : "text-neutral-600 hover:bg-white/35 dark:text-neutral-400 dark:hover:bg-white/10"
             }`}
           >
             <Brain size={16} />
@@ -70,10 +70,10 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
           </button>
           <button
             onClick={() => switchMode("break")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
               mode === "break"
                 ? "bg-green-500/12 text-green-600 dark:text-green-400 ring-1 ring-green-500/30"
-                : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                : "text-neutral-600 hover:bg-white/35 dark:text-neutral-400 dark:hover:bg-white/10"
             }`}
           >
             <Coffee size={16} />
@@ -85,7 +85,7 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
         <div ref={presetsRef} className="relative">
           <button
             onClick={() => setShowPresets(!showPresets)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="settings-glass-card flex h-9 items-center justify-center gap-1 rounded-xl border border-white/40 bg-white/25 px-3 text-xs font-medium text-neutral-500 transition-colors hover:bg-white/40 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:justify-start"
           >
             {mode === "focus" ? focusMins : breakMins} min
             <ChevronDown
@@ -94,7 +94,7 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
             />
           </button>
           {showPresets && (
-            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[#1c1c1c] border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl z-10 overflow-hidden animate-fade-in min-w-[120px]">
+            <div className="settings-glass-card absolute right-0 top-full z-10 mt-1 min-w-[120px] overflow-hidden rounded-xl border border-white/45 bg-white/80 shadow-xl backdrop-blur-xl animate-fade-in dark:border-white/10 dark:bg-neutral-950/85">
               <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
                 Duration
               </div>
@@ -109,7 +109,7 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
                     }
                     setShowPresets(false);
                   }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors ${
+                  className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-white/60 dark:hover:bg-white/10 ${
                     (mode === "focus" ? focusMins : breakMins) === mins
                       ? "text-[hsl(var(--primary))] font-medium"
                       : "text-neutral-700 dark:text-neutral-300"
@@ -125,7 +125,7 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
 
       {/* Circular Timer */}
       <div className="flex flex-col items-center">
-        <div className="relative w-52 h-52">
+        <div className="relative h-44 w-44 sm:h-52 sm:w-52">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
             {/* Track */}
             <circle

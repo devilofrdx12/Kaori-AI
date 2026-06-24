@@ -59,8 +59,10 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-10">
-          <div className="w-full max-w-sm animate-fade-in">
+        <section className="flex items-center justify-center px-5 py-10 relative">
+          {/* Glass overlay for the right section */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--primary)/0.05)] to-transparent pointer-events-none" />
+          <div className="w-full max-w-sm animate-fade-in glass-panel p-8 sm:p-10 rounded-3xl shadow-xl z-10">
             <div className="mb-8 lg:hidden">
               <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-[hsl(var(--primary))] text-white shadow-sm">
                 <Sparkles size={22} />

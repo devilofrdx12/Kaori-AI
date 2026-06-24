@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { chatId, message, model, files, editMessageId, studyMode } = await req.json();
+    const { chatId, message, model, files, editMessageId, studyMode } = await req.json().catch(() => ({}));
 
     if (!chatId || !message) {
       return new Response(

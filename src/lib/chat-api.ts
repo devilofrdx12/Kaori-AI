@@ -46,10 +46,21 @@ async function jsonFetchWithRetry(url: string, init: RequestInit = {}) {
   const res = await fetchWithRetry(url, init);
   const text = await res.text();
   if (!res.ok) {
-    const data = text ? JSON.parse(text) : {};
-    throw new Error(data.error || "Request failed");
+    let data: any = {};
+    try {
+      if (text.trim()) data = JSON.parse(text);
+    } catch {
+      // Not JSON
+      throw new Error(`Request failed (${res.status}): ${text.slice(0, 100)}`);
+    }
+    throw new Error(data.error || data.message || `Request failed (${res.status})`);
   }
-  return text ? JSON.parse(text) : null;
+  
+  try {
+    return text.trim() ? JSON.parse(text) : null;
+  } catch (err: any) {
+    throw new Error(`Failed to parse API response (${res.status}): ${err.message}. Response excerpt: ${text.slice(0, 50)}...`);
+  }
 }
 
 export async function listChats(): Promise<ChatThreadSummary[]> {

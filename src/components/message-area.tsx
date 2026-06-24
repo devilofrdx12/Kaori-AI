@@ -66,15 +66,15 @@ export default function MessageArea({
               key={msg.id}
               initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              transition={{ type: "spring", stiffness: 350, damping: 30, mass: 0.8 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
               className="group relative"
             >
               {msg.role === "user" ? (
                 /* ── USER MESSAGE ── */
                 <div className="flex justify-end mb-4">
-                  <div className="max-w-[min(88%,44rem)] flex items-start gap-2">
+                  <div className="max-w-[min(88%,44rem)] flex items-end gap-2">
                     {editingMessageId === msg.id ? (
-                      <div className="w-full flex flex-col gap-2 bg-white/62 dark:bg-white/5 p-4 rounded-2xl glass-border shadow-sm">
+                      <div className="w-full flex flex-col gap-2 glass-panel p-4 rounded-2xl">
                         <textarea
                           title="Edit message"
                           placeholder="Edit message"
@@ -85,7 +85,7 @@ export default function MessageArea({
                         <div className="flex justify-end gap-2 mt-2">
                           <button 
                             onClick={() => setEditingMessageId(null)}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg hover:bg-white/55 dark:hover:bg-white/10 text-secondary transition-all active:scale-95"
+                            className="px-3 py-1.5 text-xs font-medium rounded-xl hover:bg-white/55 dark:hover:bg-white/10 text-secondary hover-lift active-press"
                           >Cancel</button>
                           <button 
                             onClick={() => {
@@ -95,7 +95,7 @@ export default function MessageArea({
                               setEditingMessageId(null);
                             }}
                             disabled={!editText.trim() || editText === msg.content}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-white disabled:opacity-50 neumorphic-raised active:scale-95 transition-all"
+                            className="px-3 py-1.5 text-xs font-medium rounded-xl bg-primary text-white disabled:opacity-50 disabled:hover-lift-none disabled:active-press-none hover-lift active-press"
                           >Save & Submit</button>
                         </div>
                       </div>
@@ -108,73 +108,77 @@ export default function MessageArea({
                               setEditText(msg.content);
                             }}
                             title="Edit"
-                            className="p-1.5 rounded-full text-secondary opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface transition-all active:scale-90"
+                            className="p-1.5 rounded-full text-secondary opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
                           >
                             <Pencil size={14} />
                           </button>
-                          <div className="px-4 sm:px-5 py-3 rounded-2xl rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
+                          <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
                             {msg.content}
                           </div>
                         </div>
                       </div>
                     )}
-                    <div className="w-7 h-7 rounded-full bg-white/40 dark:bg-black/40 flex items-center justify-center shrink-0 mt-0.5 glass-border">
+                    <div className="w-7 h-7 rounded-full bg-white/40 dark:bg-black/40 flex items-center justify-center shrink-0 glass-border">
                       <User size={14} className="text-secondary" />
                     </div>
                   </div>
                 </div>
               ) : (
                 /* ── ASSISTANT MESSAGE ── */
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 mt-0.5 border border-[hsl(var(--border))]">
-                    <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {msg.toolResults?.map((tr, i) => (
-                      <ToolResultCard
-                        key={i}
-                        toolName={tr.toolName}
-                        result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
-                      />
-                    ))}
+                <div className="flex flex-col mb-4">
+                  <div className="flex items-end gap-3">
+                    <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-[hsl(var(--border))]">
+                      <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {msg.toolResults?.map((tr, i) => (
+                        <ToolResultCard
+                          key={i}
+                          toolName={tr.toolName}
+                          result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
+                        />
+                      ))}
 
-                    <div className="bg-white/62 dark:bg-white/5 glass-border p-4 sm:p-5 rounded-2xl rounded-bl-md shadow-sm transition-colors duration-300">
-                      <div className="prose dark:prose-invert max-w-none">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
-                          components={{
-                            code: ({ className, children, ...rest }) => {
-                              const isBlock = /language-(\w+)/.test(className || "");
-                              if (isBlock) {
+                      <div className="glass-panel p-4 sm:p-5 rounded-[1.5rem] rounded-bl-md transition-colors duration-300">
+                        <div className="prose dark:prose-invert max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
+                            components={{
+                              pre: ({ children }) => <>{children}</>,
+                              code: ({ className, children, ...rest }) => {
+                                const isBlock = /language-(\w+)/.test(className || "");
+                                if (isBlock) {
+                                  return (
+                                    <CodeBlock className={className}>
+                                      {children}
+                                    </CodeBlock>
+                                  );
+                                }
                                 return (
-                                  <CodeBlock className={className}>
-                                    {children}
-                                  </CodeBlock>
+                                    <code
+                                      className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
+                                      {...rest}
+                                    >
+                                      {children}
+                                    </code>
                                 );
-                              }
-                              return (
-                                  <code
-                                    className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
-                                    {...rest}
-                                  >
-                                    {children}
-                                  </code>
-                              );
-                            },
-                            pre: ({ children }) => <>{children}</>,
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
+                              },
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Copy button */}
-                    {msg.id !== "__streaming__" && (
+                  {/* Copy button */}
+                  {msg.id !== "__streaming__" && (
+                    <div className="pl-10">
                       <button
                         onClick={() => copyMessage(msg.id, msg.content)}
-                        className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface transition-all duration-200 opacity-0 group-hover:opacity-100 hover:translate-x-0.5 active:scale-95"
+                        className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface opacity-0 group-hover:opacity-100 hover-lift active-press"
                       >
                         {copiedId === msg.id ? (
                           <>
@@ -188,8 +192,8 @@ export default function MessageArea({
                           </>
                         )}
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>

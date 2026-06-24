@@ -9,7 +9,7 @@ const INVALID_CODE_MESSAGE = "Invalid or expired reset code";
 
 export async function POST(req: Request) {
   try {
-    const { email: rawEmail, otp: rawOtp, password: rawPassword } = await req.json();
+    const { email: rawEmail, otp: rawOtp, password: rawPassword } = await req.json().catch(() => ({}));
 
     let email: string;
     let password: string;

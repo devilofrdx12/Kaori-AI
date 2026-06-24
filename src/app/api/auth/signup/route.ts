@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     // Validate input
     const name = validateUsername(body.name);

@@ -34,7 +34,7 @@ function buildResetUrl(req: Request, email: string) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const rawEmail = body.email;
 
     let email: string;

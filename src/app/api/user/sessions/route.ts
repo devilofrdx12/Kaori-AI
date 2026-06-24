@@ -87,7 +87,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const { sessionId } = body;
 
   if (!sessionId || typeof sessionId !== "string") {

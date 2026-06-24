@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { query } = await req.json();
+    const { query } = await req.json().catch(() => ({}));
     const validatedQuery = validateSearchQuery(query);
 
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(

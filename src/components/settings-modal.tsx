@@ -1,6 +1,8 @@
+"use client";
+
 import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { motion, useDragControls } from "framer-motion";
+import { motion, useDragControls, AnimatePresence } from "framer-motion";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
@@ -48,6 +50,7 @@ function applyAccent(colorName: string) {
     purple: "270 95% 60%",
     pink: "330 81% 60%",
     green: "142 71% 45%",
+    teal: "173 80% 40%",
     orange: "18 65% 59%",
     indigo: "239 84% 67%",
     black: "0 0% 10%",
@@ -237,8 +240,6 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     return () => window.clearTimeout(timeoutId);
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const tabs = [
     { id: "appearance", label: "Appearance", icon: Palette },
     { id: "model", label: "AI Model", icon: Cpu },
@@ -250,39 +251,51 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Clickable backdrop */}
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-[24px]" onClick={onClose} />
-      <motion.div 
-        drag 
-        dragControls={dragControls}
-        dragListener={false}
-        dragMomentum={false}
-        dragElastic={0}
-        className="relative w-full min-w-0 max-w-4xl h-[90dvh] md:h-[80dvh] bg-white/40 dark:bg-black/40 rounded-[2.5rem] glass-border neumorphic-raised flex flex-col md:flex-row overflow-hidden pointer-events-auto"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6">
+          {/* Clickable backdrop */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="settings-glass-backdrop absolute inset-0 bg-black/20" 
+            onClick={onClose} 
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            drag 
+            dragControls={dragControls}
+            dragListener={false}
+            dragMomentum={false}
+            dragElastic={0}
+            className="settings-glass-shell relative flex h-[calc(100dvh-2rem)] max-h-[800px] w-full min-w-0 max-w-4xl flex-col overflow-hidden rounded-[1.75rem] sm:rounded-[2.25rem] pointer-events-auto md:h-[min(80dvh,800px)] md:flex-row"
+          >
         {/* Close Button Pinned to Modal Top Right */}
         <button 
           onClick={onClose} 
           aria-label="Close settings"
-          className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-white/20 z-[60] transition-all active:scale-90"
+          className="settings-glass-card absolute right-3 top-3 z-[60] rounded-full border border-white/40 bg-white/30 p-2 shadow-sm backdrop-blur-xl transition-all hover:bg-white/45 active:scale-90 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 sm:right-4 sm:top-4"
         >
           <X size={24} className="text-neutral-900 dark:text-neutral-100" />
         </button>
 
         {/* Full-width Drag Handle */}
         <div 
-          className="absolute top-0 left-0 right-16 h-10 z-50 cursor-grab active:cursor-grabbing"
+          className="absolute left-3 right-16 top-0 z-50 h-11 cursor-grab active:cursor-grabbing sm:left-5"
           onPointerDown={(e) => dragControls.start(e)}
         />
         
         {/* Sidebar */}
-        <div className="w-full md:w-72 shrink-0 flex flex-col pt-12 md:py-10 px-4 md:px-6 border-b md:border-b-0 md:border-r border-white/70 dark:border-neutral-800 min-w-0">
-          <div className="px-2 pb-4 md:mb-10 flex flex-col min-w-0">
+        <div className="flex w-full shrink-0 flex-col border-b border-white/45 bg-white/35 px-3 pb-3 pt-12 backdrop-blur-[36px] backdrop-saturate-150 dark:border-white/10 dark:bg-neutral-900/40 sm:px-4 md:h-full md:w-72 md:border-b-0 md:border-r md:px-5 md:py-8">
+          <div className="flex min-w-0 flex-col px-2 pb-4 md:mb-8">
             <h2 className="text-2xl font-light tracking-tighter text-neutral-900 dark:text-neutral-100 select-none">Settings</h2>
             <p className="text-xs text-neutral-500 mt-1 uppercase tracking-widest font-medium hidden md:block">Manage your AI environment</p>
           </div>
-          <nav className="flex-none md:flex-1 w-full min-w-0 space-x-2 md:space-x-0 md:space-y-1 flex md:flex-col overflow-x-auto pb-4 md:pb-0 scrollbar-hide">
+          <nav className="flex w-full min-w-0 flex-none gap-2 overflow-x-auto pb-1 scrollbar-hide md:min-h-0 md:flex-1 md:flex-col md:gap-1 md:overflow-x-visible md:overflow-y-auto md:pb-0">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -290,26 +303,26 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`shrink-0 md:w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+                  className={`group flex h-11 shrink-0 items-center gap-3 rounded-2xl px-4 text-sm transition-all duration-300 md:h-auto md:w-full md:py-3 ${
                     isActive 
-                      ? "bg-white/20 dark:bg-white/10 text-neutral-900 dark:text-neutral-100 font-medium scale-95 origin-left" 
-                      : "text-neutral-500 hover:bg-white/10 font-light tracking-tight"
+                      ? "bg-white/60 text-neutral-900 shadow-[0_8px_22px_hsl(220_30%_10%/0.08)] dark:bg-white/15 dark:text-neutral-100 dark:shadow-none md:scale-95 md:origin-left border border-white/40 dark:border-white/10" 
+                      : "text-neutral-600 hover:bg-white/30 font-light tracking-tight dark:text-neutral-400 dark:hover:bg-white/10"
                   }`}
                 >
                   <Icon size={18} className={`${isActive ? "text-primary" : ""} group-hover:scale-110 transition-transform`} />
-                  {tab.label}
+                  <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
           
-          <div className="hidden md:block p-4 border-t border-neutral-200 dark:border-neutral-800">
+          <div className="mt-4 hidden border-t border-white/35 p-4 dark:border-white/10 md:block">
             <button 
               onClick={async () => {
                 await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
                 window.location.href = '/login';
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50/70 dark:text-red-400 dark:hover:bg-red-500/10"
             >
               <LogOut size={18} />
               Logout
@@ -318,13 +331,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col relative bg-transparent overflow-y-auto">
-          <header className="flex justify-between items-center w-full p-6 md:px-12 md:py-8 sticky top-0 bg-white/5 backdrop-blur-md z-20">
-            <h2 className="text-2xl md:text-3xl font-light tracking-tight text-neutral-900 dark:text-neutral-100">{tabs.find(t => t.id === activeTab)?.label}</h2>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-transparent">
+          <header className="settings-glass-pane z-20 flex shrink-0 items-center justify-between border-b border-white/35 bg-white/20 px-5 py-4 backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.03] sm:px-8 md:px-10 md:py-6">
+            <h2 className="min-w-0 truncate pr-12 text-2xl font-light tracking-tight text-neutral-900 dark:text-neutral-100 md:text-3xl">{tabs.find(t => t.id === activeTab)?.label}</h2>
           </header>
 
-          <div className="px-8 md:px-12 pb-16 space-y-12">
-            <div className="max-w-2xl mx-auto space-y-8">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8 md:px-10 md:py-8">
+            <div className="mx-auto max-w-2xl space-y-8 pb-12">
               
               {statusMsg && (
                 <div className={`p-4 rounded-xl text-sm border ${statusMsg.startsWith("Error") ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400" : "bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400"}`}>
@@ -341,19 +354,19 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-[0.2em]">Theme Selection</h3>
                       <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">Adjust the visual tone of your workspace.</p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-3 sm:gap-4">
                       {["Light", "Dark", "System"].map(t => {
                         const isSelected = theme === t.toLowerCase();
                         return (
                           <button 
                             key={t} 
                             onClick={() => handleThemeChange(t.toLowerCase())}
-                            className={`group aspect-[4/3] rounded-3xl glass-border p-6 flex flex-col items-center justify-center transition-all duration-300 active:scale-95 ${
-                              isSelected ? 'neumorphic-inset relative' : 'bg-white/10 hover:bg-white/20'
+                            className={`settings-glass-card group relative flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/45 p-5 backdrop-blur-xl transition-all duration-300 active:scale-95 dark:border-white/10 ${
+                              isSelected ? 'bg-white/45 shadow-[inset_0_2px_8px_hsl(220_30%_30%/0.10)] dark:bg-white/10' : 'bg-white/20 hover:bg-white/35 dark:bg-white/[0.03] dark:hover:bg-white/10'
                             }`}
                           >
                             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                              isSelected ? 'bg-white dark:bg-neutral-800 neumorphic-raised' : 'bg-white/50 dark:bg-neutral-800/50 shadow-lg'
+                              isSelected ? 'bg-white/80 dark:bg-neutral-900/80 shadow-sm' : 'bg-white/50 dark:bg-neutral-800/50 shadow-lg'
                             }`}>
                               <Palette size={20} className={isSelected ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'} />
                             </div>
@@ -387,7 +400,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           key={c.id} 
                           onClick={() => handleAccentChange(c.id)}
                           aria-label={`${c.id} accent`}
-                          className={`w-10 h-10 rounded-full ${c.bg} transition-all hover:scale-110 active:scale-90 ${
+                          className={`h-11 w-11 rounded-full border border-white/50 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.45),0_8px_18px_hsl(220_30%_10%/0.08)] ${c.bg} transition-all hover:scale-110 active:scale-90 dark:border-white/10 ${
                             accent === c.id ? `ring-4 ring-white/60 dark:ring-white/20 ${c.glow}` : 'hover:' + c.glow
                           }`}
                         />
@@ -407,7 +420,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         title="Font Family Selection"
                         aria-label="Font Family Selection"
                         onChange={(e) => handleFontChange(e.target.value)}
-                        className="appearance-none w-full py-4 px-6 rounded-2xl bg-white/20 dark:bg-black/20 glass-border neumorphic-inset focus:ring-0 border-none text-neutral-900 dark:text-neutral-100 font-light transition-all cursor-pointer outline-none"
+                        className="settings-glass-card w-full appearance-none rounded-2xl border border-white/45 bg-white/25 px-6 py-4 font-light text-neutral-900 outline-none backdrop-blur-xl transition-all focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-white/[0.04] dark:text-neutral-100"
                       >
                         {["Inter", "Roboto", "Outfit", "Playfair Display", "Kaori UI"].map(f => (
                           <option key={f} value={f} className="bg-[#e0e5ec] dark:bg-[#1c1c1c] text-neutral-900 dark:text-neutral-100">{f}</option>
@@ -428,7 +441,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Configure default providers and advanced capabilities.</p>
                   
                   <div className="space-y-4">
-                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
+                    <div className="settings-glass-card space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Default Provider</label>
                         <select 
@@ -436,7 +449,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           title="Default Provider"
                           aria-label="Default Provider"
                           onChange={(e) => handleProviderChange(e.target.value)}
-                          className="w-full bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-primary/50"
+                          className="settings-glass-card w-full rounded-xl border border-white/45 bg-white/45 px-3 py-2 text-sm text-neutral-900 outline-none backdrop-blur-xl focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-neutral-950/45 dark:text-neutral-100"
                         >
                           <option value="google">Google</option>
                           <option value="groq">Groq</option>
@@ -449,7 +462,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           title="Default Model"
                           aria-label="Default Model"
                           onChange={(e) => handleModelChange(e.target.value)}
-                          className="w-full bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 outline-none focus:ring-2 focus:ring-primary/50"
+                          className="settings-glass-card w-full rounded-xl border border-white/45 bg-white/45 px-3 py-2 text-sm text-neutral-900 outline-none backdrop-blur-xl focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-neutral-950/45 dark:text-neutral-100"
                         >
                           {provider === "google" && <option value="gemini-2.5-flash">gemini-2.5-flash</option>}
                           {provider === "groq" && (
@@ -462,16 +475,16 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
+                    <div className="settings-glass-card space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                       {/* Extended thinking removed since we aren't using Opus */}
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Study Mode</div>
                           <div className="text-sm text-neutral-500">Provide hints instead of direct answers.</div>
                         </div>
                         <div 
                           onClick={toggleStudyMode}
-                          className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${studyMode ? 'bg-primary' : 'bg-neutral-200 dark:bg-neutral-700'}`}
+                          className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-colors ${studyMode ? 'bg-primary' : 'bg-neutral-200 dark:bg-neutral-700'}`}
                         >
                           <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${studyMode ? 'right-1' : 'left-1'}`}></div>
                         </div>
@@ -488,32 +501,32 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Allow Kaori to perform actions on your behalf.</p>
                   
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
-                      <div className="flex items-center gap-4">
+                    <div className="settings-glass-card flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
                           G
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Google</div>
                           <div className="text-sm text-neutral-500">Drive & Gmail access</div>
                         </div>
                       </div>
-                      <a href="/api/auth/google" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors">
+                      <a href="/api/auth/google" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-blue-500 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-600 sm:w-auto">
                         Connect
                       </a>
                     </div>
 
-                    <div className="flex items-center justify-between p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
-                      <div className="flex items-center gap-4">
+                    <div className="settings-glass-card flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-500">
                           S
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Spotify</div>
                           <div className="text-sm text-neutral-500">Playback control</div>
                         </div>
                       </div>
-                      <a href="/api/auth/spotify" className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-900 text-white rounded-lg text-sm font-medium transition-colors">
+                      <a href="/api/auth/spotify" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white transition-colors hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white sm:w-auto">
                         Connect
                       </a>
                     </div>
@@ -533,34 +546,34 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       <span className="ml-2 text-sm text-neutral-500">Loading usage data...</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                         <div className="text-sm text-neutral-500 mb-1">Messages Today</div>
-                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                        <div className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">
                           {usageData?.messagesToday ?? 0} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ {usageData?.messageLimit ?? 100}</span>}
                         </div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
+                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                         <div className="text-sm text-neutral-500 mb-1">Daily Spend</div>
-                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                        <div className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">
                           ${(usageData?.dailySpendUsd ?? 0).toFixed(2)} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ ${(usageData?.dailyLimitUsd ?? 2).toFixed(2)}</span>}
                         </div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
+                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                         <div className="text-sm text-neutral-500 mb-1">Tools Used</div>
-                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{usageData?.toolsUsed ?? 0}</div>
+                        <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">{usageData?.toolsUsed ?? 0}</div>
                       </div>
-                      <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
+                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                         <div className="text-sm text-neutral-500 mb-1">Est. Session Cost</div>
-                        <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">${(usageData?.dailySpendUsd ?? 0).toFixed(4)}</div>
+                        <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">${(usageData?.dailySpendUsd ?? 0).toFixed(4)}</div>
                       </div>
                     </div>
                   )}
 
-                  <div className="mt-6 p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+                  <div className="settings-glass-card mt-6 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 font-medium text-neutral-900 dark:text-neutral-100">
                           Kaori Pro 
                           <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                             {isPro ? "ACTIVE" : "FREE TIER"}
@@ -570,7 +583,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       </div>
                       {!isPro && (
                         <button 
-                          className="px-4 py-2 bg-[hsl(var(--primary))] hover:brightness-110 text-white rounded-lg text-sm font-medium transition-colors cursor-not-allowed opacity-60"
+                          className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-medium text-white opacity-60 transition-colors hover:brightness-110 disabled:cursor-not-allowed sm:w-auto"
                           title="Coming soon"
                           disabled
                         >
@@ -588,7 +601,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Focus Mode</h3>
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Stay productive with the Pomodoro technique.</p>
                   
-                  <div className="p-6 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10">
+                  <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] sm:p-6">
                     <PomodoroTimer />
                   </div>
                 </div>
@@ -611,51 +624,51 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Manage your personal data and account.</p>
                   
                   <div className="space-y-4">
-                    <div className="p-5 rounded-2xl bg-white/40 dark:bg-black/20 border border-white/50 dark:border-white/10 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
+                    <div className="settings-glass-card space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export Conversations</div>
                           <div className="text-sm text-neutral-500">Download all your chats as Markdown.</div>
                         </div>
-                        <button onClick={handleExportData} className="px-4 py-2 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                        <button onClick={handleExportData} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
                           Export ZIP
                         </button>
                       </div>
                       <hr className="border-neutral-100 dark:border-neutral-800" />
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export My Data (GDPR)</div>
                           <div className="text-sm text-neutral-500">Request a full export of your profile and data.</div>
                         </div>
-                        <button className="px-4 py-2 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors">
+                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
                           Request Data
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-5 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/10 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
+                    <div className="settings-glass-danger space-y-4 rounded-2xl border border-red-200/80 bg-red-50/55 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.4)] backdrop-blur-xl dark:border-red-900/50 dark:bg-red-900/10">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <div className="font-medium text-red-600 dark:text-red-400">Delete All Conversations</div>
                           <div className="text-sm text-red-500/80">This action cannot be undone.</div>
                         </div>
-                        <button onClick={handleDeleteAllChats} className="px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium transition-colors">
+                        <button onClick={handleDeleteAllChats} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 sm:w-auto">
                           Delete Chats
                         </button>
                       </div>
                       <hr className="border-red-200 dark:border-red-900/50" />
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <div className="font-medium text-red-600 dark:text-red-400">Delete Account</div>
                           <div className="text-sm text-red-500/80">Permanently remove your account and data.</div>
                         </div>
-                        <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors">
+                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:w-auto">
                           Delete Account
                         </button>
                       </div>
                       <hr className="border-red-200 dark:border-red-900/50" />
-                      <div className="flex items-center justify-between md:hidden">
-                        <div>
+                      <div className="flex flex-col gap-4 md:hidden">
+                        <div className="min-w-0">
                           <div className="font-medium text-red-600 dark:text-red-400">Logout</div>
                           <div className="text-sm text-red-500/80">Sign out of your account on this device.</div>
                         </div>
@@ -664,7 +677,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                             await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
                             window.location.href = '/login';
                           }} 
-                          className="px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium transition-colors"
+                          className="inline-flex h-10 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
                         >
                           Logout
                         </button>
@@ -677,7 +690,9 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             </div>
           </div>
         </div>
-      </motion.div>
-    </div>
+        </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }

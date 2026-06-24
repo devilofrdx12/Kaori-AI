@@ -101,7 +101,7 @@ export default function ChatInput({
                 <img
                   src={url}
                   alt=""
-                  className="w-16 h-16 object-cover rounded-xl border border-white/70 dark:border-white/10 shadow-sm"
+                  className="w-16 h-16 object-cover rounded-[1.25rem] border border-white/70 dark:border-white/10 shadow-sm"
                 />
                 <button
                   onClick={() => removeFile(i)}
@@ -116,7 +116,7 @@ export default function ChatInput({
         )}
 
         {/* Input Container */}
-        <div className="flex flex-col neumorphic-inset bg-white/40 dark:bg-neutral-950/40 backdrop-blur-[20px] rounded-[1.5rem] border border-white/40 dark:border-white/10 transition-all duration-300 focus-within:ring-2 focus-within:ring-primary/30 focus-within:bg-white/60 dark:focus-within:bg-white/10 input-glow shadow-[0_4px_24px_-4px_hsl(220_30%_10%/0.05)]">
+        <div className="flex flex-col glass-panel rounded-[1.5rem] input-glow relative z-10">
           
           <input
             ref={fileRef}
@@ -148,7 +148,7 @@ export default function ChatInput({
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="h-10 w-10 shrink-0 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95"
+                className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover-lift active-press"
                 title="Attach file"
               >
                 <Plus size={20} strokeWidth={1.5} />
@@ -168,17 +168,17 @@ export default function ChatInput({
             <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
               <button
                 onClick={startVoice}
-                className={`h-10 w-10 shrink-0 grid place-items-center rounded-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95 ${
+                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${
                   listening
                     ? "text-red-400 bg-red-400/10 animate-pulse"
-                    : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised"
+                    : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"
                 }`}
                 title="Voice input"
               >
                 <Mic size={18} strokeWidth={1.5} />
               </button>
               <button
-                className="h-10 w-10 shrink-0 grid place-items-center rounded-xl text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover:neumorphic-raised transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 active:-translate-y-0.5 active:scale-95"
+                className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover-lift active-press"
                 title="Voice mode"
               >
                 <AudioLines size={18} strokeWidth={1.5} />
@@ -189,7 +189,7 @@ export default function ChatInput({
               {disabled ? (
                 <button
                   onClick={onStop}
-                  className="h-10 w-10 shrink-0 grid place-items-center rounded-xl neumorphic-raised bg-white/55 dark:bg-white/10 text-secondary transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+                  className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] bg-white/55 dark:bg-white/10 text-secondary hover-lift active-press"
                   title="Stop generating"
                 >
                   <Square size={14} className="fill-current" />
@@ -198,7 +198,7 @@ export default function ChatInput({
                 <button
                   onClick={handleSend}
                   disabled={disabled || (!value.trim() && !files.length)}
-                  className="h-10 w-10 shrink-0 grid place-items-center rounded-xl bg-primary text-white shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-110 hover:shadow-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:hover:shadow-sm active:-translate-y-0.5 active:scale-95"
+                  className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] bg-primary text-white shadow-sm hover-lift active-press disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:active-press-none"
                   title="Send message"
                 >
                   <ArrowUp size={18} strokeWidth={2.5} />
