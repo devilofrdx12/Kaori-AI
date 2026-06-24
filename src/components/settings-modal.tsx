@@ -1,7 +1,7 @@
 "use client";
 
-import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2, ChevronDown } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { motion, useDragControls, AnimatePresence } from "framer-motion";import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
@@ -78,6 +78,86 @@ function applyFont(f: string) {
     document.documentElement.style.setProperty("--font-sans", `"${f}", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`);
     document.documentElement.style.removeProperty("--font-assistant");
   }
+}
+
+function CustomSelect({
+  value,
+  onChange,
+  options,
+  label,
+  size = "md",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+  label?: string;
+  size?: "md" | "lg";
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectedOption = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    // Timeout prevents the click that opens the menu from instantly closing it
+    setTimeout(() => window.addEventListener("click", handleClickOutside), 10);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, [open]);
+
+  const sizeClasses = size === "lg" 
+    ? "rounded-2xl px-6 py-4 font-light bg-white/25 dark:bg-white/[0.04] text-base" 
+    : "rounded-xl px-3 py-2.5 text-sm bg-white/45 dark:bg-neutral-950/45 font-medium";
+
+  return (
+    <div className={`relative ${open ? "z-50" : "z-10"}`} ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`settings-glass-card flex w-full items-center justify-between border border-white/45 text-neutral-900 outline-none backdrop-blur-xl transition-all focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:text-neutral-100 hover:bg-white/60 dark:hover:bg-white/10 active-press hover-lift ${sizeClasses}`}
+        type="button"
+        aria-label={label}
+      >
+        <span>{selectedOption?.label}</span>
+        <ChevronDown className="w-4 h-4 text-neutral-500 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ ease: [0.34, 1.56, 0.64, 1], duration: 0.4 }}
+            className="absolute left-0 right-0 top-full mt-2 overflow-hidden rounded-2xl border border-white/40 bg-white/85 p-1.5 shadow-[0_16px_48px_-12px_hsl(var(--primary)/0.25)] backdrop-blur-2xl origin-top dark:border-white/10 dark:bg-neutral-900/90"
+          >
+            <div className="max-h-60 overflow-y-auto scrollbar-hide flex flex-col gap-0.5">
+              {options.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center px-4 py-2.5 text-sm transition-all rounded-xl ${
+                    value === opt.value
+                      ? "bg-white/60 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-neutral-100 font-medium"
+                      : "text-neutral-600 hover:bg-white/30 dark:text-neutral-400 dark:hover:bg-white/10 font-light"
+                  } active-press`}
+                  type="button"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default function SettingsModal({ isOpen, onClose }: Props) {
@@ -159,11 +239,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     const defaultModel = newProvider === "google" ? "gemini-2.5-flash" : "llama-3.3-70b-versatile";
     setModel(defaultModel);
     localStorage.setItem("kaori_model", defaultModel);
+    window.dispatchEvent(new Event("kaori_settings_changed"));
   };
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
     localStorage.setItem("kaori_model", newModel);
+    window.dispatchEvent(new Event("kaori_settings_changed"));
   };
 
   const toggleStudyMode = () => {
@@ -272,10 +354,11 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             onClick={onClose} 
           />
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ ease: [0.34, 1.56, 0.64, 1], duration: 0.5 }}
+            style={{ willChange: "transform, opacity" }}
             drag 
             dragControls={dragControls}
             dragListener={false}
@@ -312,13 +395,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`group flex h-11 shrink-0 items-center gap-3 rounded-2xl px-4 text-sm transition-all duration-300 md:h-auto md:w-full md:py-3 ${
+                  className={`group flex h-11 shrink-0 items-center gap-3 rounded-[1.25rem] px-4 text-sm md:h-auto md:w-full md:py-3 active-press hover-lift ${
                     isActive 
-                      ? "bg-white/60 text-neutral-900 shadow-[0_8px_22px_hsl(220_30%_10%/0.08)] dark:bg-white/15 dark:text-neutral-100 dark:shadow-none md:scale-95 md:origin-left border border-white/40 dark:border-white/10" 
-                      : "text-neutral-600 hover:bg-white/30 font-light tracking-tight dark:text-neutral-400 dark:hover:bg-white/10"
+                      ? "bg-white/60 text-neutral-900 shadow-sm dark:bg-white/10 dark:text-neutral-100 border border-white/40 dark:border-white/10 font-medium" 
+                      : "text-neutral-600 hover:bg-white/45 font-light tracking-tight dark:text-neutral-400 dark:hover:bg-white/10 border border-transparent"
                   }`}
                 >
-                  <Icon size={18} className={`${isActive ? "text-primary" : ""} group-hover:scale-110 transition-transform`} />
+                  <Icon size={18} className={`${isActive ? "text-primary" : "text-neutral-500 dark:text-neutral-400"} group-hover:scale-110 transition-transform duration-500`} />
                   <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               );
@@ -345,7 +428,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             <h2 className="min-w-0 truncate pr-12 text-2xl font-light tracking-tight text-neutral-900 dark:text-neutral-100 md:text-3xl">{tabs.find(t => t.id === activeTab)?.label}</h2>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8 md:px-10 md:py-8">
+          <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden p-6 sm:p-8 md:p-10 relative pb-[30vh]">
             <div className="mx-auto max-w-2xl space-y-8 pb-12">
               
               {statusMsg && (
@@ -424,20 +507,13 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       <p className="text-neutral-600 dark:text-neutral-400 text-sm mt-1">Choose a typeface that suits your reading style.</p>
                     </div>
                     <div className="max-w-md relative group">
-                      <select 
+                      <CustomSelect
                         value={font}
-                        title="Font Family Selection"
-                        aria-label="Font Family Selection"
-                        onChange={(e) => handleFontChange(e.target.value)}
-                        className="settings-glass-card w-full appearance-none rounded-2xl border border-white/45 bg-white/25 px-6 py-4 font-light text-neutral-900 outline-none backdrop-blur-xl transition-all focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-white/[0.04] dark:text-neutral-100"
-                      >
-                        {["Inter", "Roboto", "Outfit", "Playfair Display", "Kaori UI"].map(f => (
-                          <option key={f} value={f} className="bg-[#e0e5ec] dark:bg-[#1c1c1c] text-neutral-900 dark:text-neutral-100">{f}</option>
-                        ))}
-                      </select>
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <Activity className="text-neutral-500 w-4 h-4" />
-                      </div>
+                        onChange={handleFontChange}
+                        options={["Inter", "Roboto", "Outfit", "Playfair Display", "Kaori UI"].map(f => ({ value: f, label: f }))}
+                        label="Font Family Selection"
+                        size="lg"
+                      />
                     </div>
                   </div>
                 </div>
@@ -450,41 +526,37 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm">Configure default providers and advanced capabilities.</p>
                   
                   <div className="space-y-4">
-                    <div className="settings-glass-card space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="settings-glass-card relative z-20 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Default Provider</label>
-                        <select 
+                        <CustomSelect
                           value={provider}
-                          title="Default Provider"
-                          aria-label="Default Provider"
-                          onChange={(e) => handleProviderChange(e.target.value)}
-                          className="settings-glass-card w-full rounded-xl border border-white/45 bg-white/45 px-3 py-2 text-sm text-neutral-900 outline-none backdrop-blur-xl focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-neutral-950/45 dark:text-neutral-100"
-                        >
-                          <option value="google">Google</option>
-                          <option value="groq">Groq</option>
-                        </select>
+                          onChange={handleProviderChange}
+                          options={[
+                            { value: "google", label: "Google" },
+                            { value: "groq", label: "Groq" }
+                          ]}
+                          label="Default Provider"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Default Model</label>
-                        <select 
+                        <CustomSelect
                           value={model}
-                          title="Default Model"
-                          aria-label="Default Model"
-                          onChange={(e) => handleModelChange(e.target.value)}
-                          className="settings-glass-card w-full rounded-xl border border-white/45 bg-white/45 px-3 py-2 text-sm text-neutral-900 outline-none backdrop-blur-xl focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:bg-neutral-950/45 dark:text-neutral-100"
-                        >
-                          {provider === "google" && <option value="gemini-2.5-flash">gemini-2.5-flash</option>}
-                          {provider === "groq" && (
-                            <>
-                              <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-                              <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
-                            </>
-                          )}
-                        </select>
+                          onChange={handleModelChange}
+                          options={provider === "google" 
+                            ? [{ value: "gemini-2.5-flash", label: "gemini-2.5-flash" }] 
+                            : [
+                                { value: "llama-3.3-70b-versatile", label: "llama-3.3-70b-versatile" },
+                                { value: "mixtral-8x7b-32768", label: "mixtral-8x7b-32768" }
+                              ]
+                          }
+                          label="Default Model"
+                        />
                       </div>
                     </div>
 
-                    <div className="settings-glass-card space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="settings-glass-card relative z-10 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                       {/* Extended thinking removed since we aren't using Opus */}
                       <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">

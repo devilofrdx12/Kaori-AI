@@ -161,13 +161,22 @@ function ChatLayoutInner() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Setup hydration
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
+    if (typeof window !== "undefined") {
       const storedModel = localStorage.getItem("kaori_model");
       if (storedModel) setModel(storedModel);
-    }, 0);
+    }
+  }, []);
 
-    return () => window.clearTimeout(timeoutId);
+  // Listen for global settings changes
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      const storedModel = localStorage.getItem("kaori_model");
+      if (storedModel) setModel(storedModel);
+    };
+    window.addEventListener("kaori_settings_changed", handleSettingsChange);
+    return () => window.removeEventListener("kaori_settings_changed", handleSettingsChange);
   }, []);
 
   // Init: check auth + load chats
@@ -224,22 +233,33 @@ function ChatLayoutInner() {
   };
 
   // ── NEW CHAT ──
-  async function handleNewChat() {
+  function handleNewChat() {
     if (window.innerWidth < 1024) setSidebarOpen(false);
-    try {
-      const newChat = await createChat();
-      const thread: ChatThread = {
-        id: newChat.id,
-        title: newChat.title,
-        messages: [],
-        createdAt: newChat.createdAt,
-        updatedAt: newChat.updatedAt,
-      };
-      setChats((prev) => [thread, ...prev]);
-      setActiveChatId(thread.id);
-    } catch (err) {
+    
+    // Optimistic UI: Immediately render an empty placeholder chat
+    const tempId = `temp-${Date.now()}`;
+    const thread: ChatThread = {
+      id: tempId,
+      title: "New chat",
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    setChats((prev) => [thread, ...prev]);
+    setActiveChatId(thread.id);
+
+    // Run the actual API creation in the background
+    createChat().then((newChat) => {
+      // Swap the temporary local ID with the real database ID
+      setChats((prev) => prev.map(c => c.id === tempId ? { ...c, id: newChat.id, title: newChat.title } : c));
+      setActiveChatId((current) => current === tempId ? newChat.id : current);
+    }).catch((err) => {
       console.error("Create chat error:", err);
-    }
+      // Revert if the server failed
+      setChats((prev) => prev.filter(c => c.id !== tempId));
+      setActiveChatId((current) => current === tempId ? null : current);
+    });
   }
 
   // ── SELECT CHAT ──
@@ -307,6 +327,11 @@ function ChatLayoutInner() {
   // ── SEND MESSAGE ──
   async function handleSend(text: string, files?: File[] | null) {
     if (!activeChatId || (!text && !files?.length)) return;
+
+    if (activeChatId.startsWith("temp-")) {
+      console.warn("Please wait a moment for the new chat to initialize on the server.");
+      return;
+    }
 
     // Add user message locally
     const userMsg: ChatMessage = {
@@ -629,7 +654,7 @@ function ChatLayoutInner() {
                     Start a focused chat, attach an image, or choose the best model for the task.
                   </p>
                 </div>
-                <div className="w-full relative z-20 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <div className="w-full relative z-20 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
                   <ChatInput
                     onSend={handleSend}
                     disabled={typing}
@@ -674,7 +699,7 @@ function ChatLayoutInner() {
                   bottomRef={bottomRef}
                 />
 
-                <div className="w-full shrink-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <div className="w-full shrink-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
                   <ChatInput
                     onSend={handleSend}
                     disabled={typing}
