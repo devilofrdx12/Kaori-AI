@@ -116,7 +116,7 @@ export default function ChatInput({
         )}
 
         {/* Input Container */}
-        <div className="flex flex-col glass-panel rounded-[1.5rem] input-glow relative z-10">
+        <div className="flex flex-col glass-panel rounded-[1.5rem] relative z-10 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-within:-translate-y-1.5 focus-within:shadow-[0_0_0_2px_hsl(var(--primary)/0.3),0_16px_48px_-12px_hsl(var(--primary)/0.25)] focus-within:border-[hsl(var(--primary)/0.4)]">
           
           <input
             ref={fileRef}

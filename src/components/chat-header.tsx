@@ -16,7 +16,7 @@ export default function ChatHeader({
 }) {
 
   return (
-    <header className="h-14 sm:h-16 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-white/60 dark:border-white/10 bg-white/50 dark:bg-neutral-950/35 backdrop-blur-xl z-20">
+    <header className="h-14 sm:h-16 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-white/60 dark:border-white/10 bg-white/50 dark:bg-neutral-950/35 backdrop-blur-md backdrop-saturate-150 z-20">
       {/* Left side */}
       <div className="flex items-center gap-2">
         {!sidebarOpen && (

@@ -117,7 +117,7 @@ export default function SessionManager() {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="settings-glass-danger rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-700 backdrop-blur-xl dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+        <div className="settings-glass-danger rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
       )}
@@ -136,7 +136,7 @@ export default function SessionManager() {
             return (
               <div
                 key={session.id}
-                className="settings-glass-card group flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl transition-all hover:bg-white/40 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] sm:flex-row sm:items-center sm:justify-between"
+                className="settings-glass-card group flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] transition-all hover:bg-white/40 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.07] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-4 min-w-0">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/45 bg-white/45 dark:border-white/10 dark:bg-white/[0.06]">

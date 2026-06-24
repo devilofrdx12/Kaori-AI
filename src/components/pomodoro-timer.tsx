@@ -94,7 +94,7 @@ export default function PomodoroTimer({ onClose }: { onClose?: () => void }) {
             />
           </button>
           {showPresets && (
-            <div className="settings-glass-card absolute right-0 top-full z-10 mt-1 min-w-[120px] overflow-hidden rounded-xl border border-white/45 bg-white/80 shadow-xl backdrop-blur-xl animate-fade-in dark:border-white/10 dark:bg-neutral-950/85">
+            <div className="settings-glass-card absolute right-0 top-full z-10 mt-1 min-w-[120px] overflow-hidden rounded-xl border border-white/45 bg-white/80 shadow-xl animate-fade-in dark:border-white/10 dark:bg-neutral-950/85">
               <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
                 Duration
               </div>

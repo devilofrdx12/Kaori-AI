@@ -2,8 +2,7 @@
 
 import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { motion, useDragControls, AnimatePresence } from "framer-motion";
-import JSZip from "jszip";
+import { motion, useDragControls, AnimatePresence } from "framer-motion";import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
 import PomodoroTimer from "./pomodoro-timer";
@@ -59,6 +58,16 @@ function applyAccent(colorName: string) {
   root.style.setProperty("--primary", hsl);
   root.style.setProperty("--ring", hsl);
   root.style.setProperty("--color-primary", `hsl(${hsl})`);
+
+  const h = hsl.split(" ")[0];
+  root.style.setProperty("--theme-h", h);
+  if (colorName === "black") {
+    root.style.setProperty("--theme-s-light", "0%");
+    root.style.setProperty("--theme-s-dark", "0%");
+  } else {
+    root.style.setProperty("--theme-s-light", "20%");
+    root.style.setProperty("--theme-s-dark", "20%");
+  }
 }
 
 function applyFont(f: string) {
@@ -290,7 +299,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
         />
         
         {/* Sidebar */}
-        <div className="flex w-full shrink-0 flex-col border-b border-white/45 bg-white/35 px-3 pb-3 pt-12 backdrop-blur-[36px] backdrop-saturate-150 dark:border-white/10 dark:bg-neutral-900/40 sm:px-4 md:h-full md:w-72 md:border-b-0 md:border-r md:px-5 md:py-8">
+        <div className="flex w-full shrink-0 flex-col border-b border-white/45 bg-white/35 px-3 pb-3 pt-12 backdrop-blur-[18px] backdrop-saturate-150 dark:border-white/10 dark:bg-neutral-900/40 sm:px-4 md:h-full md:w-72 md:border-b-0 md:border-r md:px-5 md:py-8">
           <div className="flex min-w-0 flex-col px-2 pb-4 md:mb-8">
             <h2 className="text-2xl font-light tracking-tighter text-neutral-900 dark:text-neutral-100 select-none">Settings</h2>
             <p className="text-xs text-neutral-500 mt-1 uppercase tracking-widest font-medium hidden md:block">Manage your AI environment</p>
@@ -686,7 +695,6 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   </div>
                 </div>
               )}
-
             </div>
           </div>
         </div>

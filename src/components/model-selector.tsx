@@ -51,7 +51,7 @@ export default function ModelSelector({
 
       {open && (
         <div
-          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} left-0 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-white/70 dark:border-white/10 bg-white/90 dark:bg-neutral-950/92 backdrop-blur-2xl shadow-2xl z-50 overflow-hidden animate-fade-in`}
+          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} left-0 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-white/70 dark:border-white/10 bg-white/90 dark:bg-neutral-950/92 backdrop-blur-md backdrop-saturate-150 shadow-2xl z-50 overflow-hidden animate-fade-in`}
         >
           {MODEL_OPTIONS.map((m) => (
             <button

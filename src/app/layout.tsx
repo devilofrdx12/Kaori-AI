@@ -28,7 +28,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <script src="/live2dcubismcore.min.js" defer />
-        <script
+          <script
           id="kaori-theme-init"
           suppressHydrationWarning
           dangerouslySetInnerHTML={{__html: `
@@ -48,6 +48,16 @@ export default function RootLayout({
                   document.documentElement.style.setProperty('--primary', hsl);
                   document.documentElement.style.setProperty('--ring', hsl);
                   document.documentElement.style.setProperty('--color-primary', 'hsl(' + hsl + ')');
+
+                  var h = hsl.split(' ')[0];
+                  document.documentElement.style.setProperty('--theme-h', h);
+                  if (a === 'black') {
+                    document.documentElement.style.setProperty('--theme-s-light', '0%');
+                    document.documentElement.style.setProperty('--theme-s-dark', '0%');
+                  } else {
+                    document.documentElement.style.setProperty('--theme-s-light', '20%');
+                    document.documentElement.style.setProperty('--theme-s-dark', '20%');
+                  }
                 }
                 
                 var f = localStorage.getItem('kaori_font') || 'Kaori UI';

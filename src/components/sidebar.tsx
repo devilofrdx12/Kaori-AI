@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+
 import { 
   MessageSquarePlus, 
   MessageSquare, 
@@ -50,24 +50,16 @@ export default function Sidebar({
   return (
     <>
       {/* Backdrop */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onToggle}
-            className="fixed inset-0 bg-black/35 backdrop-blur-sm z-30 lg:hidden"
-          />
-        )}
-      </AnimatePresence>
+      {open && (
+        <div
+          onClick={onToggle}
+          className="fixed inset-0 bg-black/35 z-30 lg:hidden transition-opacity duration-300 animate-fade-in"
+        />
+      )}
 
       {/* Sidebar panel */}
-      <motion.aside
-        initial={false}
-        animate={open ? { x: 0, scale: 1 } : { x: "calc(-100% - 24px)", scale: 0.98 }}
-        transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
-        className="fixed left-3 top-3 bottom-3 sm:left-4 sm:top-4 sm:bottom-4 z-40 w-[min(20rem,calc(100vw-1.5rem))] lg:w-72 glass-panel shadow-[0_16px_48px_-12px_hsl(var(--primary)/0.2)] flex flex-col font-sans"
+      <aside
+        className={`fixed left-3 top-3 bottom-3 sm:left-4 sm:top-4 sm:bottom-4 z-40 w-[min(20rem,calc(100vw-1.5rem))] lg:w-72 glass-panel shadow-[0_16px_48px_-12px_hsl(var(--primary)/0.2)] flex flex-col font-sans transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${open ? "translate-x-0 scale-100" : "-translate-x-[calc(100%+24px)] scale-[0.98]"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 pt-6 sm:pt-8 pb-4">
@@ -89,35 +81,35 @@ export default function Sidebar({
             onClick={() => { onNewChat(); closeMobile(); }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] text-on-surface hover:bg-white/45 dark:hover:bg-white/10 active-press hover-lift group"
           >
-            <MessageSquarePlus size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] text-secondary" />
+            <MessageSquarePlus size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] text-secondary" />
             <span className="font-headline tracking-tight font-light">New chat</span>
           </button>
           <button 
             onClick={() => { onTabChange('chats'); closeMobile(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'chats' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <MessageSquare size={18} strokeWidth={1.5} className={activeTab === 'chats' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
+            <MessageSquare size={18} strokeWidth={1.5} className={activeTab === 'chats' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]'} />
             <span className="font-headline tracking-tight">Chats</span>
           </button>
           <button 
             onClick={() => { onTabChange('projects'); closeMobile(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'projects' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Archive size={18} strokeWidth={1.5} className={activeTab === 'projects' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
+            <Archive size={18} strokeWidth={1.5} className={activeTab === 'projects' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]'} />
             <span className="font-headline tracking-tight">Projects</span>
           </button>
           <button 
             onClick={() => { onTabChange('artifacts'); closeMobile(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'artifacts' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Blocks size={18} strokeWidth={1.5} className={activeTab === 'artifacts' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
+            <Blocks size={18} strokeWidth={1.5} className={activeTab === 'artifacts' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]'} />
             <span className="font-headline tracking-tight">Artifacts</span>
           </button>
           <button 
             onClick={() => { onTabChange('code'); closeMobile(); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] active-press hover-lift group ${activeTab === 'code' ? 'bg-white/60 dark:bg-white/10 text-on-surface font-medium shadow-sm' : 'text-secondary hover:bg-white/45 dark:hover:bg-white/10 font-light'}`}
           >
-            <Code size={18} strokeWidth={1.5} className={activeTab === 'code' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'} />
+            <Code size={18} strokeWidth={1.5} className={activeTab === 'code' ? 'text-primary' : 'group-hover:scale-110 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]'} />
             <span className="font-headline tracking-tight">Code</span>
           </button>
         </div>
@@ -251,7 +243,7 @@ export default function Sidebar({
           </div>
           <ChevronDown size={18} className="text-secondary group-hover:text-primary shrink-0 transition-colors" strokeWidth={1.5} />
         </button>
-      </motion.aside>
+      </aside>
     </>
   );
 }

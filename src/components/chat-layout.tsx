@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+
 import Sidebar from "./sidebar";
 import ChatHeader from "./chat-header";
 import MessageArea from "./message-area";
@@ -629,8 +629,7 @@ function ChatLayoutInner() {
                     Start a focused chat, attach an image, or choose the best model for the task.
                   </p>
                 </div>
-                
-                <motion.div layoutId="chat-input-container" className="w-full relative z-20">
+                <div className="w-full relative z-20 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
                   <ChatInput
                     onSend={handleSend}
                     disabled={typing}
@@ -639,7 +638,7 @@ function ChatLayoutInner() {
                     onModelChange={setModel}
                     placeholder="How can I help you today?"
                   />
-                </motion.div>
+                </div>
 
                 <div className="flex overflow-x-auto sm:flex-wrap items-center sm:justify-center gap-2.5 mt-5 w-[calc(100%+2rem)] sm:w-full max-w-3xl pb-2 px-4 sm:px-0 -mx-4 sm:mx-0 scrollbar-hide">
                   {[
@@ -675,7 +674,7 @@ function ChatLayoutInner() {
                   bottomRef={bottomRef}
                 />
 
-                <motion.div layoutId="chat-input-container" className="w-full shrink-0">
+                <div className="w-full shrink-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
                   <ChatInput
                     onSend={handleSend}
                     disabled={typing}
@@ -684,7 +683,7 @@ function ChatLayoutInner() {
                     onModelChange={setModel}
                     placeholder="Reply to Kaori"
                   />
-                </motion.div>
+                </div>
               </>
             )}
           </>
