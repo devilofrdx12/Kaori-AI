@@ -179,6 +179,8 @@ const MessageRow = memo(({
 });
 MessageRow.displayName = "MessageRow";
 
+import { Virtuoso } from "react-virtuoso";
+
 export default function MessageArea({
   messages = [],
   typing,
@@ -224,12 +226,15 @@ export default function MessageArea({
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 sm:py-6">
-      <div className="max-w-3xl mx-auto space-y-1">
-        <div>
-          {allMessages.map((msg) => (
+    <div className="flex-1 min-h-0 px-3 sm:px-5 py-4 sm:py-6 relative will-change-transform">
+      <Virtuoso
+        style={{ height: "100%" }}
+        data={allMessages}
+        alignToBottom
+        followOutput="smooth"
+        itemContent={(index, msg) => (
+          <div className="max-w-3xl mx-auto py-0.5">
             <MessageRow
-              key={msg.id}
               msg={msg}
               isEditing={editingMessageId === msg.id}
               editText={editText}
@@ -239,23 +244,28 @@ export default function MessageArea({
               isCopied={copiedId === msg.id}
               copyMessage={copyMessage}
             />
-          ))}
-        </div>
+          </div>
+        )}
+        components={{
+          Footer: () => (
+            <div className="max-w-3xl mx-auto space-y-1">
+              {/* Tool results during streaming */}
+              {toolResults?.map((tr, i) => (
+                <ToolResultCard key={`tr-${i}`} toolName={tr.tool} result={tr.result} />
+              ))}
 
-        {/* Tool results during streaming */}
-        {toolResults?.map((tr, i) => (
-          <ToolResultCard key={`tr-${i}`} toolName={tr.tool} result={tr.result} />
-        ))}
+              {/* Tool in progress */}
+              {toolInProgress && <ThinkingIndicator toolName={toolInProgress} />}
 
-        {/* Tool in progress */}
-        {toolInProgress && <ThinkingIndicator toolName={toolInProgress} />}
+              {/* Typing indicator */}
+              {typing && !streamingText && !toolInProgress && <TypingIndicator />}
 
-        {/* Typing indicator */}
-        {typing && !streamingText && !toolInProgress && <TypingIndicator />}
-
-        {/* Scroll anchor */}
-        <div ref={bottomRef} className="h-4" />
-      </div>
+              {/* Scroll anchor */}
+              <div ref={bottomRef} className="h-4" />
+            </div>
+          ),
+        }}
+      />
     </div>
   );
 }

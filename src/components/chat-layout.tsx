@@ -1,30 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import Sidebar from "./sidebar";
 import ChatHeader from "./chat-header";
-import MessageArea from "./message-area";
-import ChatInput from "./chat-input";
+import EmptyChatState from "./empty-chat-state";
+import ActiveChatArea from "./active-chat-area";
 import AnimatedAvatar from "./animated-avatar";
 import SettingsModal from "./settings-modal";
 import { PomodoroProvider, usePomodoro } from "./pomodoro-context";
 import { ChatMessage, DEFAULT_MODEL } from "./types";
 import { ChatThread } from "./chat-types";
 import { me, logout as apiLogout, AuthUser } from "./auth";
-import { BookOpen, Code2, ListChecks, PenLine, Sparkles, Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw } from "lucide-react";
 import {
   listChats,
   createChat,
   renameChat,
   deleteChat,
   fetchChat,
-  sendMessage,
   buildChatTitle,
   toggleStarChat,
 } from "@/lib/chat-api";
 
-type AvatarEmotion = "idle" | "happy" | "shy" | "caring" | "thinking" | "surprised";
+type AvatarEmotion = "idle" | "happy" | "shy" | "caring" | "thinking";
 
 function getInitialModel() {
   return DEFAULT_MODEL;
@@ -42,76 +41,7 @@ function getInitialSidebarOpen() {
   return window.innerWidth >= 1024;
 }
 
-const BLOCKED_CUSTOM_URI_PROTOCOLS = new Set([
-  "about:",
-  "blob:",
-  "chrome:",
-  "chrome-extension:",
-  "data:",
-  "devtools:",
-  "edge:",
-  "file:",
-  "filesystem:",
-  "http:",
-  "https:",
-  "javascript:",
-  "vbscript:",
-]);
 
-function getSafeCustomUri(value: unknown) {
-  if (typeof value !== "string" || value.length > 2048) return null;
-
-  try {
-    const parsed = new URL(value);
-    const protocol = parsed.protocol.toLowerCase();
-    if (!/^[a-z][a-z0-9+.-]*:$/.test(protocol)) return null;
-    if (BLOCKED_CUSTOM_URI_PROTOCOLS.has(protocol)) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function navigateToCustomUri(value: unknown) {
-  const uri = getSafeCustomUri(value);
-  if (!uri) return false;
-  window.location.href = uri;
-  return true;
-}
-
-function openSafeHttpsUrl(value: unknown) {
-  if (typeof value !== "string" || value.length > 2048) return false;
-
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:") return false;
-
-    const opened = window.open(url.toString(), "_blank", "noopener,noreferrer");
-    if (opened) opened.opener = null;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function fileToDataUrl(
-  file: File
-): Promise<{ url: string; name: string; type: string; data: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = typeof reader.result === "string" ? reader.result : "";
-      resolve({
-        url: data,
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        data,
-      });
-    };
-    reader.onerror = () => reject(new Error(`Failed to read: ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-}
 
 function MiniPomodoroTimer() {
   const { running, secondsLeft, mode, toggleRunning, switchMode } = usePomodoro();
@@ -146,10 +76,8 @@ function ChatLayoutInner() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [model, setModel] = useState(getInitialModel);
-  const [typing, setTyping] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [toolInProgress, setToolInProgress] = useState<string | null>(null);
-  const [toolResults, setToolResults] = useState<{ tool: string; result: string }[]>([]);
+  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null } | null>(null);
+  const [avatarState, setAvatarState] = useState<{ emotion: AvatarEmotion; speaking: boolean }>({ emotion: "idle", speaking: false });
 
   const [chats, setChats] = useState<ChatThread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -158,14 +86,16 @@ function ChatLayoutInner() {
   const [activeTab, setActiveTab] = useState("chats");
   const [greeting] = useState(getTimeGreeting);
 
-  const abortRef = useRef<AbortController | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+
 
   // Setup hydration
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedModel = localStorage.getItem("kaori_model");
-      if (storedModel) setModel(storedModel);
+      if (storedModel) {
+        // Use timeout to avoid synchronous setState cascading render warning
+        setTimeout(() => setModel(storedModel), 0);
+      }
     }
   }, []);
 
@@ -220,10 +150,7 @@ function ChatLayoutInner() {
     })();
   }, []);
 
-  // Auto-scroll
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chats, typing, streamingText]);
+
 
   const activeChat = activeChatId ? chats.find((c) => c.id === activeChatId) : null;
   const isEmpty = !activeChat || activeChat.messages.length === 0;
@@ -324,8 +251,8 @@ function ChatLayoutInner() {
     window.location.href = "/login";
   }
 
-  // ── SEND MESSAGE ──
-  async function handleSend(text: string, files?: File[] | null) {
+  // ── SEND INITIAL MESSAGE ──
+  function handleSendInitial(text: string, files?: File[] | null) {
     if (!activeChatId || (!text && !files?.length)) return;
 
     if (activeChatId.startsWith("temp-")) {
@@ -333,7 +260,6 @@ function ChatLayoutInner() {
       return;
     }
 
-    // Add user message locally
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -346,255 +272,12 @@ function ChatLayoutInner() {
       updatedAt: new Date().toISOString(),
     }));
 
-    // Auto-title first message
     if (activeChat && activeChat.messages.length === 0) {
       const title = buildChatTitle(text);
       handleRenameChat(activeChatId, title);
     }
 
-    setTyping(true);
-    setStreamingText("");
-    setToolInProgress(null);
-    setToolResults([]);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    // Convert files to data URLs
-    let fileData;
-    if (files?.length) {
-      fileData = await Promise.all(files.map(fileToDataUrl));
-    }
-
-    let fullText = "";
-
-    const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
-
-    await sendMessage({
-      chatId: activeChatId,
-      message: text,
-      model,
-      files: fileData,
-      studyMode,
-      signal: controller.signal,
-      onText: (chunk) => {
-        fullText += chunk;
-        setStreamingText(fullText);
-        setToolInProgress(null);
-      },
-      onToolStart: (tool) => {
-        setToolInProgress(tool);
-      },
-      onToolExecuting: (tool, input) => {
-        setToolInProgress(tool);
-        if (tool === "open_application" && input && typeof input === "object") {
-          const { uriScheme, fallbackUrl } = input as {
-            uriScheme?: string;
-            fallbackUrl?: string;
-          };
-          if (navigateToCustomUri(uriScheme)) {
-            setTimeout(() => {
-              openSafeHttpsUrl(fallbackUrl);
-            }, 1500);
-          }
-        }
-      },
-      onToolResult: (tool, result) => {
-        setToolResults((prev) => [...prev, { tool, result }]);
-        setToolInProgress(null);
-        if (tool === "play_spotify" && result.includes("spotify:")) {
-          const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
-          if (match) {
-            navigateToCustomUri(match[1]);
-          }
-        }
-        if (tool === "open_youtube" && result.includes("https://www.youtube.com")) {
-          const match = result.match(/(https:\/\/www\.youtube\.com[^\s]*)/);
-          if (match) {
-            openSafeHttpsUrl(match[1]);
-          }
-        }
-      },
-      onDone: () => {
-        // Save assistant message locally
-        const assistantMsg: ChatMessage = {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: fullText,
-          timestamp: new Date().toISOString(),
-        };
-        updateChat(activeChatId!, (c) => ({
-          ...c,
-          messages: [...c.messages, assistantMsg],
-          updatedAt: new Date().toISOString(),
-        }));
-        setTyping(false);
-        setStreamingText("");
-        setToolInProgress(null);
-        setToolResults([]);
-        abortRef.current = null;
-      },
-      onError: (error) => {
-        console.error("Chat error:", error);
-        const errMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: `⚠️ **Error:** ${error}`,
-          timestamp: new Date().toISOString(),
-        };
-        updateChat(activeChatId!, (c) => ({
-          ...c,
-          messages: [...c.messages, errMsg],
-        }));
-        setTyping(false);
-        setStreamingText("");
-        setToolInProgress(null);
-        abortRef.current = null;
-      },
-    });
-  }
-
-  // ── EDIT & RESEND MESSAGE ──
-  async function handleEditSend(messageId: string, text: string) {
-    if (!activeChatId || !text) return;
-
-    const chat = chats.find(c => c.id === activeChatId);
-    if (!chat) return;
-
-    const msgIndex = chat.messages.findIndex(m => m.id === messageId);
-    if (msgIndex === -1) return;
-
-    // Truncate messages from this point locally
-    const newMessages = chat.messages.slice(0, msgIndex);
-    const editedMsg: ChatMessage = {
-      id: messageId, // Keep the same ID for the UI
-      role: "user",
-      content: text,
-      timestamp: new Date().toISOString(),
-    };
-    newMessages.push(editedMsg);
-
-    updateChat(activeChatId, (c) => ({
-      ...c,
-      messages: newMessages,
-      updatedAt: new Date().toISOString(),
-    }));
-
-    setTyping(true);
-    setStreamingText("");
-    setToolInProgress(null);
-    setToolResults([]);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    let fullText = "";
-
-    const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
-
-    await sendMessage({
-      chatId: activeChatId,
-      message: text,
-      model,
-      editMessageId: messageId,
-      studyMode,
-      signal: controller.signal,
-      onText: (chunk) => {
-        fullText += chunk;
-        setStreamingText(fullText);
-      },
-      onToolStart: (tool) => {
-        setToolInProgress(tool);
-      },
-      onToolExecuting: (tool, input) => {
-        setToolInProgress(tool);
-        if (tool === "open_application" && input && typeof input === "object") {
-          const { uriScheme, fallbackUrl } = input as {
-            uriScheme?: string;
-            fallbackUrl?: string;
-          };
-          if (navigateToCustomUri(uriScheme)) {
-            setTimeout(() => {
-              openSafeHttpsUrl(fallbackUrl);
-            }, 1500);
-          }
-        }
-      },
-      onToolResult: (tool, result) => {
-        setToolResults((prev) => [...prev, { tool, result }]);
-        setToolInProgress(null);
-        if (tool === "play_spotify" && result.includes("spotify:")) {
-          const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
-          if (match) {
-            navigateToCustomUri(match[1]);
-          }
-        }
-        if (tool === "open_youtube" && result.includes("https://www.youtube.com")) {
-          const match = result.match(/(https:\/\/www\.youtube\.com[^\s]*)/);
-          if (match) {
-            openSafeHttpsUrl(match[1]);
-          }
-        }
-      },
-      onDone: () => {
-        const assistantMsg: ChatMessage = {
-          id: `asst-${Date.now()}`,
-          role: "assistant",
-          content: fullText,
-          timestamp: new Date().toISOString(),
-        };
-        updateChat(activeChatId, (c) => ({
-          ...c,
-          messages: [...c.messages, assistantMsg],
-        }));
-        setTyping(false);
-        setStreamingText("");
-        setToolInProgress(null);
-        setToolResults([]);
-        abortRef.current = null;
-      },
-      onError: (err) => {
-        console.error(err);
-        setTyping(false);
-        abortRef.current = null;
-      },
-    });
-  }
-
-  // ── STOP ──
-  function handleStop() {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-      setTyping(false);
-
-      if (streamingText) {
-        const msg: ChatMessage = {
-          id: `stopped-${Date.now()}`,
-          role: "assistant",
-          content: streamingText + "\n\n*[Generation stopped]*",
-          timestamp: new Date().toISOString(),
-        };
-        updateChat(activeChatId!, (c) => ({
-          ...c,
-          messages: [...c.messages, msg],
-        }));
-      }
-      setStreamingText("");
-      setToolInProgress(null);
-    }
-  }
-
-  let avatarEmotion: AvatarEmotion = "idle";
-  let avatarSpeaking = false;
-
-  if (toolInProgress) {
-    avatarEmotion = "shy";
-  } else if (typing && !streamingText) {
-    avatarEmotion = "thinking";
-  } else if (typing && streamingText) {
-    avatarEmotion = "happy";
-    avatarSpeaking = true;
+    setPendingPrompt({ text, files });
   }
 
   return (
@@ -602,8 +285,8 @@ function ChatLayoutInner() {
       <MiniPomodoroTimer />
       {/* Floating Avatar */}
       {showAvatar && (
-        <div className="hidden lg:block fixed bottom-0 right-0 2xl:right-6 w-[260px] 2xl:w-[320px] h-[400px] 2xl:h-[500px] z-[25] pointer-events-none opacity-95 transition-all duration-500">
-          <AnimatedAvatar emotion={avatarEmotion} speaking={avatarSpeaking} />
+        <div className="hidden lg:block fixed bottom-0 right-0 2xl:right-6 w-[260px] 2xl:w-[320px] h-[400px] 2xl:h-[500px] z-[25] pointer-events-none opacity-95 transition-all duration-500 will-change-transform">
+          <AnimatedAvatar emotion={avatarState.emotion} speaking={avatarState.speaking} />
         </div>
       )}
 
@@ -642,74 +325,23 @@ function ChatLayoutInner() {
         {activeTab === "chats" ? (
           <>
             {isEmpty ? (
-              <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-fade-in pb-12 sm:pb-24">
-                <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
-                  <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl glass-panel text-primary transition-transform duration-300 hover:scale-105">
-                    <Sparkles size={24} strokeWidth={1.5} className="animate-pulse" />
-                  </div>
-                  <h1 className="text-2xl sm:text-4xl lg:text-5xl font-headline font-light tracking-tight text-on-surface text-balance">
-                    {greeting}, {user?.name?.split(" ")[0] || "there"}
-                  </h1>
-                  <p className="mt-3 sm:mt-4 max-w-xl text-sm sm:text-base text-secondary font-light leading-relaxed">
-                    Start a focused chat, attach an image, or choose the best model for the task.
-                  </p>
-                </div>
-                <div className="w-full relative z-20 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
-                  <ChatInput
-                    onSend={handleSend}
-                    disabled={typing}
-                    onStop={handleStop}
-                    model={model}
-                    onModelChange={setModel}
-                    placeholder="How can I help you today?"
-                  />
-                </div>
-
-                <div className="flex overflow-x-auto sm:flex-wrap items-center sm:justify-center gap-2.5 mt-5 w-[calc(100%+2rem)] sm:w-full max-w-3xl pb-2 px-4 sm:px-0 -mx-4 sm:mx-0 scrollbar-hide">
-                  {[
-                    { icon: Code2, text: "Code", prompt: "Help me write some code" },
-                    { icon: Sparkles, text: "Create", prompt: "Help me create something new" },
-                    { icon: BookOpen, text: "Learn", prompt: "Explain a complex topic clearly" },
-                    { icon: PenLine, text: "Write", prompt: "Help me write an email or blog post" },
-                    { icon: ListChecks, text: "Plan", prompt: "Help me organize my next steps" },
-                  ].map((chip, i) => {
-                    const Icon = chip.icon;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => handleSend(chip.prompt, null)}
-                        className="shrink-0 flex h-11 items-center justify-center gap-2 rounded-[1.25rem] glass-panel px-4 text-sm font-medium text-secondary hover-lift active-press hover:text-on-surface group"
-                      >
-                        <Icon size={16} className="text-neutral-500 dark:text-neutral-400" />
-                        {chip.text}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <EmptyChatState
+                greeting={greeting}
+                userName={user?.name?.split(" ")[0] || ""}
+                onSend={handleSendInitial}
+                model={model}
+                setModel={setModel}
+              />
             ) : (
-              <>
-                <MessageArea
-                  messages={activeChat?.messages || []}
-                  typing={typing}
-                  toolInProgress={toolInProgress}
-                  toolResults={toolResults}
-                  onEditSubmit={handleEditSend}
-                  streamingText={streamingText}
-                  bottomRef={bottomRef}
-                />
-
-                <div className="w-full shrink-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
-                  <ChatInput
-                    onSend={handleSend}
-                    disabled={typing}
-                    onStop={handleStop}
-                    model={model}
-                    onModelChange={setModel}
-                    placeholder="Reply to Kaori"
-                  />
-                </div>
-              </>
+              <ActiveChatArea
+                activeChat={activeChat!}
+                model={model}
+                setModel={setModel}
+                updateChat={updateChat}
+                onAvatarStateChange={(emotion, speaking) => setAvatarState({ emotion, speaking })}
+                pendingPrompt={pendingPrompt}
+                clearPendingPrompt={() => setPendingPrompt(null)}
+              />
             )}
           </>
         ) : (
