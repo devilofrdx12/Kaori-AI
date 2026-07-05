@@ -37,8 +37,8 @@ function getTimeGreeting() {
 }
 
 function getInitialSidebarOpen() {
-  if (typeof window === "undefined") return true;
-  return window.innerWidth >= 1024;
+  // Always return true for initial hydration to match SSR
+  return true;
 }
 
 
@@ -52,7 +52,7 @@ function MiniPomodoroTimer() {
   const timeStr = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-full px-4 py-2 flex items-center gap-3 animate-fade-in transition-all">
+    <div className="absolute top-16 sm:top-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-full px-4 py-2 flex items-center gap-3 animate-fade-in transition-all scale-90 sm:scale-100 origin-top">
       <div className="flex items-center gap-2">
         <span className="text-lg">{mode === "focus" ? "🧠" : "☕"}</span>
         <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{timeStr}</span>
@@ -96,6 +96,11 @@ function ChatLayoutInner() {
         // Use timeout to avoid synchronous setState cascading render warning
         setTimeout(() => setModel(storedModel), 0);
       }
+      
+      // Fix hydration mismatch for sidebar by checking window size after initial render
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      }
     }
   }, []);
 
@@ -131,15 +136,23 @@ function ChatLayoutInner() {
             updatedAt: c.updatedAt,
           }));
           setChats(safeChats);
-          setActiveChatId(safeChats[0].id);
-
-          // Load first chat messages
+          
+          // Check if the most recent chat is already empty
           const full = await fetchChat(safeChats[0].id);
-          setChats((prev) =>
-            prev.map((c) =>
-              c.id === safeChats[0].id ? { ...c, messages: full.messages || [] } : c
-            )
-          );
+          const hasMessages = full.messages && full.messages.length > 0;
+          
+          if (!hasMessages) {
+            // Re-use the existing empty chat at the top
+            setActiveChatId(safeChats[0].id);
+            setChats((prev) =>
+              prev.map((c) =>
+                c.id === safeChats[0].id ? { ...c, messages: [] } : c
+              )
+            );
+          } else {
+            // The top chat has messages, so spawn a fresh one for the new session
+            handleNewChat();
+          }
         } else {
           await handleNewChat();
         }
@@ -285,7 +298,7 @@ function ChatLayoutInner() {
       <MiniPomodoroTimer />
       {/* Floating Avatar */}
       {showAvatar && (
-        <div className="hidden lg:block fixed bottom-0 right-0 2xl:right-6 w-[260px] 2xl:w-[320px] h-[400px] 2xl:h-[500px] z-[25] pointer-events-none opacity-95 transition-all duration-500 will-change-transform">
+        <div className="hidden lg:block fixed bottom-0 right-0 2xl:right-6 w-[260px] 2xl:w-[320px] h-[480px] 2xl:h-[580px] z-[25] pointer-events-none opacity-95 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform animate-fade-in">
           <AnimatedAvatar emotion={avatarState.emotion} speaking={avatarState.speaking} />
         </div>
       )}
@@ -311,9 +324,9 @@ function ChatLayoutInner() {
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Main chat area wrapper to prevent margin overflow */}
-      <div className={`transition-[padding] duration-300 ease-out h-full w-full lg:py-4 lg:pr-4 ${sidebarOpen ? "lg:pl-[312px]" : "lg:pl-4"}`}>
+      <div className={`transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform transform-gpu h-full w-full p-2 sm:p-4 lg:p-6 lg:pr-6 ${sidebarOpen ? "lg:pl-[336px]" : "lg:pl-6"}`}>
         <main
-          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden glass-panel lg:rounded-[2rem]"
+          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden glass-panel rounded-[1.25rem] sm:rounded-[2rem] transition-[border-radius] duration-500"
         >
           <ChatHeader
           onToggleSidebar={() => setSidebarOpen((p) => !p)}

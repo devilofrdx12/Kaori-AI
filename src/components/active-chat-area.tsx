@@ -12,6 +12,33 @@ const BLOCKED_CUSTOM_URI_PROTOCOLS = new Set([
   "edge:", "file:", "filesystem:", "http:", "https:", "javascript:", "vbscript:",
 ]);
 
+// Exact hostnames that are permitted when the open_youtube tool fires.
+const YOUTUBE_ALLOWED_HOSTS = new Set([
+  "www.youtube.com",
+  "youtu.be",
+  "youtube.com",
+  "m.youtube.com",
+]);
+
+/**
+ * Extracts the first https: URL from tool result text whose hostname is in
+ * YOUTUBE_ALLOWED_HOSTS. Returns null when nothing trustworthy is found.
+ */
+function extractYouTubeUrl(result: string): string | null {
+  // Split on whitespace so we inspect discrete tokens, not substrings.
+  for (const token of result.split(/\s+/)) {
+    try {
+      const url = new URL(token);
+      if (url.protocol === "https:" && YOUTUBE_ALLOWED_HOSTS.has(url.hostname)) {
+        return url.toString();
+      }
+    } catch {
+      // token wasn't a valid URL – keep scanning
+    }
+  }
+  return null;
+}
+
 function getSafeCustomUri(value: unknown) {
   if (typeof value !== "string" || value.length > 2048) return null;
   try {
@@ -192,9 +219,9 @@ export default function ActiveChatArea({
             const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
             if (match) navigateToCustomUri(match[1]);
           }
-          if (tool === "open_youtube" && result.includes("https://www.youtube.com")) {
-            const match = result.match(/(https:\/\/www\.youtube\.com[^\s]*)/);
-            if (match) openSafeHttpsUrl(match[1]);
+          if (tool === "open_youtube") {
+            const ytUrl = extractYouTubeUrl(result);
+            if (ytUrl) openSafeHttpsUrl(ytUrl);
           }
         },
         onDone: () => {
@@ -358,7 +385,7 @@ export default function ActiveChatArea({
         streamingText={streamingText}
         bottomRef={bottomRef}
       />
-      <div className="w-full shrink-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
+      <div className="w-full shrink-0 animate-spring-down transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
         <ChatInput
           onSend={(t, f) => handleSendInternal(t, f)}
           disabled={typing}

@@ -55,3 +55,6 @@ next-env.d.ts
 
 # misc
 Thumbs.db
+
+.vercel
+.env*

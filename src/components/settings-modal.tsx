@@ -117,7 +117,7 @@ function CustomSelect({
     <div className={`relative ${open ? "z-50" : "z-10"}`} ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className={`settings-glass-card flex w-full items-center justify-between border border-white/45 text-neutral-900 outline-none backdrop-blur-xl transition-all focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:text-neutral-100 hover:bg-white/60 dark:hover:bg-white/10 active-press hover-lift ${sizeClasses}`}
+        className={`settings-glass-card flex w-full items-center justify-between border border-white/45 text-neutral-900 outline-none backdrop-blur-xl focus:ring-2 focus:ring-[hsl(var(--primary)/0.25)] dark:border-white/10 dark:text-neutral-100 hover:bg-white/60 dark:hover:bg-white/10 hover-lift active-press ${sizeClasses}`}
         type="button"
         aria-label={label}
       >
@@ -142,11 +142,11 @@ function CustomSelect({
                     onChange(opt.value);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center px-4 py-2.5 text-sm transition-all rounded-xl ${
+                  className={`flex w-full items-center px-4 py-2.5 text-sm rounded-xl ${
                     value === opt.value
                       ? "bg-white/60 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-neutral-100 font-medium"
                       : "text-neutral-600 hover:bg-white/30 dark:text-neutral-400 dark:hover:bg-white/10 font-light"
-                  } active-press`}
+                  } hover-lift active-press`}
                   type="button"
                 >
                   {opt.label}
@@ -164,6 +164,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const dragControls = useDragControls();
   const [activeTab, setActiveTab] = useState<Tab>("appearance");
   const [statusMsg, setStatusMsg] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
   const [theme, setTheme] = useState(() => getStoredValue("kaori_theme", "system"));
   const [accent, setAccent] = useState(() => getStoredValue("kaori_accent", "orange"));
   const [font, setFont] = useState(() => getStoredValue("kaori_font", "Kaori UI"));
@@ -173,6 +174,15 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const [isPro, setIsPro] = useState(false);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleResize = () => setIsMobile(window.innerWidth < 768);
+      handleResize();
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -359,18 +369,18 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ ease: [0.34, 1.56, 0.64, 1], duration: 0.5 }}
             style={{ willChange: "transform, opacity" }}
-            drag 
+            drag={!isMobile}
             dragControls={dragControls}
             dragListener={false}
             dragMomentum={false}
             dragElastic={0}
-            className="settings-glass-shell relative flex h-[calc(100dvh-2rem)] max-h-[800px] w-full min-w-0 max-w-4xl flex-col overflow-hidden rounded-[1.75rem] sm:rounded-[2.25rem] pointer-events-auto md:h-[min(80dvh,800px)] md:flex-row"
+            className="settings-glass-shell relative flex h-[calc(100dvh-2rem)] max-h-[800px] w-full min-w-0 max-w-4xl flex-row overflow-hidden rounded-[1.75rem] sm:rounded-[2.25rem] pointer-events-auto md:h-[min(80dvh,800px)]"
           >
         {/* Close Button Pinned to Modal Top Right */}
         <button 
           onClick={onClose} 
           aria-label="Close settings"
-          className="settings-glass-card absolute right-3 top-3 z-[60] rounded-full border border-white/40 bg-white/30 p-2 shadow-sm backdrop-blur-xl transition-all hover:bg-white/45 active:scale-90 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 sm:right-4 sm:top-4"
+          className="settings-glass-card absolute right-3 top-3 z-[60] rounded-full border border-white/40 bg-white/30 p-2 shadow-sm backdrop-blur-xl hover-lift active-press hover:bg-white/45 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 sm:right-4 sm:top-4"
         >
           <X size={24} className="text-neutral-900 dark:text-neutral-100" />
         </button>
@@ -382,12 +392,12 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
         />
         
         {/* Sidebar */}
-        <div className="flex w-full shrink-0 flex-col border-b border-white/45 bg-white/35 px-3 pb-3 pt-12 backdrop-blur-[18px] backdrop-saturate-150 dark:border-white/10 dark:bg-neutral-900/40 sm:px-4 md:h-full md:w-72 md:border-b-0 md:border-r md:px-5 md:py-8">
-          <div className="flex min-w-0 flex-col px-2 pb-4 md:mb-8">
-            <h2 className="text-2xl font-light tracking-tighter text-neutral-900 dark:text-neutral-100 select-none">Settings</h2>
+        <div className="flex w-16 md:w-72 shrink-0 flex-col border-r border-white/45 bg-white/35 px-2 pb-4 pt-12 md:pt-8 backdrop-blur-[18px] backdrop-saturate-150 dark:border-white/10 dark:bg-neutral-900/40 md:px-5 md:h-full md:pb-8">
+          <div className="flex min-w-0 flex-col px-2 pb-4 md:mb-8 items-center md:items-start">
+            <h2 className="text-xl md:text-2xl font-light tracking-tighter text-neutral-900 dark:text-neutral-100 select-none hidden md:block">Settings</h2>
             <p className="text-xs text-neutral-500 mt-1 uppercase tracking-widest font-medium hidden md:block">Manage your AI environment</p>
           </div>
-          <nav className="flex w-full min-w-0 flex-none gap-2 overflow-x-auto pb-1 scrollbar-hide md:min-h-0 md:flex-1 md:flex-col md:gap-1 md:overflow-x-visible md:overflow-y-auto md:pb-0">
+          <nav className="flex w-full min-w-0 flex-none flex-col gap-2 md:gap-1 overflow-y-auto pb-0 scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -395,14 +405,15 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
-                  className={`group flex h-11 shrink-0 items-center gap-3 rounded-[1.25rem] px-4 text-sm md:h-auto md:w-full md:py-3 active-press hover-lift ${
+                  title={tab.label}
+                  className={`group flex h-11 shrink-0 items-center justify-center md:justify-start gap-3 rounded-[1.25rem] px-0 md:px-4 text-sm md:h-auto md:w-full md:py-3 active-press hover-lift ${
                     isActive 
                       ? "bg-white/60 text-neutral-900 shadow-sm dark:bg-white/10 dark:text-neutral-100 border border-white/40 dark:border-white/10 font-medium" 
                       : "text-neutral-600 hover:bg-white/45 font-light tracking-tight dark:text-neutral-400 dark:hover:bg-white/10 border border-transparent"
                   }`}
                 >
                   <Icon size={18} className={`${isActive ? "text-primary" : "text-neutral-500 dark:text-neutral-400"} group-hover:scale-110 transition-transform duration-500`} />
-                  <span className="whitespace-nowrap">{tab.label}</span>
+                  <span className="whitespace-nowrap hidden md:block">{tab.label}</span>
                 </button>
               );
             })}
@@ -414,7 +425,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                 await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
                 window.location.href = '/login';
               }}
-              className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50/70 dark:text-red-400 dark:hover:bg-red-500/10"
+              className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-red-600 hover-lift active-press hover:bg-red-50/70 dark:text-red-400 dark:hover:bg-red-500/10"
             >
               <LogOut size={18} />
               Logout
@@ -428,7 +439,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             <h2 className="min-w-0 truncate pr-12 text-2xl font-light tracking-tight text-neutral-900 dark:text-neutral-100 md:text-3xl">{tabs.find(t => t.id === activeTab)?.label}</h2>
           </header>
 
-          <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden p-6 sm:p-8 md:p-10 relative pb-[30vh]">
+          <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-10 relative pb-[30vh]">
             <div className="mx-auto max-w-2xl space-y-8 pb-12">
               
               {statusMsg && (
@@ -453,8 +464,8 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <button 
                             key={t} 
                             onClick={() => handleThemeChange(t.toLowerCase())}
-                            className={`settings-glass-card group relative flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/45 p-5 backdrop-blur-xl transition-all duration-300 active:scale-95 dark:border-white/10 ${
-                              isSelected ? 'bg-white/45 shadow-[inset_0_2px_8px_hsl(220_30%_30%/0.10)] dark:bg-white/10' : 'bg-white/20 hover:bg-white/35 dark:bg-white/[0.03] dark:hover:bg-white/10'
+                            className={`settings-glass-card group relative flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/45 p-5 backdrop-blur-xl hover-lift active-press dark:border-white/10 ${
+                              isSelected ? 'bg-white/45 shadow-[inset_0_2px_8px_hsl(220_30%_30%/0.10)] dark:bg-white/10 ring-2 ring-primary' : 'bg-white/20 hover:bg-white/35 dark:bg-white/[0.03] dark:hover:bg-white/10'
                             }`}
                           >
                             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
@@ -492,7 +503,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           key={c.id} 
                           onClick={() => handleAccentChange(c.id)}
                           aria-label={`${c.id} accent`}
-                          className={`h-11 w-11 rounded-full border border-white/50 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.45),0_8px_18px_hsl(220_30%_10%/0.08)] ${c.bg} transition-all hover:scale-110 active:scale-90 dark:border-white/10 ${
+                          className={`h-11 w-11 rounded-full border border-white/50 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.45),0_8px_18px_hsl(220_30%_10%/0.08)] ${c.bg} hover-lift active-press dark:border-white/10 ${
                             accent === c.id ? `ring-4 ring-white/60 dark:ring-white/20 ${c.glow}` : 'hover:' + c.glow
                           }`}
                         />
@@ -592,7 +603,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="text-sm text-neutral-500">Drive & Gmail access</div>
                         </div>
                       </div>
-                      <a href="/api/auth/google" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-blue-500 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-600 sm:w-auto">
+                      <a href="/api/auth/google" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-blue-500 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-blue-600 sm:w-auto">
                         Connect
                       </a>
                     </div>
@@ -607,7 +618,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="text-sm text-neutral-500">Playback control</div>
                         </div>
                       </div>
-                      <a href="/api/auth/spotify" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white transition-colors hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white sm:w-auto">
+                      <a href="/api/auth/spotify" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white sm:w-auto">
                         Connect
                       </a>
                     </div>
@@ -657,18 +668,22 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         <div className="flex flex-wrap items-center gap-2 font-medium text-neutral-900 dark:text-neutral-100">
                           Kaori Pro 
                           <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {isPro ? "ACTIVE" : "FREE TIER"}
+                            {isPro ? "ACTIVE" : "BETA"}
                           </span>
                         </div>
-                        <div className="text-sm text-neutral-500">{isPro ? "Unlimited messages and priority access." : "Upgrade for unlimited messages and premium features."}</div>
+                        <div className="text-sm text-neutral-500">{isPro ? "Unlimited messages and priority access." : "Try Kaori Pro for free during our beta period."}</div>
                       </div>
                       {!isPro && (
                         <button 
-                          className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-medium text-white opacity-60 transition-colors hover:brightness-110 disabled:cursor-not-allowed sm:w-auto"
-                          title="Coming soon"
-                          disabled
+                          onClick={() => {
+                            setIsPro(true);
+                            setStatusMsg("Welcome to the Kaori Pro Beta!");
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-medium text-white hover-lift active-press hover:brightness-110 sm:w-auto"
+                          title="Join Beta"
                         >
-                          Upgrade
+                          Join Beta
                         </button>
                       )}
                     </div>
@@ -711,7 +726,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export Conversations</div>
                           <div className="text-sm text-neutral-500">Download all your chats as Markdown.</div>
                         </div>
-                        <button onClick={handleExportData} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
+                        <button onClick={handleExportData} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium hover-lift active-press hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
                           Export ZIP
                         </button>
                       </div>
@@ -721,7 +736,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export My Data (GDPR)</div>
                           <div className="text-sm text-neutral-500">Request a full export of your profile and data.</div>
                         </div>
-                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
+                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium hover-lift active-press hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
                           Request Data
                         </button>
                       </div>
@@ -733,7 +748,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-red-600 dark:text-red-400">Delete All Conversations</div>
                           <div className="text-sm text-red-500/80">This action cannot be undone.</div>
                         </div>
-                        <button onClick={handleDeleteAllChats} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 sm:w-auto">
+                        <button onClick={handleDeleteAllChats} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 hover-lift active-press hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 sm:w-auto">
                           Delete Chats
                         </button>
                       </div>
@@ -743,7 +758,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-red-600 dark:text-red-400">Delete Account</div>
                           <div className="text-sm text-red-500/80">Permanently remove your account and data.</div>
                         </div>
-                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:w-auto">
+                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-red-700 sm:w-auto">
                           Delete Account
                         </button>
                       </div>
@@ -758,7 +773,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                             await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
                             window.location.href = '/login';
                           }} 
-                          className="inline-flex h-10 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
+                          className="inline-flex h-10 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 hover-lift active-press hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
                         >
                           Logout
                         </button>

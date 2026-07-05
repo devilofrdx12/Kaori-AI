@@ -143,8 +143,10 @@ export default function AnimeCharacter({
         };
 
         fitModel();
-        resizeHandler = () => fitModel();
-        window.addEventListener("resize", resizeHandler);
+        // Use ResizeObserver instead of window.resize to handle zoom correctly
+        const ro = new ResizeObserver(() => fitModel());
+        ro.observe(containerRef.current);
+        resizeHandler = () => ro.disconnect();
 
         startIdleBehavior(core);
         startBlinking(core);
@@ -167,7 +169,7 @@ export default function AnimeCharacter({
       destroyed = true;
 
       if (resizeHandler) {
-        window.removeEventListener("resize", resizeHandler);
+        resizeHandler(); // disconnects the ResizeObserver
       }
 
       if (blinkIntervalRef.current) {

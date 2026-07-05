@@ -221,20 +221,7 @@ export async function deleteConversation(id: string) {
 }
 
 export async function deleteUserConversations(userId: string) {
-  const db = await getDb();
-  await db.batch(
-    [
-      {
-        sql: `DELETE FROM messages
-              WHERE conversation_id IN (
-                SELECT id FROM conversations WHERE user_id = ?
-              )`,
-        args: [userId],
-      },
-      { sql: "DELETE FROM conversations WHERE user_id = ?", args: [userId] },
-    ],
-    "write"
-  );
+  await run("DELETE FROM conversations WHERE user_id = ?", [userId]);
 }
 
 // MESSAGE HELPERS

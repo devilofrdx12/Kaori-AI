@@ -22,6 +22,8 @@ export default function ChatInput({
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [listening, setListening] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isJerking, setIsJerking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const previewUrls = useMemo(
@@ -32,9 +34,37 @@ export default function ChatInput({
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
+    
+    // Save current height before measuring
+    const currentHeight = el.style.height || "54px";
+    
+    // Disable transition temporarily to prevent glitching during measurement
+    el.style.transition = "none";
+    
+    // Shrink to measure true scrollHeight
     el.style.height = "0px";
-    el.style.height = Math.min(el.scrollHeight, 180) + "px";
+    const scrollHeight = el.scrollHeight;
+    
+    // Calculate target height with a 2px buffer for subpixel descender safety
+    const targetHeight = Math.min(scrollHeight + 2, 180) + "px";
+    
+    // Restore previous height and force a layout reflow
+    el.style.height = currentHeight;
+    void el.offsetHeight; // The magic line that forces the browser to acknowledge the starting state
+    
+    // Re-enable the CSS transition and trigger the animation to the new height
+    el.style.transition = "";
+    el.style.height = targetHeight;
+    el.style.overflowY = scrollHeight > 180 ? "auto" : "hidden";
   }, [value]);
+
+  useEffect(() => {
+    // Auto focus on mount and when not disabled (desktop only to prevent mobile keyboard pop)
+    const isMobile = typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile && textareaRef.current && !disabled) {
+      textareaRef.current.focus();
+    }
+  }, [disabled]);
 
   useEffect(() => {
     return () => previewUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -55,8 +85,11 @@ export default function ChatInput({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!disabled) handleSend();
+      const isMobile = typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile) {
+        e.preventDefault();
+        if (!disabled) handleSend();
+      }
     }
   };
 
@@ -70,6 +103,47 @@ export default function ChatInput({
 
   const removeFile = (idx: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    // Physical weight impact for pasting paragraphs
+    const text = e.clipboardData?.getData("text");
+    if (text && text.length > 30) {
+      setIsJerking(true);
+      setTimeout(() => setIsJerking(false), 80); // 80ms heavy impact down
+    }
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pastedFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) pastedFiles.push(file);
+      }
+    }
+    if (pastedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...pastedFiles].slice(0, 3));
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    if (droppedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...droppedFiles].slice(0, 3));
+    }
   };
 
   const startVoice = () => {
@@ -90,33 +164,37 @@ export default function ChatInput({
   };
 
   return (
-    <div className="shrink-0 px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
+    <div className="shrink-0 px-3 sm:px-4 pb-6 sm:pb-8 pt-2 w-full">
       <div className="max-w-3xl mx-auto">
-        {/* File previews */}
-        {previewUrls.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2 px-1">
-            {previewUrls.map((url, i) => (
-              <div key={i} className="relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */}
-                <img
-                  src={url}
-                  alt=""
-                  className="w-16 h-16 object-cover rounded-[1.25rem] border border-white/70 dark:border-white/10 shadow-sm"
-                />
-                <button
-                  onClick={() => removeFile(i)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neutral-900 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-all active:scale-90"
-                  title="Remove image"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Input Container */}
-        <div className="flex flex-col glass-panel rounded-[1.5rem] relative z-10 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus-within:-translate-y-1.5 focus-within:shadow-[0_0_0_2px_hsl(var(--primary)/0.3),0_16px_48px_-12px_hsl(var(--primary)/0.25)] focus-within:border-[hsl(var(--primary)/0.4)]">
+        <div 
+          className={`flex flex-col glass-panel rounded-[1.5rem] relative z-10 chat-input-box transition-all duration-300 ${isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-transparent bg-primary/5" : ""} ${isJerking ? "jerk-impact" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* File previews */}
+          {previewUrls.length > 0 && (
+            <div className="flex flex-wrap gap-3 pt-4 sm:pt-5 px-4 sm:px-5 pb-1">
+              {previewUrls.map((url, i) => (
+                <div key={i} className="relative group animate-fade-in">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-xl border border-black/5 dark:border-white/10 shadow-sm"
+                  />
+                  <button
+                    onClick={() => removeFile(i)}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-neutral-800/80 hover:bg-neutral-900 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-all active:scale-90 backdrop-blur-md shadow-sm"
+                    title="Remove image"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           
           <input
             ref={fileRef}
@@ -136,14 +214,15 @@ export default function ChatInput({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder || "Reply to Kaori"}
+            onPaste={handlePaste}
+            placeholder={isDragging ? "Drop images here..." : (placeholder || "Reply to Kaori")}
             rows={1}
-            className="flex-1 w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pt-4 sm:pt-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70"
+            className={`w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70 caret-[hsl(var(--primary))] transition-[height] duration-500 ease-[cubic-bezier(0.2,1.2,0.4,1)] will-change-[height] ${previewUrls.length > 0 ? "pt-2" : "pt-4 sm:pt-5"}`}
             disabled={disabled}
           />
 
           {/* Bottom Toolbar */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full">
+          <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full flex-wrap">
             {/* Left: attach + model */}
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <button
@@ -165,7 +244,7 @@ export default function ChatInput({
             </div>
 
             {/* Right: voice + send */}
-            <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
+            <div className="flex items-center gap-1 shrink-0 ml-auto self-end sm:self-auto">
               <button
                 onClick={startVoice}
                 className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${
@@ -198,10 +277,14 @@ export default function ChatInput({
                 <button
                   onClick={handleSend}
                   disabled={disabled || (!value.trim() && !files.length)}
-                  className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] bg-primary text-white shadow-sm hover-lift active-press disabled:opacity-50 disabled:cursor-not-allowed disabled:hover-lift-none disabled:active-press-none"
+                  className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] transition-all duration-300 ${
+                    (!value.trim() && !files.length) || disabled
+                      ? "bg-neutral-200 dark:bg-white/5 text-secondary/50 cursor-not-allowed"
+                      : "bg-primary text-white shadow-sm hover-lift active-press animate-breathe"
+                  }`}
                   title="Send message"
                 >
-                  <ArrowUp size={18} strokeWidth={2.5} />
+                  <ArrowUp size={18} strokeWidth={(!value.trim() && !files.length) || disabled ? 2 : 2.5} />
                 </button>
               )}
             </div>

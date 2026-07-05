@@ -44,21 +44,38 @@ export async function POST(req: NextRequest) {
 
     const html = await resp.text();
 
+    // ── Text extraction pipeline ────────────────────────────────────────────
+    // Step 1: Remove high-noise block elements (script/style/nav/footer/header)
+    //         before generic tag-stripping so their inner text is not included.
     let textContent = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<nav[\s\S]*?<\/nav>/gi, "")
       .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-      .replace(/<header[\s\S]*?<\/header>/gi, "")
-      .replace(/<[^>]*>/g, " ")
+      .replace(/<header[\s\S]*?<\/header>/gi, "");
+
+    // Step 2: Strip all remaining HTML tags. Replace with a space so words
+    //         that span tag boundaries don't run together.
+    textContent = textContent.replace(/<[^>]*>/g, " ");
+
+    // Step 3: Decode a small, explicit set of HTML entities.
+    //         Order matters: &amp; must come last so &amp;lt; → &lt; → handled
+    //         by the next replace rather than accidentally producing a "<".
+    textContent = textContent
       .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
-      .replace(/\s+/g, " ")
-      .trim();
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+
+    // Step 4: Single-character sanitization — remove any bare < or > that
+    //         survived or were re-introduced by entity decoding above.
+    //         This prevents decoded entities from forming tag delimiters.
+    textContent = textContent.replace(/[<>]/g, "");
+
+    // Step 5: Collapse whitespace and trim.
+    textContent = textContent.replace(/\s+/g, " ").trim();
 
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
     const title = titleMatch

@@ -28,12 +28,12 @@ const memoizedComponents: Components = {
       );
     }
     return (
-        <code
-          className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
-          {...rest}
-        >
-          {children}
-        </code>
+      <code
+        className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
+        {...rest}
+      >
+        {children}
+      </code>
     );
   },
 };
@@ -73,11 +73,11 @@ const MessageRow = memo(({
                   className="w-full min-h-[100px] bg-transparent text-on-surface text-sm resize-none outline-none font-body"
                 />
                 <div className="flex justify-end gap-2 mt-2">
-                  <button 
+                  <button
                     onClick={() => setEditingMessageId(null)}
                     className="px-3 py-1.5 text-xs font-medium rounded-xl hover:bg-white/55 dark:hover:bg-white/10 text-secondary hover-lift active-press"
                   >Cancel</button>
-                  <button 
+                  <button
                     onClick={() => {
                       if (onEditSubmit && editText.trim() !== msg.content) {
                         onEditSubmit(msg.id, editText);
@@ -92,7 +92,7 @@ const MessageRow = memo(({
             ) : (
               <div className="group/user flex flex-col items-end gap-1">
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => {
                       setEditingMessageId(msg.id);
                       setEditText(msg.content);
@@ -226,9 +226,9 @@ export default function MessageArea({
   }
 
   return (
-    <div className="flex-1 min-h-0 px-3 sm:px-5 py-4 sm:py-6 relative will-change-transform">
+    <div className="flex-1 min-h-0 px-3 sm:px-5 py-4 sm:py-6 relative will-change-transform [clip-path:polygon(-100vw_0,200vw_0,200vw_200vh,-100vw_200vh)]">
       <Virtuoso
-        style={{ height: "100%" }}
+        className="h-full"
         data={allMessages}
         alignToBottom
         followOutput="smooth"
