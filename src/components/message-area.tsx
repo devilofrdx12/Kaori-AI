@@ -230,6 +230,7 @@ export default function MessageArea({
       <Virtuoso
         className="h-full"
         data={allMessages}
+        computeItemKey={(_, msg) => msg.id}
         alignToBottom
         followOutput="smooth"
         itemContent={(index, msg) => (

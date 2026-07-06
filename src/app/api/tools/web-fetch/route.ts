@@ -47,16 +47,25 @@ export async function POST(req: NextRequest) {
     // ── Text extraction pipeline ────────────────────────────────────────────
     // Step 1: Remove high-noise block elements (script/style/nav/footer/header)
     //         before generic tag-stripping so their inner text is not included.
-    let textContent = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-      .replace(/<header[\s\S]*?<\/header>/gi, "");
+    let textContent = html;
+    let prevBlockStrip;
+    do {
+      prevBlockStrip = textContent;
+      textContent = textContent
+        .replace(/<script\b[\s\S]*?<\/script(?:\s[^>]*)?>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+        .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+        .replace(/<header[\s\S]*?<\/header>/gi, "");
+    } while (textContent !== prevBlockStrip);
 
     // Step 2: Strip all remaining HTML tags. Replace with a space so words
     //         that span tag boundaries don't run together.
-    textContent = textContent.replace(/<[^>]*>/g, " ");
+    let previousTextContent;
+    do {
+      previousTextContent = textContent;
+      textContent = textContent.replace(/<[^>]*>/g, " ");
+    } while (textContent !== previousTextContent);
 
     // Step 3: Decode a small, explicit set of HTML entities.
     //         Order matters: &amp; must come last so &amp;lt; → &lt; → handled
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
     const title = titleMatch
-      ? titleMatch[1].replace(/<[^>]*>/g, "").trim()
+      ? titleMatch[1].replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim()
       : parsedUrl.hostname;
 
     const descMatch = html.match(

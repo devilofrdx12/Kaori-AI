@@ -63,8 +63,16 @@ export async function POST(req: NextRequest) {
       const title = decodeHtml(match[2]);
       const snippet = decodeHtml(match[3]);
 
-      if (title && url && !url.includes("duckduckgo.com")) {
-        results.push({ title, url, snippet });
+      if (title && url) {
+        try {
+          const parsedUrl = new URL(url);
+          const hostname = parsedUrl.hostname;
+          if (hostname !== "duckduckgo.com" && !hostname.endsWith(".duckduckgo.com")) {
+            results.push({ title, url, snippet });
+          }
+        } catch {
+          // Invalid URL, skip
+        }
       }
     }
 
