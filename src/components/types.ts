@@ -1,4 +1,4 @@
-export type ProviderId = "claude" | "groq" | "google";
+export type ProviderId = "groq" | "google";
 
 export type UploadFile = {
   url: string;
@@ -73,14 +73,6 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsVision: true,
     supportsThinking: false,
   },
-  {
-    id: "claude-sonnet-4-20250514",
-    label: "Kaori 4 Sonnet",
-    provider: "claude",
-    description: "Balanced speed & intelligence (Requires Key)",
-    supportsVision: true,
-    supportsThinking: true,
-  }
 ];
 
 export const DEFAULT_MODEL = "llama-3.3-70b-versatile";

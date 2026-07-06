@@ -1,4 +1,4 @@
-import { AnthropicMessage, AnthropicTool } from "./anthropic";
+import { KaoriMessage, KaoriTool } from "./core-types";
 import { streamOpenAiCompatible } from "./openai-adapter";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -18,9 +18,9 @@ export async function streamGroqChatCompletion({
   signal,
 }: {
   model: string;
-  messages: AnthropicMessage[];
+  messages: KaoriMessage[];
   system?: string;
-  tools?: AnthropicTool[];
+  tools?: KaoriTool[];
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<Response> {

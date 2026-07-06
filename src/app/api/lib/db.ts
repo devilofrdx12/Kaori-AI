@@ -184,8 +184,8 @@ export async function createConversation(conv: {
       conv.id,
       conv.user_id,
       conv.title,
-      conv.provider || "anthropic",
-      conv.model || "claude-sonnet-4-20250514",
+      conv.provider || "google",
+      conv.model || "gemini-1.5-pro",
     ]
   );
   return (await findConversation(conv.id))!;
@@ -421,4 +421,35 @@ export async function deleteOAuthToken(userId: string, provider: string) {
     userId,
     provider,
   ]);
+}
+
+// ══════════════════════════════════════════
+// DOCUMENTS HELPERS
+// ══════════════════════════════════════════
+
+export type DBDocument = {
+  id: string;
+  user_id: string;
+  filename: string;
+  format: string;
+  content: string;
+  created_at: number;
+};
+
+export async function createDocument(doc: {
+  id: string;
+  user_id: string;
+  filename: string;
+  format: string;
+  content: string;
+}) {
+  await run(
+    `INSERT INTO documents (id, user_id, filename, format, content)
+     VALUES (?, ?, ?, ?, ?)`,
+    [doc.id, doc.user_id, doc.filename, doc.format, doc.content]
+  );
+}
+
+export async function getDocument(id: string): Promise<DBDocument | undefined> {
+  return getOne<DBDocument>("SELECT * FROM documents WHERE id = ?", [id]);
 }

@@ -199,3 +199,17 @@ CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id, created_a
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, done, due_at);
 CREATE INDEX IF NOT EXISTS idx_snippets_user ON snippets(user_id, created_at DESC);
+
+-- ══════════════════════════════════════════
+-- GENERATED DOCUMENTS
+-- ══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  format TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+

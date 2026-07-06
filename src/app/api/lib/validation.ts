@@ -5,7 +5,7 @@ const ALLOWED_MODELS = new Set([
   "claude-sonnet-4-20250514",
 ]);
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 
 export const LIMITS = {
   message: { max: 32_000 },
@@ -125,8 +125,8 @@ export function validateUploadFiles(files: unknown): ValidatedUploadFile[] {
     const data = typeof candidate.data === "string" ? candidate.data : "";
     const name = typeof candidate.name === "string" ? candidate.name.slice(0, 180) : "image";
 
-    if (!ALLOWED_IMAGE_TYPES.has(type)) {
-      throw new Error("Unsupported image type");
+    if (!ALLOWED_UPLOAD_TYPES.has(type)) {
+      throw new Error("Unsupported file type");
     }
 
     const base64Data = data.split(",")[1] || data;

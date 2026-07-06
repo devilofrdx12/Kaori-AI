@@ -20,7 +20,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     const { id } = await params;
-    const conv = await findConversation(id);
+    
+    let conv = await findConversation(id);
+    if (!conv) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      conv = await findConversation(id);
+      if (!conv) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        conv = await findConversation(id);
+      }
+    }
 
     // IDOR: return 404 if not owner or not found
     if (!conv || conv.user_id !== user.id) {
@@ -121,7 +130,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    const conv = await findConversation(id);
+    
+    let conv = await findConversation(id);
+    // Handle potential Turso edge replication delay (read-your-own-writes lag)
+    if (!conv) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      conv = await findConversation(id);
+      if (!conv) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        conv = await findConversation(id);
+      }
+    }
 
     if (!conv || conv.user_id !== user.id) {
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });

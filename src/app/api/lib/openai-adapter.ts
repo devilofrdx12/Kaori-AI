@@ -1,7 +1,7 @@
-import { AnthropicMessage, AnthropicTool } from "./anthropic";
+import { KaoriMessage, KaoriTool } from "./core-types";
 
-// Convert Anthropic messages to OpenAI format
-function convertMessages(messages: AnthropicMessage[]) {
+// Convert Kaori messages to OpenAI format
+function convertMessages(messages: KaoriMessage[]) {
   const openAiMessages: any[] = [];
   
   for (const msg of messages) {
@@ -51,18 +51,21 @@ export async function streamOpenAiCompatible({
   system,
   tools,
   maxTokens = 4096,
+  extraHeaders,
   signal,
 }: {
   apiUrl: string;
   apiKey: string;
   model: string;
-  messages: AnthropicMessage[];
+  messages: KaoriMessage[];
   system?: string;
-  tools?: AnthropicTool[];
+  tools?: KaoriTool[];
   maxTokens?: number;
+  extraHeaders?: Record<string, string>;
   signal?: AbortSignal;
-}): Promise<Response> {
+} = {} as any): Promise<Response> {
   const openAiMessages = convertMessages(messages);
+  const extraHeadersObj = extraHeaders || {};
   if (system) {
     openAiMessages.unshift({ role: "system", content: system });
   }
@@ -88,12 +91,15 @@ export async function streamOpenAiCompatible({
     body.tool_choice = "auto";
   }
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+    ...extraHeadersObj,
+  };
+
   const resp = await fetch(apiUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify(body),
     signal,
   });

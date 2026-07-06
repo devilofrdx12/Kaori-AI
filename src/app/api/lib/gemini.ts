@@ -1,4 +1,4 @@
-import { AnthropicMessage, AnthropicTool } from "./anthropic";
+import { KaoriMessage, KaoriTool } from "./core-types";
 import { streamOpenAiCompatible } from "./openai-adapter";
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
@@ -14,13 +14,13 @@ export async function streamGeminiChatCompletion({
   messages,
   system,
   tools,
-  maxTokens = 4096,
+  maxTokens = 8192,
   signal,
 }: {
   model: string;
-  messages: AnthropicMessage[];
+  messages: KaoriMessage[];
   system?: string;
-  tools?: AnthropicTool[];
+  tools?: KaoriTool[];
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<Response> {

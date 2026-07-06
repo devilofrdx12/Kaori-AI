@@ -26,8 +26,13 @@ export default function ChatInput({
   const [isJerking, setIsJerking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const previewUrls = useMemo(
-    () => files.filter((f) => f.type.startsWith("image/")).map((f) => URL.createObjectURL(f)),
+  const filePreviews = useMemo(
+    () =>
+      files.map((file) => ({
+        file,
+        isImage: file.type.startsWith("image/"),
+        url: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      })),
     [files]
   );
 
@@ -67,8 +72,8 @@ export default function ChatInput({
   }, [disabled]);
 
   useEffect(() => {
-    return () => previewUrls.forEach((url) => URL.revokeObjectURL(url));
-  }, [previewUrls]);
+    return () => filePreviews.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
+  }, [filePreviews]);
 
   const handleSend = () => {
     const text = value.trim();
@@ -96,8 +101,8 @@ export default function ChatInput({
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
     if (!selected.length) return;
-    const imageFiles = selected.filter((f) => f.type.startsWith("image/"));
-    setFiles((prev) => [...prev, ...imageFiles].slice(0, 3));
+    const validFiles = selected.filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
+    setFiles((prev) => [...prev, ...validFiles].slice(0, 3));
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -117,7 +122,7 @@ export default function ChatInput({
     if (!items) return;
     const pastedFiles: File[] = [];
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith("image/")) {
+      if (items[i].type.startsWith("image/") || items[i].type === "application/pdf") {
         const file = items[i].getAsFile();
         if (file) pastedFiles.push(file);
       }
@@ -140,7 +145,7 @@ export default function ChatInput({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
     if (droppedFiles.length > 0) {
       setFiles((prev) => [...prev, ...droppedFiles].slice(0, 3));
     }
@@ -174,20 +179,27 @@ export default function ChatInput({
           onDrop={handleDrop}
         >
           {/* File previews */}
-          {previewUrls.length > 0 && (
+          {filePreviews.length > 0 && (
             <div className="flex flex-wrap gap-3 pt-4 sm:pt-5 px-4 sm:px-5 pb-1">
-              {previewUrls.map((url, i) => (
+              {filePreviews.map((preview, i) => (
                 <div key={i} className="relative group animate-fade-in">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */}
-                  <img
-                    src={url}
-                    alt=""
-                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-xl border border-black/5 dark:border-white/10 shadow-sm"
-                  />
+                  {preview.isImage ? (
+                    /* eslint-disable-next-line @next/next/no-img-element -- Blob preview URLs cannot be optimized by next/image. */
+                    <img
+                      src={preview.url!}
+                      alt=""
+                      className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-xl border border-black/5 dark:border-white/10 shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 bg-neutral-100 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/10 shadow-sm flex flex-col items-center justify-center p-2 text-center overflow-hidden">
+                      <span className="text-[10px] sm:text-xs font-medium text-neutral-600 dark:text-neutral-300 truncate w-full">{preview.file.name}</span>
+                      <span className="text-[9px] sm:text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 uppercase">{preview.file.name.split('.').pop()}</span>
+                    </div>
+                  )}
                   <button
                     onClick={() => removeFile(i)}
                     className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-neutral-800/80 hover:bg-neutral-900 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-all active:scale-90 backdrop-blur-md shadow-sm"
-                    title="Remove image"
+                    title="Remove file"
                   >
                     <X size={14} />
                   </button>
@@ -202,7 +214,7 @@ export default function ChatInput({
             title="Upload image"
             placeholder="Upload image"
             aria-label="Upload image"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             onChange={handleFiles}
             className="hidden"
@@ -217,7 +229,7 @@ export default function ChatInput({
             onPaste={handlePaste}
             placeholder={isDragging ? "Drop images here..." : (placeholder || "Reply to Kaori")}
             rows={1}
-            className={`w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70 caret-[hsl(var(--primary))] transition-[height] duration-500 ease-[cubic-bezier(0.2,1.2,0.4,1)] will-change-[height] ${previewUrls.length > 0 ? "pt-2" : "pt-4 sm:pt-5"}`}
+            className={`w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70 caret-[hsl(var(--primary))] transition-[height] duration-500 ease-[cubic-bezier(0.2,1.2,0.4,1)] will-change-[height] ${filePreviews.length > 0 ? "pt-2" : "pt-4 sm:pt-5"}`}
             disabled={disabled}
           />
 

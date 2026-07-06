@@ -99,7 +99,7 @@ function ChatLayoutInner() {
       
       // Fix hydration mismatch for sidebar by checking window size after initial render
       if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
+        setTimeout(() => setSidebarOpen(false), 0);
       }
     }
   }, []);

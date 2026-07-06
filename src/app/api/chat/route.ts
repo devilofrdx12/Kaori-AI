@@ -6,14 +6,15 @@ import {
   deleteMessagesFrom,
   insertMessage,
   touchConversation,
+  createDocument,
 } from "../lib/db";
 import {
-  streamChatCompletion,
-  AnthropicContentBlock,
-  AnthropicMessage,
-} from "../lib/anthropic";
+  KaoriContentBlock,
+  KaoriMessage,
+} from "../lib/core-types";
 import { streamGroqChatCompletion } from "../lib/groq";
 import { streamGeminiChatCompletion } from "../lib/gemini";
+import { streamOpenRouterChatCompletion } from "../lib/openrouter";
 import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
@@ -46,7 +47,9 @@ type StreamEvent = {
 
 async function executeToolCall(
   toolName: string,
-  toolInput: Record<string, unknown>
+  toolInput: Record<string, unknown>,
+  userId?: string,
+  lastPdfBase64?: string
 ): Promise<string> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
@@ -91,6 +94,40 @@ async function executeToolCall(
       return `Successfully sent command to client device to open ${toolInput.appName} at ${toolInput.uriScheme}. The user's device is now handling the request.`;
     }
     
+    if (toolName === "create_document") {
+      if (!userId) return "Error: User ID not found.";
+      const docId = uuid();
+      await createDocument({
+        id: docId,
+        user_id: userId,
+        filename: String(toolInput.filename),
+        format: String(toolInput.format),
+        content: String(toolInput.content),
+      });
+      return `Document created successfully! Download it here: [${toolInput.filename}](${baseUrl}/api/download/${docId})`;
+    }
+
+    if (toolName === "analyze_pdf_visuals") {
+      if (!lastPdfBase64) return "Error: No PDF was found in the recent upload context.";
+      const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
+      if (!apiKey) return "Error: Google API key not configured.";
+
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: `Please analyze the visuals (images, graphs, charts, tables) in this PDF to answer the following query: ${toolInput.query}` },
+              { inline_data: { mime_type: "application/pdf", data: lastPdfBase64 } }
+            ]
+          }]
+        })
+      });
+      const data = await resp.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated from vision model.";
+    }
+
     if (toolName === "play_spotify") {
       const queryLower = String(toolInput.songName).toLowerCase();
       if (queryLower.includes("liked songs")) {
@@ -167,7 +204,7 @@ export async function POST(req: NextRequest) {
   try {
     const { chatId, message, model, files, editMessageId, studyMode } = await req.json().catch(() => ({}));
 
-    if (!chatId || !message) {
+    if (!chatId || (!message && !(files && files.length > 0))) {
       return new Response(
         JSON.stringify({ error: "chatId and message are required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -175,9 +212,17 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Input validation ──
-    const validatedMessage = validateMessage(message);
-    const validatedModel = validateModel(model);
     const validatedFiles = validateUploadFiles(files);
+    const validatedMessage = (!message || !message.trim()) && validatedFiles.length > 0 
+      ? "" 
+      : validateMessage(message);
+    const validatedModel = validateModel(model);
+    let lastPdfBase64: string | undefined;
+    for (const f of validatedFiles) {
+       if (f.type === "application/pdf") {
+         lastPdfBase64 = f.data.split(",")[1] || f.data;
+       }
+    }
 
     // ── Prompt injection check ──
     if (detectInjection(validatedMessage)) {
@@ -225,7 +270,7 @@ export async function POST(req: NextRequest) {
 
     // ── Build message history from DB ──
     const dbMessages = await getConversationMessages(chatId);
-    const anthropicMessages: AnthropicMessage[] = dbMessages.map((m) => {
+    const anthropicMessages: KaoriMessage[] = dbMessages.map((m) => {
       const decrypted = decryptContent(m.content);
       let content: any = decrypted;
       try {
@@ -239,21 +284,33 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // Handle image files in last message
+    // Handle files in last message
     if (validatedFiles.length) {
       const lastMsg = anthropicMessages[anthropicMessages.length - 1];
-      const contentBlocks: AnthropicContentBlock[] = [];
+      const contentBlocks: KaoriContentBlock[] = [];
 
       for (const file of validatedFiles) {
         const base64Data = file.data.split(",")[1] || file.data;
-        contentBlocks.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: file.type,
-            data: base64Data,
-          },
-        });
+        
+        if (file.type === "application/pdf") {
+          try {
+            const { extractPdfText } = await import("../lib/pdf-parser");
+            const text = await extractPdfText(base64Data);
+            contentBlocks.push({ type: "text", text });
+          } catch (e: any) {
+            logger.error({ err: e }, "PDF parse error");
+            contentBlocks.push({ type: "text", text: `[Error extracting PDF text: ${e.message || e}]` });
+          }
+        } else {
+          contentBlocks.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: file.type,
+              data: base64Data,
+            },
+          });
+        }
       }
 
       contentBlocks.push({ type: "text", text: validatedMessage });
@@ -286,7 +343,7 @@ export async function POST(req: NextRequest) {
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: TOOL_DEFINITIONS,
-                  maxTokens: 4096,
+                  maxTokens: 8192,
                 });
               } else if (model.startsWith("gemini-")) {
                 return await streamGeminiChatCompletion({
@@ -294,16 +351,18 @@ export async function POST(req: NextRequest) {
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: TOOL_DEFINITIONS,
-                  maxTokens: 4096,
+                  maxTokens: 8192,
                 });
-              } else {
-                return await streamChatCompletion({
+              } else if (model.includes("nemotron") || model.includes("gpt-oss") || model.includes("qwen") || model.includes("llama-3.2-11b-vision")) {
+                return await streamOpenRouterChatCompletion({
                   model,
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: TOOL_DEFINITIONS,
-                  maxTokens: 4096,
+                  maxTokens: 8192,
                 });
+              } else {
+                throw new Error(`Model ${model} is not supported`);
               }
             };
 
@@ -417,7 +476,7 @@ export async function POST(req: NextRequest) {
 
             // If Kaori wants to use tools, execute them and continue
             if (stopReason === "tool_use" && toolUseBlocks.length > 0) {
-              const assistantContent: AnthropicContentBlock[] = [];
+              const assistantContent: KaoriContentBlock[] = [];
               if (fullAssistantContent) {
                 assistantContent.push({
                   type: "text",
@@ -444,7 +503,7 @@ export async function POST(req: NextRequest) {
               });
 
               // Execute tools and add results
-              const toolResults: AnthropicContentBlock[] = [];
+              const toolResults: KaoriContentBlock[] = [];
               for (const tool of toolUseBlocks) {
                 controller.enqueue(
                   encoder.encode(
@@ -461,7 +520,7 @@ export async function POST(req: NextRequest) {
                   "Tool call"
                 );
 
-                const result = await executeToolCall(tool.name, tool.input);
+                const result = await executeToolCall(tool.name, tool.input, user.id, lastPdfBase64);
 
                 controller.enqueue(
                   encoder.encode(

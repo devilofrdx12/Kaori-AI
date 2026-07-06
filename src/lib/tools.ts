@@ -1,6 +1,6 @@
-import { AnthropicTool } from "@/app/api/lib/anthropic";
+import { KaoriTool } from "@/app/api/lib/core-types";
 
-export const TOOL_DEFINITIONS: AnthropicTool[] = [
+export const TOOL_DEFINITIONS: KaoriTool[] = [
   {
     name: "web_search",
     description:
@@ -81,6 +81,42 @@ export const TOOL_DEFINITIONS: AnthropicTool[] = [
       required: ["videoName"],
     },
   },
+  {
+    name: "analyze_pdf_visuals",
+    description: "Use this tool to analyze the visual elements of a recently uploaded PDF. Call this tool ONLY if the user specifically asks about a graph, chart, table, or picture in a PDF, or if the PDF text says [IMAGE/GRAPH DETECTED] and the user wants to know more about it. This tool will native-upload the PDF to Gemini Vision and return a description of the visuals.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "What you want to know about the visuals in the PDF (e.g. 'Describe the graph on page 3')",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "create_document",
+    description: "Create and offer a downloadable document (PDF, Word, or Markdown) for the user. Use this when the user asks you to write a report, essay, code file, or any content and provide it as a file. The tool will return a clickable download link that you MUST include in your final response to the user.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        filename: {
+          type: "string",
+          description: "The name of the file to create, including the extension (e.g. 'report.pdf', 'summary.docx', 'notes.md')",
+        },
+        format: {
+          type: "string",
+          description: "The format of the document. Must be exactly 'pdf', 'docx', or 'md'.",
+        },
+        content: {
+          type: "string",
+          description: "The full content of the document, formatted in Markdown.",
+        },
+      },
+      required: ["filename", "format", "content"],
+    },
+  }
 ];
 
 export function getToolByName(name: string) {
