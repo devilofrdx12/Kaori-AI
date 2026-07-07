@@ -5,13 +5,48 @@ import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { Copy, Check, User, Pencil } from "lucide-react";
+import { Copy, Check, User, Pencil, ChevronDown, Brain } from "lucide-react";
 import { ChatMessage } from "./types";
 import CodeBlock from "./code-block";
 import TypingIndicator from "./typing-indicator";
 import ThinkingIndicator from "./thinking-indicator";
 import ToolResultCard from "./tool-result-card";
 import type { Components } from "react-markdown";
+
+/* ── Collapsible thinking block (Claude-style) ── */
+function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 text-xs text-secondary hover:text-on-surface transition-colors group select-none"
+      >
+        <Brain
+          size={13}
+          className={`shrink-0 text-[hsl(var(--primary))] ${isStreaming ? "animate-pulse" : ""}`}
+        />
+        <span className="font-medium">
+          {isStreaming ? "Thinking…" : "Thought process"}
+        </span>
+        <ChevronDown
+          size={13}
+          className={`shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="mt-2 pl-5 border-l-2 border-[hsl(var(--primary)/0.3)] animate-fade-in">
+          <p className="text-xs leading-relaxed text-secondary whitespace-pre-wrap font-mono max-h-72 overflow-y-auto">
+            {content}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const memoizedRemarkPlugins = [remarkGfm];
 const memoizedRehypePlugins = [[rehypeHighlight, { ignoreMissing: true }]] as any;
@@ -38,7 +73,8 @@ const memoizedComponents: Components = {
   },
 };
 
-const MessageRow = memo(({
+const MessageRow = memo((
+{
   msg,
   isEditing,
   editText,
@@ -47,6 +83,7 @@ const MessageRow = memo(({
   onEditSubmit,
   isCopied,
   copyMessage,
+  streamingThinking,
 }: {
   msg: ChatMessage;
   isEditing: boolean;
@@ -56,6 +93,7 @@ const MessageRow = memo(({
   onEditSubmit?: (messageId: string, newText: string) => void;
   isCopied: boolean;
   copyMessage: (id: string, text: string) => void;
+  streamingThinking?: string;
 }) => {
   return (
     <div className="message-enter group relative">
@@ -102,8 +140,29 @@ const MessageRow = memo(({
                   >
                     <Pencil size={14} />
                   </button>
-                  <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
-                    {msg.content}
+                  <div className="flex flex-col gap-2 w-full max-w-full items-end">
+                    {msg.files && msg.files.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-end mb-1">
+                        {msg.files.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm max-w-full overflow-hidden">
+                            {f.type.startsWith("image/") ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={f.url} alt={f.name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-md" />
+                            ) : (
+                              <div className="flex items-center gap-2 px-1">
+                                <span className="text-2xl">📄</span>
+                                <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300 max-w-[120px] truncate">{f.name}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {msg.content && (
+                      <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
+                        {msg.content}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -130,6 +189,13 @@ const MessageRow = memo(({
               ))}
 
               <div className="glass-panel p-4 sm:p-5 rounded-[1.5rem] rounded-bl-md transition-colors duration-300">
+                {/* Show thinking block if this is the streaming message with thinking, or a saved message with thinking */}
+                {(streamingThinking || msg.thinking) && (
+                  <ThinkingBlock
+                    content={streamingThinking || msg.thinking || ""}
+                    isStreaming={!!streamingThinking}
+                  />
+                )}
                 <div className="prose dark:prose-invert max-w-none">
                   <ReactMarkdown
                     remarkPlugins={memoizedRemarkPlugins}
@@ -174,6 +240,7 @@ const MessageRow = memo(({
     prevProps.isEditing === nextProps.isEditing &&
     (prevProps.isEditing ? prevProps.editText === nextProps.editText : true) &&
     prevProps.isCopied === nextProps.isCopied &&
+    prevProps.streamingThinking === nextProps.streamingThinking &&
     prevProps.msg.toolResults?.length === nextProps.msg.toolResults?.length
   );
 });
@@ -187,6 +254,7 @@ export default function MessageArea({
   toolInProgress,
   toolResults,
   streamingText,
+  streamingThinking,
   onEditSubmit,
   bottomRef,
 }: {
@@ -195,6 +263,7 @@ export default function MessageArea({
   toolInProgress?: string | null;
   toolResults?: { tool: string; result: string }[];
   streamingText?: string;
+  streamingThinking?: string;
   onEditSubmit?: (messageId: string, newText: string) => void;
   bottomRef?: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -213,11 +282,11 @@ export default function MessageArea({
   };
 
   const allMessages = [...messages];
-  if (streamingText) {
+  if (streamingText || streamingThinking) {
     allMessages.push({
       id: "__streaming__",
       role: "assistant",
-      content: streamingText,
+      content: streamingText || "",
     });
   }
 
@@ -244,6 +313,7 @@ export default function MessageArea({
               onEditSubmit={onEditSubmit}
               isCopied={copiedId === msg.id}
               copyMessage={copyMessage}
+              streamingThinking={msg.id === "__streaming__" ? streamingThinking : undefined}
             />
           </div>
         )}
@@ -258,8 +328,8 @@ export default function MessageArea({
               {/* Tool in progress */}
               {toolInProgress && <ThinkingIndicator toolName={toolInProgress} />}
 
-              {/* Typing indicator */}
-              {typing && !streamingText && !toolInProgress && <TypingIndicator />}
+              {/* Typing indicator — hidden when thinking block is shown */}
+              {typing && !streamingText && !streamingThinking && !toolInProgress && <TypingIndicator />}
 
               {/* Scroll anchor */}
               <div ref={bottomRef} className="h-4" />

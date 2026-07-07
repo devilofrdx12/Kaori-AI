@@ -14,7 +14,7 @@ import {
 } from "../lib/core-types";
 import { streamGroqChatCompletion } from "../lib/groq";
 import { streamGeminiChatCompletion } from "../lib/gemini";
-import { streamOpenRouterChatCompletion } from "../lib/openrouter";
+
 import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
@@ -23,6 +23,14 @@ import { validateMessage, validateModel, validateUploadFiles } from "../lib/vali
 import { detectInjection } from "../lib/injection-guard";
 import { logger } from "../lib/logger";
 import { v4 as uuid } from "uuid";
+
+const MODEL_OPTIONS_MAP: Record<string, string> = {
+  "llama-3.3-70b-versatile": "Groq LLaMA 3.3",
+  "gemini-2.5-flash": "Gemini 2.5 Flash",
+  "gemini-2.5-pro": "Gemini 2.5 Pro",
+  "nvidia/nemotron-3-ultra-550b-a55b": "Nemotron 3 Ultra",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "Nemotron Nano Omni",
+};
 
 type ToolUseBlock = {
   id: string;
@@ -337,8 +345,9 @@ export async function POST(req: NextRequest) {
             let response;
             
             const attemptStream = async (model: string) => {
-              if (model.startsWith("llama-") || model.startsWith("mixtral-")) {
-                return await streamGroqChatCompletion({
+              if (model.startsWith("nvidia/")) {
+                const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
+                return await streamNvidiaChatCompletion({
                   model,
                   messages: currentMessages,
                   system: systemPrompt,
@@ -353,8 +362,8 @@ export async function POST(req: NextRequest) {
                   tools: TOOL_DEFINITIONS,
                   maxTokens: 8192,
                 });
-              } else if (model.includes("nemotron") || model.includes("gpt-oss") || model.includes("qwen") || model.includes("llama-3.2-11b-vision")) {
-                return await streamOpenRouterChatCompletion({
+              } else if (model.startsWith("llama-") || model.startsWith("mixtral-")) {
+                return await streamGroqChatCompletion({
                   model,
                   messages: currentMessages,
                   system: systemPrompt,
@@ -374,21 +383,43 @@ export async function POST(req: NextRequest) {
               const isOverloaded = errMsg.includes("503") || errMsg.includes("high demand") || errMsg.includes("UNAVAILABLE");
 
               if (isRateLimit || isOverloaded) {
-                const fallbackModel = resolvedModel.startsWith("gemini-") ? "llama-3.3-70b-versatile" : "gemini-2.5-flash";
+                // Build a fallback chain based on the original model
+                const fallbackChain: string[] = [];
+                if (!resolvedModel.startsWith("nvidia/")) fallbackChain.push("nvidia/nemotron-3-ultra-550b-a55b");
+                if (!resolvedModel.startsWith("gemini-")) fallbackChain.push("gemini-2.5-flash");
+                if (!resolvedModel.startsWith("llama-") && !resolvedModel.startsWith("mixtral-")) fallbackChain.push("llama-3.3-70b-versatile");
+
                 const reason = isRateLimit ? "quota reached" : "model overloaded";
-                logger.warn({ userId: user.id, fallbackModel, originalModel: resolvedModel, reason }, "API unavailable, triggering fallback");
-                
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: "text", text: `\n*(Warning: Primary AI ${reason}. Automatically switching to backup AI provider...)*\n\n` })}\n\n`)
-                );
-                
-                // Note: If the fallback also fails, it will just throw naturally and end the stream with the standard error handling.
-                response = await attemptStream(fallbackModel);
+                let fallbackSucceeded = false;
+
+                for (const fallbackModel of fallbackChain) {
+                  try {
+                    const fallbackLabel = MODEL_OPTIONS_MAP[fallbackModel] || fallbackModel;
+                    logger.warn({ userId: user.id, fallbackModel, originalModel: resolvedModel, reason }, "API unavailable, triggering fallback");
+
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ type: "text", text: `\n*(Warning: Primary AI ${reason}. Automatically switching to backup AI: **${fallbackLabel}**...)*\n\n` })}\n\n`)
+                    );
+
+                    response = await attemptStream(fallbackModel);
+                    fallbackSucceeded = true;
+                    break;
+                  } catch {
+                    // This fallback also failed, try next in chain
+                  }
+                }
+
+                if (!fallbackSucceeded) {
+                  throw err; // All fallbacks exhausted, throw the original error
+                }
               } else {
                 throw err;
               }
             }
 
+            if (!response) {
+              throw new Error("Stream failed to initialize");
+            }
             const reader = response.body!.getReader();
             const decoder = new TextDecoder();
             let buffer = "";

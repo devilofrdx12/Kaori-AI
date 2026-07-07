@@ -87,9 +87,16 @@ export async function POST(req: NextRequest) {
     textContent = textContent.replace(/\s+/g, " ").trim();
 
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
-    const title = titleMatch
-      ? titleMatch[1].replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim()
-      : parsedUrl.hostname;
+    let title = parsedUrl.hostname;
+    if (titleMatch) {
+      let t = titleMatch[1];
+      let prevT;
+      do {
+        prevT = t;
+        t = t.replace(/<[^>]*>/g, "");
+      } while (t !== prevT);
+      title = t.replace(/[<>]/g, "").trim();
+    }
 
     const descMatch = html.match(
       /<meta[^>]*name=["']description["'][^>]*content=["'](.*?)["']/i

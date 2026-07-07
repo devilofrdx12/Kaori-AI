@@ -1,4 +1,4 @@
-export type ProviderId = "groq" | "google";
+export type ProviderId = "groq" | "google" | "nvidia";
 
 export type UploadFile = {
   url: string;
@@ -69,9 +69,27 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: "Gemini 2.5 Flash",
     provider: "google",
     description: "Balanced speed & intelligence from Google",
-    badge: "Recommended",
+    badge: "Vision",
     supportsVision: true,
     supportsThinking: false,
+  },
+  {
+    id: "nvidia/nemotron-3-ultra-550b-a55b",
+    label: "Nemotron 3 Ultra",
+    provider: "nvidia",
+    description: "Ultra-massive 550B chat model by Nvidia",
+    badge: "Massive & Thinking",
+    supportsVision: false,
+    supportsThinking: true,
+  },
+  {
+    id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    label: "Nemotron Nano Omni",
+    provider: "nvidia",
+    description: "Fast 30B reasoning model by Nvidia",
+    badge: "Reasoning",
+    supportsVision: false,
+    supportsThinking: true,
   },
 ];
 

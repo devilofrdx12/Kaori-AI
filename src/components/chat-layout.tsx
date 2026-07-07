@@ -273,10 +273,18 @@ function ChatLayoutInner() {
       return;
     }
 
+    const mappedFiles = files ? files.map(f => ({
+      url: URL.createObjectURL(f),
+      name: f.name,
+      type: f.type,
+      size: f.size
+    })) : undefined;
+
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
       content: text,
+      files: mappedFiles,
       timestamp: new Date().toISOString(),
     };
     updateChat(activeChatId, (c) => ({

@@ -116,6 +116,7 @@ export async function sendMessage({
   editMessageId,
   studyMode,
   onText,
+  onThinking,
   onToolStart,
   onToolExecuting,
   onToolResult,
@@ -130,6 +131,7 @@ export async function sendMessage({
   editMessageId?: string;
   studyMode?: boolean;
   onText: (text: string) => void;
+  onThinking?: (chunk: string) => void;
   onToolStart?: (tool: string) => void;
   onToolExecuting?: (tool: string, input: unknown) => void;
   onToolResult?: (tool: string, result: string) => void;
@@ -197,6 +199,9 @@ export async function sendMessage({
           switch (event.type) {
             case "text":
               onText(event.text);
+              break;
+            case "thinking_delta":
+              onThinking?.(event.text);
               break;
             case "tool_use_start":
               onToolStart?.(event.tool);

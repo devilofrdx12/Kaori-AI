@@ -52,6 +52,7 @@ export async function streamOpenAiCompatible({
   tools,
   maxTokens = 4096,
   extraHeaders,
+  extraBody,
   signal,
 }: {
   apiUrl: string;
@@ -62,10 +63,11 @@ export async function streamOpenAiCompatible({
   tools?: KaoriTool[];
   maxTokens?: number;
   extraHeaders?: Record<string, string>;
+  extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
 } = {} as any): Promise<Response> {
   const openAiMessages = convertMessages(messages);
-  const extraHeadersObj = extraHeaders || {};
+
   if (system) {
     openAiMessages.unshift({ role: "system", content: system });
   }
@@ -84,6 +86,7 @@ export async function streamOpenAiCompatible({
     messages: openAiMessages,
     max_tokens: maxTokens,
     stream: true,
+    ...(extraBody || {}),
   };
 
   if (openAiTools && openAiTools.length > 0) {
@@ -94,7 +97,7 @@ export async function streamOpenAiCompatible({
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${apiKey}`,
-    ...extraHeadersObj,
+    ...(extraHeaders || {}),
   };
 
   const resp = await fetch(apiUrl, {
@@ -169,6 +172,14 @@ export async function streamOpenAiCompatible({
           const event = JSON.parse(data);
           const delta = event.choices?.[0]?.delta;
           const finishReason = event.choices?.[0]?.finish_reason;
+          
+          if (delta?.reasoning_content) {
+            // Emit as a special 'thinking' event — UI handles display
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+              type: "thinking_delta",
+              text: delta.reasoning_content
+            })}\n\n`));
+          }
           
           if (delta?.content) {
              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({

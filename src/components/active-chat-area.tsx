@@ -110,6 +110,7 @@ export default function ActiveChatArea({
 }) {
   const [typing, setTyping] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [streamingThinking, setStreamingThinking] = useState("");
   const [toolInProgress, setToolInProgress] = useState<string | null>(null);
   const [toolResults, setToolResults] = useState<{ tool: string; result: string }[]>([]);
   
@@ -158,10 +159,18 @@ export default function ActiveChatArea({
     }
 
     if (!skipLocalAdd) {
+      const mappedFiles = files ? files.map(f => ({
+        url: URL.createObjectURL(f),
+        name: f.name,
+        type: f.type,
+        size: f.size
+      })) : undefined;
+      
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
         content: text,
+        files: mappedFiles,
         timestamp: new Date().toISOString(),
       };
       updateChat(activeChat.id, (c) => ({
@@ -173,6 +182,7 @@ export default function ActiveChatArea({
 
     setTyping(true);
     setStreamingText("");
+    setStreamingThinking("");
     setToolInProgress(null);
     setToolResults([]);
 
@@ -201,6 +211,9 @@ export default function ActiveChatArea({
           fullText += chunk;
           setStreamingText(fullText);
           setToolInProgress(null);
+        },
+        onThinking: (chunk) => {
+          setStreamingThinking(prev => prev + chunk);
         },
         onToolStart: (tool) => setToolInProgress(tool),
         onToolExecuting: (tool, input) => {
@@ -238,6 +251,7 @@ export default function ActiveChatArea({
           }));
           setTyping(false);
           setStreamingText("");
+          setStreamingThinking("");
           setToolInProgress(null);
           setToolResults([]);
           abortRef.current = null;
@@ -256,6 +270,7 @@ export default function ActiveChatArea({
           }));
           setTyping(false);
           setStreamingText("");
+          setStreamingThinking("");
           setToolInProgress(null);
           abortRef.current = null;
         },
@@ -290,6 +305,7 @@ export default function ActiveChatArea({
 
     setTyping(true);
     setStreamingText("");
+    setStreamingThinking("");
     setToolInProgress(null);
     setToolResults([]);
 
@@ -311,6 +327,9 @@ export default function ActiveChatArea({
         onText: (chunk) => {
           fullText += chunk;
           setStreamingText(fullText);
+        },
+        onThinking: (chunk) => {
+          setStreamingThinking(prev => prev + chunk);
         },
         onToolStart: (tool) => setToolInProgress(tool),
         onToolExecuting: (tool) => {
@@ -334,6 +353,7 @@ export default function ActiveChatArea({
           }));
           setTyping(false);
           setStreamingText("");
+          setStreamingThinking("");
           setToolInProgress(null);
           setToolResults([]);
           abortRef.current = null;
@@ -370,6 +390,7 @@ export default function ActiveChatArea({
         }));
       }
       setStreamingText("");
+      setStreamingThinking("");
       setToolInProgress(null);
     }
   }
@@ -383,6 +404,7 @@ export default function ActiveChatArea({
         toolResults={toolResults}
         onEditSubmit={handleEditSend}
         streamingText={streamingText}
+        streamingThinking={streamingThinking}
         bottomRef={bottomRef}
       />
       <div className="w-full shrink-0 animate-spring-down transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">

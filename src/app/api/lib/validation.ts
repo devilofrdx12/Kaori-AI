@@ -2,7 +2,8 @@ const ALLOWED_MODELS = new Set([
   "llama-3.3-70b-versatile",
   "gemini-2.5-pro",
   "gemini-2.5-flash",
-  "claude-sonnet-4-20250514",
+  "nvidia/nemotron-3-ultra-550b-a55b",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 ]);
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
