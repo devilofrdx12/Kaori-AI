@@ -126,6 +126,7 @@ body {
     radial-gradient(ellipse 60% 40% at 80% 90%, hsl(var(--primary) / 0.06), transparent 50%),
     radial-gradient(circle at 50% 50%, hsl(var(--muted) / 0.3), transparent 70%),
     linear-gradient(145deg, hsl(var(--background)), hsl(var(--muted)));
+  background-attachment: fixed;
   color: hsl(var(--foreground));
   font-family: var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   -webkit-font-smoothing: antialiased;
@@ -164,28 +165,28 @@ a {
 
 /* ── ANIMATIONS ── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); filter: blur(4px); }
-  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-24px) scale(0.97); filter: blur(3px); }
-  to   { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+  from { opacity: 0; transform: translateX(-24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(24px) scale(0.97); filter: blur(3px); }
-  to   { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+  from { opacity: 0; transform: translateX(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 @keyframes springUp {
-  0%   { opacity: 0; transform: translate3d(0, 20px, 0) scale3d(0.96, 0.96, 1); filter: blur(12px); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); filter: blur(0); }
+  0%   { opacity: 0; transform: translate3d(0, 20px, 0) scale3d(0.96, 0.96, 1); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); }
 }
 
 @keyframes springDown {
-  0%   { opacity: 0; transform: translate3d(0, -20px, 0) scale3d(0.96, 0.96, 1); filter: blur(12px); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); filter: blur(0); }
+  0%   { opacity: 0; transform: translate3d(0, -20px, 0) scale3d(0.96, 0.96, 1); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); }
 }
 
 @keyframes springScale {
@@ -420,6 +421,13 @@ a {
     inset 0 -1px 2px hsl(0 0% 100% / 0.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.5);
   backdrop-filter: blur(12px) saturate(1.5);
+  /* GPU compositing + anti-stripe fix */
+  isolation: isolate;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
 }
 
 .dark .glass-panel {
@@ -457,18 +465,13 @@ a {
 
 /* Combined hover + active for buttons */
 .btn-interactive {
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease;
-  will-change: transform;
-  transform: translateZ(0);
-  backface-visibility: hidden;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease;
 }
 .btn-interactive:hover {
   transform: translate3d(0, -2px, 0);
-  box-shadow: 0 8px 24px -4px hsl(var(--primary) / 0.20);
 }
 .btn-interactive:active {
   transform: translate3d(0, 0.5px, 0) scale3d(0.97, 0.97, 1);
-  box-shadow: none;
   transition-duration: 0.1s;
 }
 
@@ -497,12 +500,19 @@ a {
 
 .message-enter {
   animation: messageSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  contain: content;
 }
 
 @keyframes messageSlideIn {
-  0% { opacity: 0; transform: translate3d(0, 20px, 0) scale3d(0.97, 0.97, 1); filter: blur(3px); }
-  60% { opacity: 1; transform: translate3d(0, -2px, 0) scale3d(1.005, 1.005, 1); filter: blur(0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); filter: blur(0); }
+  0% { opacity: 0; transform: translate3d(0, 20px, 0) scale3d(0.97, 0.97, 1); }
+  60% { opacity: 1; transform: translate3d(0, -2px, 0) scale3d(1.005, 1.005, 1); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale3d(1, 1, 1); }
+}
+
+/* ── OFF-SCREEN RENDERING OPTIMIZATION ── */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 /* ── CHIP / PILL HOVER (for suggestion chips) ── */
@@ -545,6 +555,8 @@ a {
   background: linear-gradient(145deg, hsl(0 0% 100% / 0.1) 0%, hsl(0 0% 100% / 0.02) 100%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.8) !important;
   backdrop-filter: blur(24px) saturate(1.8) !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
   box-shadow: 
     0 0 0 0 hsl(var(--primary) / 0),
     0 32px 64px -16px hsl(var(--primary) / 0.1),
@@ -555,6 +567,8 @@ a {
   background: linear-gradient(145deg, hsl(0 0% 100% / 0.04) 0%, hsl(0 0% 100% / 0.01) 100%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(2) !important;
   backdrop-filter: blur(32px) saturate(2) !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
   box-shadow: 
     0 0 0 0 hsl(var(--primary) / 0),
     0 32px 64px -16px hsl(0 0% 0% / 0.6),
@@ -792,6 +806,36 @@ a {
   .prose {
     font-size: 0.875rem;
     line-height: 1.65;
+  }
+}
+
+/* ── MOBILE PERFORMANCE — reduce GPU-heavy effects ── */
+@media (max-width: 768px) {
+  .glass-panel {
+    -webkit-backdrop-filter: blur(6px) saturate(1.2);
+    backdrop-filter: blur(6px) saturate(1.2);
+  }
+  .glass-panel.chat-input-box {
+    -webkit-backdrop-filter: blur(8px) saturate(1.3) !important;
+    backdrop-filter: blur(8px) saturate(1.3) !important;
+  }
+  .settings-glass-shell,
+  .settings-glass-pane,
+  .settings-glass-card,
+  .settings-glass-backdrop {
+    -webkit-backdrop-filter: blur(4px) saturate(1.1);
+    backdrop-filter: blur(4px) saturate(1.1);
+  }
+  /* Kill expensive animations on mobile */
+  .message-enter {
+    animation-duration: 0.3s;
+  }
+  .animate-fade-in {
+    animation-duration: 0.3s;
+  }
+  .animate-spring-up,
+  .animate-spring-down {
+    animation-duration: 0.4s;
   }
 }
 

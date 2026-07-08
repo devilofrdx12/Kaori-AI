@@ -39,24 +39,24 @@ export default function ChatInput({
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    
+
     // Save current height before measuring
     const currentHeight = el.style.height || "54px";
-    
+
     // Disable transition temporarily to prevent glitching during measurement
     el.style.transition = "none";
-    
+
     // Shrink to measure true scrollHeight
     el.style.height = "0px";
     const scrollHeight = el.scrollHeight;
-    
+
     // Calculate target height with a 2px buffer for subpixel descender safety
     const targetHeight = Math.min(scrollHeight + 2, 180) + "px";
-    
+
     // Restore previous height and force a layout reflow
     el.style.height = currentHeight;
     void el.offsetHeight; // The magic line that forces the browser to acknowledge the starting state
-    
+
     // Re-enable the CSS transition and trigger the animation to the new height
     el.style.transition = "";
     el.style.height = targetHeight;
@@ -172,7 +172,7 @@ export default function ChatInput({
     <div className="shrink-0 px-3 sm:px-4 pb-6 sm:pb-8 pt-2 w-full">
       <div className="max-w-3xl mx-auto">
         {/* Input Container */}
-        <div 
+        <div
           className={`flex flex-col glass-panel rounded-[1.5rem] relative z-10 chat-input-box transition-all duration-300 ${isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-transparent bg-primary/5" : ""} ${isJerking ? "jerk-impact" : ""}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -207,7 +207,7 @@ export default function ChatInput({
               ))}
             </div>
           )}
-          
+
           <input
             ref={fileRef}
             type="file"
@@ -246,11 +246,11 @@ export default function ChatInput({
               </button>
 
               <div className="relative z-10 min-w-0 ml-1 max-w-[calc(100vw-7.5rem)] sm:max-w-none">
-                <ModelSelector 
-                  model={model} 
-                  onChange={onModelChange} 
-                  direction="up" 
-                  minimal 
+                <ModelSelector
+                  model={model}
+                  onChange={onModelChange}
+                  direction="up"
+                  minimal
                 />
               </div>
             </div>
@@ -259,11 +259,10 @@ export default function ChatInput({
             <div className="flex items-center gap-1 shrink-0 ml-auto self-end sm:self-auto">
               <button
                 onClick={startVoice}
-                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${
-                  listening
+                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${listening
                     ? "text-red-400 bg-red-400/10 animate-pulse"
                     : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"
-                }`}
+                  }`}
                 title="Voice input"
               >
                 <Mic size={18} strokeWidth={1.5} />
@@ -289,11 +288,10 @@ export default function ChatInput({
                 <button
                   onClick={handleSend}
                   disabled={disabled || (!value.trim() && !files.length)}
-                  className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] transition-all duration-300 ${
-                    (!value.trim() && !files.length) || disabled
+                  className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] transition-all duration-300 ${(!value.trim() && !files.length) || disabled
                       ? "bg-neutral-200 dark:bg-white/5 text-secondary/50 cursor-not-allowed"
                       : "bg-primary text-white shadow-sm hover-lift active-press animate-breathe"
-                  }`}
+                    }`}
                   title="Send message"
                 >
                   <ArrowUp size={18} strokeWidth={(!value.trim() && !files.length) || disabled ? 2 : 2.5} />

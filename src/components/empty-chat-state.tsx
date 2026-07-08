@@ -17,7 +17,7 @@ export default function EmptyChatState({
   setModel: (m: string) => void;
 }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-spring-up will-change-transform transform-gpu pb-12 sm:pb-24 overflow-hidden lg:rounded-[2rem]">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-spring-up will-change-transform transform-gpu pb-12 sm:pb-24 overflow-visible lg:rounded-[2rem]">
       <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
         <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl glass-panel text-primary animate-float animate-breathe">
           <Sparkles size={24} strokeWidth={1.5} className="animate-pulse" />

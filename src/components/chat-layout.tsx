@@ -61,8 +61,8 @@ function MiniPomodoroTimer() {
       <button onClick={toggleRunning} className="text-neutral-500 hover:text-primary transition-colors">
         {running ? <Pause size={16} /> : <Play size={16} />}
       </button>
-      <button 
-        onClick={() => switchMode(mode === "focus" ? "break" : "focus")} 
+      <button
+        onClick={() => switchMode(mode === "focus" ? "break" : "focus")}
         className="text-neutral-500 hover:text-primary transition-colors"
         title="Skip"
       >
@@ -96,7 +96,7 @@ function ChatLayoutInner() {
         // Use timeout to avoid synchronous setState cascading render warning
         setTimeout(() => setModel(storedModel), 0);
       }
-      
+
       // Fix hydration mismatch for sidebar by checking window size after initial render
       if (window.innerWidth < 1024) {
         setTimeout(() => setSidebarOpen(false), 0);
@@ -136,11 +136,11 @@ function ChatLayoutInner() {
             updatedAt: c.updatedAt,
           }));
           setChats(safeChats);
-          
+
           // Check if the most recent chat is already empty
           const full = await fetchChat(safeChats[0].id);
           const hasMessages = full.messages && full.messages.length > 0;
-          
+
           if (!hasMessages) {
             // Re-use the existing empty chat at the top
             setActiveChatId(safeChats[0].id);
@@ -175,7 +175,7 @@ function ChatLayoutInner() {
   // ── NEW CHAT ──
   function handleNewChat() {
     if (window.innerWidth < 1024) setSidebarOpen(false);
-    
+
     // Optimistic UI: Immediately render an empty placeholder chat
     const tempId = `temp-${Date.now()}`;
     const thread: ChatThread = {
@@ -185,7 +185,7 @@ function ChatLayoutInner() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
+
     setChats((prev) => [thread, ...prev]);
     setActiveChatId(thread.id);
 
@@ -332,54 +332,54 @@ function ChatLayoutInner() {
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Main chat area wrapper to prevent margin overflow */}
-      <div className={`transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform transform-gpu h-full w-full p-2 sm:p-4 lg:p-6 lg:pr-6 ${sidebarOpen ? "lg:pl-[336px]" : "lg:pl-6"}`}>
+      <div className="flex h-full w-full p-2 sm:p-4 lg:py-4 lg:pr-4">
         <main
-          className="relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden glass-panel rounded-[1.25rem] sm:rounded-[2rem] transition-[border-radius] duration-500"
+          className={`flex-1 relative z-10 w-full h-full flex flex-col min-w-0 min-h-0 overflow-hidden glass-panel rounded-[1.25rem] sm:rounded-[2rem] transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarOpen ? "lg:ml-[320px]" : "lg:ml-4"}`}
         >
           <ChatHeader
-          onToggleSidebar={() => setSidebarOpen((p) => !p)}
-          sidebarOpen={sidebarOpen}
-          showAvatar={showAvatar}
-          onToggleAvatar={() => setShowAvatar((prev) => !prev)}
-        />
+            onToggleSidebar={() => setSidebarOpen((p) => !p)}
+            sidebarOpen={sidebarOpen}
+            showAvatar={showAvatar}
+            onToggleAvatar={() => setShowAvatar((prev) => !prev)}
+          />
 
-        {activeTab === "chats" ? (
-          <>
-            {isEmpty ? (
-              <EmptyChatState
-                greeting={greeting}
-                userName={user?.name?.split(" ")[0] || ""}
-                onSend={handleSendInitial}
-                model={model}
-                setModel={setModel}
-              />
-            ) : (
-              <ActiveChatArea
-                activeChat={activeChat!}
-                model={model}
-                setModel={setModel}
-                updateChat={updateChat}
-                onAvatarStateChange={(emotion, speaking) => setAvatarState({ emotion, speaking })}
-                pendingPrompt={pendingPrompt}
-                clearPendingPrompt={() => setPendingPrompt(null)}
-              />
-            )}
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in p-8">
-            <div className="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">
-              {activeTab === 'projects' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> :
-               activeTab === 'artifacts' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg> :
-               activeTab === 'code' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> : null}
+          {activeTab === "chats" ? (
+            <>
+              {isEmpty ? (
+                <EmptyChatState
+                  greeting={greeting}
+                  userName={user?.name?.split(" ")[0] || ""}
+                  onSend={handleSendInitial}
+                  model={model}
+                  setModel={setModel}
+                />
+              ) : (
+                <ActiveChatArea
+                  activeChat={activeChat!}
+                  model={model}
+                  setModel={setModel}
+                  updateChat={updateChat}
+                  onAvatarStateChange={(emotion, speaking) => setAvatarState({ emotion, speaking })}
+                  pendingPrompt={pendingPrompt}
+                  clearPendingPrompt={() => setPendingPrompt(null)}
+                />
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in p-8">
+              <div className="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">
+                {activeTab === 'projects' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg> :
+                  activeTab === 'artifacts' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><rect x="4" y="4" width="16" height="16" rx="2" ry="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" /></svg> :
+                    activeTab === 'code' ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg> : null}
+              </div>
+              <h2 className="text-2xl font-semibold text-neutral-800 dark:text-neutral-200 mb-2 capitalize">
+                {activeTab} Workspace
+              </h2>
+              <p className="text-neutral-500 max-w-sm">
+                This feature is scheduled for Phase 6 of the Kaori AI Godmode plan. Coming soon!
+              </p>
             </div>
-            <h2 className="text-2xl font-semibold text-neutral-800 dark:text-neutral-200 mb-2 capitalize">
-              {activeTab} Workspace
-            </h2>
-            <p className="text-neutral-500 max-w-sm">
-              This feature is scheduled for Phase 6 of the Kaori AI Godmode plan. Coming soon!
-            </p>
-          </div>
-        )}
+          )}
         </main>
       </div>
     </div>

@@ -113,7 +113,7 @@ export default function ActiveChatArea({
   const [streamingThinking, setStreamingThinking] = useState("");
   const [toolInProgress, setToolInProgress] = useState<string | null>(null);
   const [toolResults, setToolResults] = useState<{ tool: string; result: string }[]>([]);
-  
+
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -165,7 +165,7 @@ export default function ActiveChatArea({
         type: f.type,
         size: f.size
       })) : undefined;
-      
+
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -284,7 +284,7 @@ export default function ActiveChatArea({
 
   async function handleEditSend(messageId: string, text: string) {
     if (!text) return;
-    
+
     const msgIndex = activeChat.messages.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
 

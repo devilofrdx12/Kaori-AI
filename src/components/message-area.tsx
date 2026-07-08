@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, useMemo } from "react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -136,7 +136,7 @@ const MessageRow = memo((
                       setEditText(msg.content);
                     }}
                     title="Edit"
-                    className="p-1.5 rounded-full text-secondary opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
+                    className="p-1.5 rounded-full text-secondary opacity-60 sm:opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
                   >
                     <Pencil size={14} />
                   </button>
@@ -214,7 +214,7 @@ const MessageRow = memo((
             <div className="pl-10">
               <button
                 onClick={() => copyMessage(msg.id, msg.content)}
-                className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface opacity-0 group-hover:opacity-100 hover-lift active-press"
+                className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface opacity-60 sm:opacity-0 sm:group-hover:opacity-100 hover-lift active-press"
               >
                 {isCopied ? (
                   <>
@@ -281,18 +281,37 @@ export default function MessageArea({
     }
   };
 
-  const allMessages = [...messages];
-  if (streamingText || streamingThinking) {
-    allMessages.push({
-      id: "__streaming__",
-      role: "assistant",
-      content: streamingText || "",
-    });
-  }
+  const allMessages = useMemo(() => {
+    const msgs = [...messages];
+    if (streamingText || streamingThinking) {
+      msgs.push({
+        id: "__streaming__",
+        role: "assistant",
+        content: streamingText || "",
+      });
+    }
+    return msgs;
+  }, [messages, streamingText, streamingThinking]);
 
   if (allMessages.length === 0 && !typing && !toolInProgress) {
     return null; // Empty state is handled by ChatLayout
   }
+
+  const renderItem = (index: number, msg: ChatMessage) => (
+    <div className="max-w-3xl mx-auto py-0.5 cv-auto">
+      <MessageRow
+        msg={msg}
+        isEditing={editingMessageId === msg.id}
+        editText={editText}
+        setEditText={setEditText}
+        setEditingMessageId={setEditingMessageId}
+        onEditSubmit={onEditSubmit}
+        isCopied={copiedId === msg.id}
+        copyMessage={copyMessage}
+        streamingThinking={msg.id === "__streaming__" ? streamingThinking : undefined}
+      />
+    </div>
+  );
 
   return (
     <div className="flex-1 min-h-0 px-3 sm:px-5 py-4 sm:py-6 relative will-change-transform [clip-path:polygon(-100vw_0,200vw_0,200vw_200vh,-100vw_200vh)]">
@@ -302,21 +321,8 @@ export default function MessageArea({
         computeItemKey={(_, msg) => msg.id}
         alignToBottom
         followOutput="smooth"
-        itemContent={(index, msg) => (
-          <div className="max-w-3xl mx-auto py-0.5">
-            <MessageRow
-              msg={msg}
-              isEditing={editingMessageId === msg.id}
-              editText={editText}
-              setEditText={setEditText}
-              setEditingMessageId={setEditingMessageId}
-              onEditSubmit={onEditSubmit}
-              isCopied={copiedId === msg.id}
-              copyMessage={copyMessage}
-              streamingThinking={msg.id === "__streaming__" ? streamingThinking : undefined}
-            />
-          </div>
-        )}
+        overscan={200}
+        itemContent={renderItem}
         components={{
           Footer: () => (
             <div className="max-w-3xl mx-auto space-y-1">
