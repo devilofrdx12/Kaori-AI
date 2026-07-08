@@ -24,6 +24,7 @@ export default function Sidebar({
   open,
   onToggle,
   user,
+  // onLogout – unused; logout is handled via the settings modal
   onOpenSettings,
   activeTab,
   onTabChange,

@@ -305,6 +305,66 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     }
   };
 
+  const handleRequestGDPRData = async () => {
+    try {
+      setStatusMsg("Preparing your GDPR data export... please wait.");
+      const chats = await listChats();
+      const zip = new JSZip();
+      const chatFolder = zip.folder("kaori_gdpr_export");
+
+      // Export all chats
+      for (const chat of chats) {
+        const fullChat = await fetchChat(chat.id);
+        let mdContent = `# ${chat.title}\n\n`;
+        for (const msg of fullChat.messages) {
+          mdContent += `**${msg.role === 'user' ? 'You' : 'Kaori'}**:\n${msg.content}\n\n---\n\n`;
+        }
+        chatFolder?.file(`${chat.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${chat.id.substring(0, 8)}.md`, mdContent);
+      }
+
+      // Export settings
+      const settings: Record<string, string | null> = {};
+      ['kaori_theme', 'kaori_accent', 'kaori_font', 'kaori_provider', 'kaori_model', 'kaori_study_mode'].forEach(key => {
+        settings[key] = localStorage.getItem(key);
+      });
+      chatFolder?.file('settings.json', JSON.stringify(settings, null, 2));
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      saveAs(blob, "kaori_gdpr_data_export.zip");
+      setStatusMsg("Success: Your GDPR data export has been downloaded.");
+    } catch (e: unknown) {
+      setStatusMsg(`Error exporting data: ${e instanceof Error ? e.message : "Unknown error"}`);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("Are you sure you want to permanently delete your account? All your data, conversations, and settings will be lost forever.")) return;
+    if (!confirm("This is your FINAL confirmation. Type OK in the next dialog will not appear — clicking OK here will permanently delete everything. Proceed?")) return;
+
+    try {
+      setStatusMsg("Deleting your account data...");
+
+      // Delete all chats
+      await fetch("/api/chats", {
+        method: "DELETE",
+        headers: AJAX_HEADERS,
+      });
+
+      // Logout (destroys session)
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: AJAX_HEADERS,
+      });
+
+      // Clear all local storage
+      localStorage.clear();
+
+      window.location.href = '/login';
+    } catch (e: unknown) {
+      setStatusMsg(`Error deleting account: ${e instanceof Error ? e.message : "Unknown error"}`);
+    }
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const success = urlParams.get("success");
@@ -736,7 +796,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Export My Data (GDPR)</div>
                           <div className="text-sm text-neutral-500">Request a full export of your profile and data.</div>
                         </div>
-                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium hover-lift active-press hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
+                        <button onClick={handleRequestGDPRData} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-sm font-medium hover-lift active-press hover:bg-white/55 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10 sm:w-auto">
                           Request Data
                         </button>
                       </div>
@@ -758,7 +818,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           <div className="font-medium text-red-600 dark:text-red-400">Delete Account</div>
                           <div className="text-sm text-red-500/80">Permanently remove your account and data.</div>
                         </div>
-                        <button className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-red-700 sm:w-auto">
+                        <button onClick={handleDeleteAccount} className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-red-700 sm:w-auto">
                           Delete Account
                         </button>
                       </div>

@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, ArrowUp, Square, Mic, AudioLines, X } from "lucide-react";
+import React, { useRef, useState, useEffect, useMemo, KeyboardEvent, ClipboardEvent } from "react";
+import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check } from "lucide-react";
 import ModelSelector from "./model-selector";
+
+const VOICE_LANGUAGES = [
+  { value: "en-US", label: "English" },
+  { value: "ja-JP", label: "Japanese" },
+  { value: "ta-IN", label: "Tamil" },
+  { value: "te-IN", label: "Telugu" },
+  { value: "ml-IN", label: "Malayalam" },
+  { value: "hi-IN", label: "Hindi" },
+  { value: "zh-CN", label: "Chinese" },
+  { value: "ro-RO", label: "Romanian" },
+];
 
 export default function ChatInput({
   onSend,
@@ -22,10 +33,41 @@ export default function ChatInput({
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [listening, setListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceLang, setVoiceLang] = useState("en-US");
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isJerking, setIsJerking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const voiceRecognitionRef = useRef<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("kaori_voice_lang");
+      if (saved) {
+        setVoiceLang(saved);
+      } else if (navigator.language) {
+        setVoiceLang(navigator.language);
+      }
+    }
+  }, []);
+
+  const handleVoiceLangChange = (lang: string) => {
+    setVoiceLang(lang);
+    localStorage.setItem("kaori_voice_lang", lang);
+  };
   const filePreviews = useMemo(
     () =>
       files.map((file) => ({
@@ -155,7 +197,7 @@ export default function ChatInput({
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) return;
     const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
+    recognition.lang = voiceLang;
     recognition.continuous = false;
     recognition.interimResults = false;
     setListening(true);
@@ -165,6 +207,63 @@ export default function ChatInput({
     };
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
+    recognition.start();
+  };
+
+  const toggleVoiceMode = () => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (voiceMode) {
+      // Stop voice mode
+      if (voiceRecognitionRef.current) {
+        voiceRecognitionRef.current.onend = null; // prevent auto-restart
+        voiceRecognitionRef.current.abort();
+        voiceRecognitionRef.current = null;
+      }
+      setVoiceMode(false);
+      return;
+    }
+
+    // Start continuous voice mode
+    const recognition = new SpeechRecognition();
+    recognition.lang = voiceLang;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    voiceRecognitionRef.current = recognition;
+    setVoiceMode(true);
+
+    recognition.onresult = (event: any) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          transcript += event.results[i][0].transcript;
+        }
+      }
+      if (transcript) {
+        setValue((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
+      }
+    };
+
+    recognition.onerror = (e: any) => {
+      if (e.error !== "no-speech") {
+        setVoiceMode(false);
+        voiceRecognitionRef.current = null;
+      }
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if voice mode is still active
+      if (voiceRecognitionRef.current) {
+        try {
+          voiceRecognitionRef.current.start();
+        } catch {
+          setVoiceMode(false);
+          voiceRecognitionRef.current = null;
+        }
+      }
+    };
+
     recognition.start();
   };
 
@@ -257,6 +356,40 @@ export default function ChatInput({
 
             {/* Right: voice + send */}
             <div className="flex items-center gap-1 shrink-0 ml-auto self-end sm:self-auto">
+              <div ref={langMenuRef} className="relative hidden sm:block mr-1 z-20">
+                <button
+                  onClick={() => setShowLangMenu(!showLangMenu)}
+                  className="flex min-w-0 items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 active:scale-95"
+                  title="Voice Language"
+                >
+                  <Globe size={13} className="text-secondary shrink-0" />
+                  <span className="truncate w-14 text-left">
+                    {VOICE_LANGUAGES.find((l) => l.value === voiceLang)?.label || "Auto"}
+                  </span>
+                  <ChevronDown size={11} className={`shrink-0 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
+                </button>
+
+                {showLangMenu && (
+                  <div className="absolute bottom-full right-0 mb-2 w-36 max-h-[16rem] rounded-2xl border border-white/70 dark:border-white/10 bg-white/90 dark:bg-neutral-950/92 backdrop-blur-md backdrop-saturate-150 shadow-2xl overflow-y-auto animate-fade-in p-1">
+                    {VOICE_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang.value}
+                        onClick={() => {
+                          handleVoiceLangChange(lang.value);
+                          setShowLangMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs font-medium rounded-xl flex items-center justify-between hover:bg-white/65 dark:hover:bg-white/10 transition-colors ${
+                          voiceLang === lang.value ? "text-primary bg-[hsl(var(--primary)/0.08)]" : "text-on-surface"
+                        }`}
+                      >
+                        {lang.label}
+                        {voiceLang === lang.value && <Check size={12} className="text-primary" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={startVoice}
                 className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${listening
@@ -268,8 +401,12 @@ export default function ChatInput({
                 <Mic size={18} strokeWidth={1.5} />
               </button>
               <button
-                className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover-lift active-press"
-                title="Voice mode"
+                onClick={toggleVoiceMode}
+                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${voiceMode
+                    ? "text-green-400 bg-green-400/10 animate-pulse"
+                    : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"
+                  }`}
+                title={voiceMode ? "Stop voice mode" : "Voice mode (continuous)"}
               >
                 <AudioLines size={18} strokeWidth={1.5} />
               </button>
