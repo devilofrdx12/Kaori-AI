@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { findUserByEmail, findPasswordResetTokenByHash, deletePasswordResetToken, updateUserPassword, deleteUserRefreshTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail, validatePassword } from "../../../api/lib/validation";
-import crypto from "crypto";
+import { hashPasswordResetCode } from "../../../api/lib/auth-utils";
 import bcrypt from "bcryptjs";
 
 const INVALID_CODE_MESSAGE = "Invalid or expired reset code";
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: INVALID_CODE_MESSAGE }, { status: 400 });
     }
 
-    const tokenHash = crypto.createHash("sha256").update(`${email}:${otp}`).digest("hex");
+    const tokenHash = hashPasswordResetCode(email, otp);
     
     const tokenRecord = await findPasswordResetTokenByHash(tokenHash);
 

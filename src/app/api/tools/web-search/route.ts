@@ -4,6 +4,8 @@ import { validateSearchQuery } from "../../lib/validation";
 
 function decodeHtml(value: string): string {
   let decoded = value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
@@ -17,6 +19,52 @@ function decodeHtml(value: string): string {
   } while (decoded !== previous);
 
   return decoded.trim();
+}
+
+function unwrapDuckDuckGoUrl(rawUrl: string): string {
+  const decoded = decodeURIComponent(rawUrl.replace(/^\/\//, "https://"));
+
+  try {
+    const parsed = new URL(decoded);
+    const wrappedUrl = parsed.searchParams.get("uddg");
+    if (wrappedUrl) return decodeURIComponent(wrappedUrl);
+    return parsed.toString();
+  } catch {
+    return decoded;
+  }
+}
+
+function extractSearchResults(html: string) {
+  const results: { title: string; url: string; snippet: string }[] = [];
+  const seen = new Set<string>();
+  const resultBlockRegex = /<div[^>]+class="[^"]*\bresult\b[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]+class="[^"]*\bresult\b[^"]*"|<\/body>|$)/gi;
+
+  let blockMatch;
+  while ((blockMatch = resultBlockRegex.exec(html)) !== null && results.length < 8) {
+    const block = blockMatch[1];
+    const linkMatch = block.match(/<a[^>]+class="[^"]*\bresult__a\b[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!linkMatch) continue;
+
+    const url = unwrapDuckDuckGoUrl(linkMatch[1]);
+    const title = decodeHtml(linkMatch[2]);
+    const snippetMatch = block.match(/<[^>]+class="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/i);
+    const snippet = snippetMatch ? decodeHtml(snippetMatch[1]) : "";
+
+    if (!title || !url || seen.has(url)) continue;
+
+    try {
+      const parsedUrl = new URL(url);
+      const hostname = parsedUrl.hostname;
+      if (hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com")) continue;
+
+      seen.add(url);
+      results.push({ title, url, snippet });
+    } catch {
+      // Invalid URL, skip
+    }
+  }
+
+  return results;
 }
 
 export async function POST(req: NextRequest) {
@@ -51,30 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     const html = await resp.text();
-    const results: { title: string; url: string; snippet: string }[] = [];
-    const resultRegex =
-      /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>(.*?)<\/a>/g;
-
-    let match;
-    while ((match = resultRegex.exec(html)) !== null && results.length < 8) {
-      const url = decodeURIComponent(
-        match[1].replace(/\/\/duckduckgo\.com\/l\/\?uddg=/, "").split("&")[0]
-      );
-      const title = decodeHtml(match[2]);
-      const snippet = decodeHtml(match[3]);
-
-      if (title && url) {
-        try {
-          const parsedUrl = new URL(url);
-          const hostname = parsedUrl.hostname;
-          if (hostname !== "duckduckgo.com" && !hostname.endsWith(".duckduckgo.com")) {
-            results.push({ title, url, snippet });
-          }
-        } catch {
-          // Invalid URL, skip
-        }
-      }
-    }
+    const results = extractSearchResults(html);
 
     return NextResponse.json({
       query: validatedQuery,

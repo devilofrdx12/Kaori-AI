@@ -5,6 +5,7 @@ import {
 } from "@tursodatabase/serverless/compat";
 import fs from "fs/promises";
 import path from "path";
+import { decryptContent, encryptContent } from "./crypto";
 
 let _db: Client | null = null;
 let _initPromise: Promise<void> | null = null;
@@ -446,10 +447,11 @@ export async function createDocument(doc: {
   await run(
     `INSERT INTO documents (id, user_id, filename, format, content)
      VALUES (?, ?, ?, ?, ?)`,
-    [doc.id, doc.user_id, doc.filename, doc.format, doc.content]
+    [doc.id, doc.user_id, doc.filename, doc.format, encryptContent(doc.content)]
   );
 }
 
 export async function getDocument(id: string): Promise<DBDocument | undefined> {
-  return getOne<DBDocument>("SELECT * FROM documents WHERE id = ?", [id]);
+  const doc = await getOne<DBDocument>("SELECT * FROM documents WHERE id = ?", [id]);
+  return doc ? { ...doc, content: decryptContent(doc.content) } : undefined;
 }

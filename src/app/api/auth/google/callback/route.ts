@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const data = await tokenRes.json();
 
     if (!tokenRes.ok) {
-      console.error("Google OAuth error:", data);
+      console.error("Google OAuth token exchange failed", { status: tokenRes.status });
       const response = NextResponse.redirect(new URL("/settings?error=google_token_failed", req.url));
       response.cookies.delete(stateCookie);
       return response;

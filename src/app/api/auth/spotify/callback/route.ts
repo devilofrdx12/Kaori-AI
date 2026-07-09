@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const data = await tokenRes.json();
 
     if (!tokenRes.ok) {
-      console.error("Spotify OAuth error:", data);
+      console.error("Spotify OAuth token exchange failed", { status: tokenRes.status });
       const response = NextResponse.redirect(new URL("/settings?error=spotify_token_failed", req.url));
       response.cookies.delete(stateCookie);
       return response;

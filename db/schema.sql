@@ -163,6 +163,21 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   PRIMARY KEY (user_id, bucket)
 );
 
+-- QUARTZWALL SECURITY EVENTS
+
+CREATE TABLE IF NOT EXISTS quartzwall_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK(type IN ('INPUT_SCAN', 'TOOL_CALL_POLICY', 'TOOL_RESULT_SCAN')),
+  verdict TEXT NOT NULL CHECK(verdict IN ('SAFE', 'SUSPICIOUS', 'BLOCKED')),
+  risk INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  tool_name TEXT,
+  signals_json TEXT NOT NULL DEFAULT '[]',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 -- ══════════════════════════════════════════
 -- PRODUCTIVITY (v7)
 -- ══════════════════════════════════════════
@@ -199,6 +214,8 @@ CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id, created_a
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, done, due_at);
 CREATE INDEX IF NOT EXISTS idx_snippets_user ON snippets(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quartzwall_events_user ON quartzwall_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quartzwall_events_verdict ON quartzwall_events(user_id, verdict, created_at DESC);
 
 -- ══════════════════════════════════════════
 -- GENERATED DOCUMENTS
@@ -212,4 +229,3 @@ CREATE TABLE IF NOT EXISTS documents (
   content TEXT NOT NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-

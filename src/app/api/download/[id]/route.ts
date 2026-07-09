@@ -1,27 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocument } from "../../lib/db";
+import { getSessionUser } from "../../lib/auth-utils";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 // @ts-expect-error - No type definitions available for the internal server-side class
 import PdfPrinter from "pdfmake/js/Printer";
+
+function attachmentHeaders(filename: string, contentType: string) {
+  const safeFilename = filename.replace(/[\r\n"]/g, "_").slice(0, 120) || "download";
+  return {
+    "Content-Type": contentType,
+    "Content-Disposition": `attachment; filename="${safeFilename}"`,
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+  };
+}
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getSessionUser();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
   const { id } = await params;
   if (!id) return new NextResponse("Document ID required", { status: 400 });
 
   const doc = await getDocument(id);
-  if (!doc) return new NextResponse("Document not found", { status: 404 });
+  if (!doc || doc.user_id !== user.id) {
+    return new NextResponse("Document not found", { status: 404 });
+  }
 
   const content = doc.content;
 
   if (doc.format === "md") {
     return new NextResponse(content, {
-      headers: {
-        "Content-Type": "text/markdown",
-        "Content-Disposition": `attachment; filename="${doc.filename}"`,
-      },
+      headers: attachmentHeaders(doc.filename, "text/markdown"),
     });
   }
 
@@ -42,10 +55,10 @@ export async function GET(
 
     const buffer = await Packer.toBuffer(docxFile);
     return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${doc.filename}"`,
-      },
+      headers: attachmentHeaders(
+        doc.filename,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ),
     });
   }
 
@@ -73,10 +86,7 @@ export async function GET(
       pdfDoc.on('end', () => {
         const result = Buffer.concat(chunks);
         resolve(new NextResponse(new Uint8Array(result), {
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="${doc.filename}"`,
-          },
+          headers: attachmentHeaders(doc.filename, "application/pdf"),
         }));
       });
       pdfDoc.end();

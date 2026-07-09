@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useMemo, KeyboardEvent, ClipboardEvent } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check } from "lucide-react";
 import ModelSelector from "./model-selector";
 
@@ -54,14 +54,16 @@ export default function ChatInput({
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const timer = window.setTimeout(() => {
       const saved = localStorage.getItem("kaori_voice_lang");
       if (saved) {
         setVoiceLang(saved);
       } else if (navigator.language) {
         setVoiceLang(navigator.language);
       }
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleVoiceLangChange = (lang: string) => {

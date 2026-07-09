@@ -3,23 +3,18 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { findUserById } from "./db";
 
-const DEFAULT_JWT_SECRET = "claude-ai-secret-key-change-me-in-production";
-const DEFAULT_REFRESH_SECRET = "refresh-secret-change-me-in-production";
+function requireServerSecret(name: "JWT_SECRET" | "JWT_REFRESH_SECRET"): string {
+  const value = process.env[name];
 
-const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || DEFAULT_REFRESH_SECRET;
-
-if (process.env.NODE_ENV === "production") {
-  const hasWeakAccessSecret =
-    !process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_JWT_SECRET;
-  const hasWeakRefreshSecret =
-    !process.env.JWT_REFRESH_SECRET ||
-    process.env.JWT_REFRESH_SECRET === DEFAULT_REFRESH_SECRET;
-
-  if (hasWeakAccessSecret || hasWeakRefreshSecret) {
-    throw new Error("Strong JWT_SECRET and JWT_REFRESH_SECRET are required in production");
+  if (!value || value.length < 32 || /change-me|your-random-secret/i.test(value)) {
+    throw new Error(`${name} must be set to a strong random value of at least 32 characters`);
   }
+
+  return value;
 }
+
+const JWT_SECRET = requireServerSecret("JWT_SECRET");
+const JWT_REFRESH_SECRET = requireServerSecret("JWT_REFRESH_SECRET");
 
 const ACCESS_COOKIE = "kaori_access";
 const REFRESH_COOKIE = "kaori_refresh";
@@ -52,6 +47,13 @@ export function issueRefreshToken(): { raw: string; hash: string } {
 
 export function hashRefreshToken(raw: string): string {
   return crypto.createHmac("sha256", JWT_REFRESH_SECRET).update(raw).digest("hex");
+}
+
+export function hashPasswordResetCode(email: string, otp: string): string {
+  return crypto
+    .createHmac("sha256", JWT_REFRESH_SECRET)
+    .update(`${email.toLowerCase()}:${otp}`)
+    .digest("hex");
 }
 
 const COOKIE_BASE = {
