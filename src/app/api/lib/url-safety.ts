@@ -139,3 +139,46 @@ export async function fetchPublicHttpUrl(url: URL, init: RequestInit = {}) {
 
   throw new Error("Too many redirects");
 }
+
+export async function readResponseTextWithLimit(
+  response: Response,
+  maxBytes: number
+): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isSafeInteger(declaredLength) && declaredLength > maxBytes) {
+    throw new Error("Remote response is too large");
+  }
+
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maxBytes) {
+        await reader.cancel("Remote response exceeded the configured size limit");
+        throw new Error("Remote response is too large");
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const buffer = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(buffer);
+}

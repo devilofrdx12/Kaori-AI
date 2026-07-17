@@ -324,6 +324,12 @@ a {
   animation: shimmer 2s ease-in-out infinite;
 }
 
+.thinking-content-stream {
+  box-shadow: inset 0 0 15px hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.15);
+  animation: thinking-pulse 2s ease-in-out infinite;
+}
+
 /* ── CLAUDE BRANDING ── */
 .claude-gradient {
   background: linear-gradient(135deg, hsl(18 65% 59%), hsl(28 80% 65%));

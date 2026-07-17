@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { validateSearchQuery } from "../../lib/validation";
+import { readResponseTextWithLimit } from "../../lib/url-safety";
+import { checkToolRateLimit } from "../../lib/rate-limit";
+
+const MAX_SEARCH_RESPONSE_BYTES = 1 * 1024 * 1024;
 
 function decodeHtml(value: string): string {
   let decoded = value
@@ -79,6 +83,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const rateCheck = await checkToolRateLimit(user.id, user.is_pro);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: "Tool rate limit reached. Please try again shortly.", retryAfterSec: rateCheck.retryAfterSec },
+      { status: 429 }
+    );
+  }
+
   try {
     const { query } = await req.json().catch(() => ({}));
     const validatedQuery = validateSearchQuery(query);
@@ -98,7 +110,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Search failed" }, { status: 502 });
     }
 
-    const html = await resp.text();
+    const html = await readResponseTextWithLimit(resp, MAX_SEARCH_RESPONSE_BYTES);
     const results = extractSearchResults(html);
 
     return NextResponse.json({
@@ -107,8 +119,10 @@ export async function POST(req: NextRequest) {
       resultCount: results.length,
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    const safeMessages = new Set(["Query is required", "Query too long (max 300 characters)"]);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Search failed" },
+      { error: safeMessages.has(message) ? message : "Search failed" },
       { status: 400 }
     );
   }

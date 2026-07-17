@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { findUserByEmail, findPasswordResetTokenByHash, deletePasswordResetToken, updateUserPassword, deleteUserRefreshTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail, validatePassword } from "../../../api/lib/validation";
-import { hashPasswordResetCode } from "../../../api/lib/auth-utils";
+import { getClientIp, hashPasswordResetCode } from "../../../api/lib/auth-utils";
 import bcrypt from "bcryptjs";
 
 const INVALID_CODE_MESSAGE = "Invalid or expired reset code";
@@ -29,14 +29,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Enter the 6-digit reset code" }, { status: 400 });
     }
 
-    // Rate limit per IP and email to slow OTP guessing.
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    const bucket = `reset_password:${ip}:${email}`;
-    const { allowed, retryAfterSec } = await checkPasswordResetRateLimit(bucket);
+    // OTP guessing must remain bounded even if an attacker rotates or spoofs
+    // forwarding headers, so use an account-specific bucket as well as an IP one.
+    const ip = getClientIp(req);
+    const [ipRate, emailRate] = await Promise.all([
+      checkPasswordResetRateLimit(`reset_password:ip:${ip}`),
+      checkPasswordResetRateLimit(`reset_password:email:${email}`),
+    ]);
 
-    if (!allowed) {
+    if (!ipRate.allowed || !emailRate.allowed) {
       return NextResponse.json(
-        { error: "Too many attempts. Please try again later.", retryAfterSec },
+        {
+          error: "Too many attempts. Please try again later.",
+          retryAfterSec: Math.max(ipRate.retryAfterSec, emailRate.retryAfterSec),
+        },
         { status: 429 }
       );
     }
@@ -74,6 +80,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Password has been successfully reset" });
   } catch (error) {
     console.error("Reset password error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "An unexpected error occurred" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to reset the password right now. Please try again." }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { upsertOAuthToken } from "../../../lib/db";
 import { encrypt } from "../../../lib/crypto";
+import { buildTrustedAppUrl } from "../../../lib/app-origin";
 import { v4 as uuid } from "uuid";
 import {
   getOAuthStateCookieName,
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   const stateCookie = getOAuthStateCookieName("google");
 
   if (error) {
-    return NextResponse.redirect(new URL("/settings?error=google_auth_failed", req.url));
+    return NextResponse.redirect(buildTrustedAppUrl("/settings?error=google_auth_failed", req));
   }
 
   if (!code || !state) {
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const stateUserId = verifyOAuthState("google", state, req.cookies.get(stateCookie)?.value);
   const user = await getSessionUser();
   if (!stateUserId || !user || user.id !== stateUserId) {
-    const response = NextResponse.redirect(new URL("/settings?error=google_state_invalid", req.url));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=google_state_invalid", req));
     response.cookies.delete(stateCookie);
     return response;
   }
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
       console.error("Google OAuth token exchange failed", { status: tokenRes.status });
-      const response = NextResponse.redirect(new URL("/settings?error=google_token_failed", req.url));
+      const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=google_token_failed", req));
       response.cookies.delete(stateCookie);
       return response;
     }
@@ -73,12 +74,12 @@ export async function GET(req: NextRequest) {
       scope: data.scope || null,
     });
 
-    const response = NextResponse.redirect(new URL("/settings?success=google_connected", req.url));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?success=google_connected", req));
     response.cookies.delete(stateCookie);
     return response;
   } catch (err) {
     console.error("Google token exchange failed:", err);
-    const response = NextResponse.redirect(new URL("/settings?error=google_internal_error", req.url));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=google_internal_error", req));
     response.cookies.delete(stateCookie);
     return response;
   }

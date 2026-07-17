@@ -58,7 +58,8 @@ export async function GET(req: NextRequest) {
   const dailyLimit = parseFloat(process.env.DAILY_SPEND_LIMIT_USD || "2.00");
 
   // Reset spend if day rolled over
-  const today = Math.floor(Date.now() / 1000 / 86400);
+  const now = new Date();
+  const today = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000);
   let dailySpend = user.daily_spend_usd;
   if (user.spend_reset_date < today) {
     dailySpend = 0;

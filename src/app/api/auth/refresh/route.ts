@@ -77,9 +77,10 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof Response) return err;
 
-    logger.error({ err }, "Refresh token error");
+    const errorMessage = err instanceof Error ? err.stack || err.message : String(err);
+    logger.error({ err, errorMessage }, "Refresh token error");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

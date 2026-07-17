@@ -11,11 +11,13 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendPasswordResetEmail(email: string, otp: string, resetUrl: string) {
-  if (!process.env.SMTP_USER) {
-    console.log('No SMTP configured. Email simulation:');
-    console.log(`Password reset email would be sent to: ${email}`);
-    console.log(`Reset OTP: ${otp}`);
-    console.log(`Reset page: ${resetUrl}`);
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Password reset email is not configured");
+    }
+
+    // Never put reset codes, recipient addresses, or reset URLs in logs.
+    console.warn("Password reset email was not delivered because SMTP is not configured.");
     return;
   }
 

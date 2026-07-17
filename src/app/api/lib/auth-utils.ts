@@ -118,11 +118,17 @@ export function requireAjax(req: Request): void {
 }
 
 export function getClientIp(req: Request): string {
-  return (
+  const candidate =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+    req.headers.get("x-real-ip")?.trim() ||
+    "";
+
+  // Keep rate-limit keys bounded and log-safe even behind a malformed proxy.
+  if (!candidate || candidate.length > 64 || !/^[a-f0-9:.]+$/i.test(candidate)) {
+    return "unknown";
+  }
+
+  return candidate.toLowerCase();
 }
 
 export function getOAuthStateCookieName(provider: string): string {

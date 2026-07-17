@@ -145,7 +145,11 @@ export async function streamOpenAiCompatible({
         userMsg = `Model quota ended. ${apiMsg ? apiMsg : "Please try again later."}`;
       }
     } else {
-      userMsg += `: ${errBody}`;
+      // Log raw body server-side for debugging, but never expose to users.
+      // Raw error bodies can contain internal API URLs, deployment IDs,
+      // server stack traces, and token usage details.
+      console.error(`[openai-adapter] API error ${resp.status}:`, errBody.slice(0, 500));
+      userMsg = `API error (${resp.status}). Please try again or switch models.`;
     }
     
     throw new Error(userMsg);

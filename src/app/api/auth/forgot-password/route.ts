@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { findUserByEmail, insertPasswordResetToken, deleteUserPasswordResetTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail } from "../../../api/lib/validation";
-import { hashPasswordResetCode } from "../../../api/lib/auth-utils";
+import { getClientIp, hashPasswordResetCode } from "../../../api/lib/auth-utils";
+import { buildTrustedAppUrl } from "../../../api/lib/app-origin";
 import { sendPasswordResetEmail } from "../../../../lib/emailService";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
@@ -12,8 +13,7 @@ const PASSWORD_RESET_MESSAGE =
   "If an account with that email exists, we have sent a password reset code.";
 
 function buildResetUrl(req: Request, email: string) {
-  const origin = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
-  const resetUrl = new URL("/reset-password", origin);
+  const resetUrl = buildTrustedAppUrl("/reset-password", req);
   resetUrl.searchParams.set("email", email);
   return resetUrl.toString();
 }
@@ -33,14 +33,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Rate limit per IP and email to reduce OTP spam without leaking accounts.
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    const bucket = `forgot_password:${ip}:${email}`;
-    const { allowed, retryAfterSec } = await checkPasswordResetRateLimit(bucket);
+    // Keep independent IP and account buckets: either dimension being abused is
+    // enough to stop password-reset email spam.
+    const ip = getClientIp(req);
+    const [ipRate, emailRate] = await Promise.all([
+      checkPasswordResetRateLimit(`forgot_password:ip:${ip}`),
+      checkPasswordResetRateLimit(`forgot_password:email:${email}`),
+    ]);
     
-    if (!allowed) {
+    if (!ipRate.allowed || !emailRate.allowed) {
       return NextResponse.json(
-        { error: "Too many requests. Please try again later.", retryAfterSec },
+        {
+          error: "Too many requests. Please try again later.",
+          retryAfterSec: Math.max(ipRate.retryAfterSec, emailRate.retryAfterSec),
+        },
         { status: 429 }
       );
     }

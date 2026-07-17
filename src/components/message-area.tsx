@@ -15,35 +15,82 @@ import type { Components } from "react-markdown";
 
 /* ── Collapsible thinking block (Claude-style) ── */
 function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(isStreaming ? true : false);
+  const [prevIsStreaming, setPrevIsStreaming] = useState(isStreaming);
+  const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+  // Auto-expand when streaming starts (React 18+ pattern for updating state based on props)
+  if (isStreaming !== prevIsStreaming) {
+    setPrevIsStreaming(isStreaming);
+    if (isStreaming) {
+      setOpen(true);
+    }
+  }
+
   return (
-    <div className="mb-3">
+    <div className="mb-3 animate-fade-in">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 text-xs text-secondary hover:text-on-surface transition-colors group select-none"
+        className={`
+          flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl
+          text-xs select-none cursor-pointer
+          transition-all duration-300 ease-out
+          ${isStreaming
+            ? "bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]"
+            : "bg-[hsl(var(--muted)/0.5)] border border-[hsl(var(--border)/0.5)] hover:bg-[hsl(var(--muted)/0.8)]"
+          }
+        `}
       >
-        <Brain
-          size={13}
-          className={`shrink-0 text-[hsl(var(--primary))] ${isStreaming ? "animate-pulse" : ""}`}
-        />
-        <span className="font-medium">
-          {isStreaming ? "Thinking…" : "Thought process"}
+        {/* Animated brain icon */}
+        <div className={`relative shrink-0 ${isStreaming ? "animate-pulse" : ""}`}>
+          <Brain
+            size={14}
+            className="text-[hsl(var(--primary))]"
+          />
+          {isStreaming && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[hsl(var(--primary))] animate-ping" />
+          )}
+        </div>
+
+        {/* Label */}
+        <span className="font-medium text-[hsl(var(--muted-foreground))]">
+          {isStreaming ? "Thinking…" : `Thought for ${wordCount} words`}
         </span>
+
+        {/* Spacer */}
+        <span className="flex-1" />
+
+        {/* Chevron */}
         <ChevronDown
           size={13}
-          className={`shrink-0 transition-transform duration-200 ${
+          className={`shrink-0 text-[hsl(var(--muted-foreground)/0.6)] transition-transform duration-300 ${
             open ? "rotate-180" : ""
           }`}
         />
       </button>
 
-      {open && (
-        <div className="mt-2 pl-5 border-l-2 border-[hsl(var(--primary)/0.3)] animate-fade-in">
-          <p className="text-xs leading-relaxed text-secondary whitespace-pre-wrap font-mono max-h-72 overflow-y-auto">
-            {content}
-          </p>
+      {/* Expandable content */}
+      <div
+        className={`
+          overflow-hidden transition-all duration-300 ease-out
+          ${open ? "max-h-[400px] opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"}
+        `}
+      >
+        <div className="pl-4 border-l-2 border-[hsl(var(--primary)/0.25)]">
+          <div className={`
+            max-h-80 overflow-y-auto scrollbar-hide rounded-lg p-3
+            bg-[hsl(var(--muted)/0.3)]
+            ${isStreaming ? "thinking-content-stream" : ""}
+          `}>
+            <p className="text-[13px] leading-relaxed text-[hsl(var(--muted-foreground))] whitespace-pre-wrap font-mono">
+              {content}
+              {isStreaming && (
+                <span className="inline-block w-[2px] h-[14px] bg-[hsl(var(--primary))] ml-0.5 align-text-bottom animate-pulse" />
+              )}
+            </p>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -298,7 +345,7 @@ export default function MessageArea({
   }
 
   const renderItem = (index: number, msg: ChatMessage) => (
-    <div className="max-w-3xl mx-auto py-0.5 cv-auto">
+    <div className="max-w-3xl mx-auto py-0.5">
       <MessageRow
         msg={msg}
         isEditing={editingMessageId === msg.id}

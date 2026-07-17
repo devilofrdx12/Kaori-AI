@@ -6,7 +6,7 @@ import { Document, Packer, Paragraph, TextRun } from "docx";
 import PdfPrinter from "pdfmake/js/Printer";
 
 function attachmentHeaders(filename: string, contentType: string) {
-  const safeFilename = filename.replace(/[\r\n"]/g, "_").slice(0, 120) || "download";
+  const safeFilename = filename.replace(/[^\w .()-]/g, "_").slice(0, 120) || "download";
   return {
     "Content-Type": contentType,
     "Content-Disposition": `attachment; filename="${safeFilename}"`,
@@ -14,6 +14,17 @@ function attachmentHeaders(filename: string, contentType: string) {
     "Cache-Control": "private, no-store",
   };
 }
+
+const TEXT_DOCUMENT_FORMATS: Record<string, string> = {
+  md: "text/markdown; charset=utf-8",
+  html: "application/octet-stream",
+  css: "text/plain; charset=utf-8",
+  js: "text/plain; charset=utf-8",
+  ts: "text/plain; charset=utf-8",
+  tsx: "text/plain; charset=utf-8",
+  jsx: "text/plain; charset=utf-8",
+  json: "application/json; charset=utf-8",
+};
 
 export async function GET(
   req: NextRequest,
@@ -32,9 +43,10 @@ export async function GET(
 
   const content = doc.content;
 
-  if (doc.format === "md") {
+  const textDocumentContentType = TEXT_DOCUMENT_FORMATS[doc.format];
+  if (textDocumentContentType) {
     return new NextResponse(content, {
-      headers: attachmentHeaders(doc.filename, "text/markdown"),
+      headers: attachmentHeaders(doc.filename, textDocumentContentType),
     });
   }
 

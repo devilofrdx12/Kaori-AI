@@ -111,7 +111,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
   } catch (err: any) {
     console.error("[GET /api/chats/[id]] Error:", err);
-    return NextResponse.json({ error: err.message || "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load this chat right now." }, { status: 500 });
   }
 }
 
@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     });
   } catch (error: any) {
     console.error("PATCH chat error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unable to update this chat right now." }, { status: 500 });
   }
 }
 

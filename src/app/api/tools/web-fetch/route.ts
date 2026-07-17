@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { sanitizeToolResult, scanText } from "../../lib/quartzwall";
-import { assertPublicHttpUrl, fetchPublicHttpUrl } from "../../lib/url-safety";
+import { checkToolRateLimit } from "../../lib/rate-limit";
+import {
+  assertPublicHttpUrl,
+  fetchPublicHttpUrl,
+  readResponseTextWithLimit,
+} from "../../lib/url-safety";
 
 const MAX_PAGE_CHARS = 8000;
 const MAX_RAW_SCAN_CHARS = 25000;
+const MAX_REMOTE_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 function decodeHtml(value: string): string {
   return value
@@ -195,6 +201,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const rateCheck = await checkToolRateLimit(user.id, user.is_pro);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: "Tool rate limit reached. Please try again shortly.", retryAfterSec: rateCheck.retryAfterSec },
+      { status: 429 }
+    );
+  }
+
   try {
     const { url } = await req.json().catch(() => ({}));
     const parsedUrl = await assertPublicHttpUrl(url);
@@ -210,7 +224,7 @@ export async function POST(req: NextRequest) {
 
     if (!resp.ok) {
       return NextResponse.json(
-        { error: `Failed to fetch: ${resp.status} ${resp.statusText}` },
+        { error: `The website returned an error (${resp.status}).` },
         { status: 502 }
       );
     }
@@ -223,7 +237,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const html = await resp.text();
+    const html = await readResponseTextWithLimit(resp, MAX_REMOTE_RESPONSE_BYTES);
     const rawScan = scanText(html.slice(0, MAX_RAW_SCAN_CHARS), "tool_result");
     const { safeHtml, removedHiddenBlocks } = removeHiddenAndActiveContent(html);
     const textScan = scanText(extractVisibleText(safeHtml), "tool_result");
@@ -274,7 +288,20 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Fetch failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const message = err instanceof Error ? err.message : "";
+    const safeMessages = new Set([
+      "Invalid URL",
+      "Invalid protocol",
+      "URL credentials are not allowed",
+      "Hostname is not allowed by configured allowlist",
+      "Fetching internal networks is prohibited",
+      "Unable to resolve URL host",
+      "Too many redirects",
+      "Remote response is too large",
+    ]);
+    return NextResponse.json(
+      { error: safeMessages.has(message) ? message : "Unable to fetch that page." },
+      { status: 400 }
+    );
   }
 }

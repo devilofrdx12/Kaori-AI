@@ -46,8 +46,22 @@ export function validateEmail(email: string): string {
   if (trimmed.length > LIMITS.email.max) {
     throw new Error("Email is too long");
   }
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(trimmed)) {
+
+  if (/[\u0000-\u001F\u007F<>"'\\]/.test(trimmed)) {
+    throw new Error("Invalid email format");
+  }
+
+  const [localPart, domain] = trimmed.split("@");
+  const emailRegex = /^[a-z0-9.!#$%&*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+  if (
+    !emailRegex.test(trimmed) ||
+    !localPart ||
+    !domain ||
+    localPart.length > 64 ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..")
+  ) {
     throw new Error("Invalid email format");
   }
   return trimmed;
@@ -71,6 +85,9 @@ export function validateUsername(name: string): string {
     throw new Error("Name is required");
   }
   const trimmed = name.trim();
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    throw new Error("Name contains invalid characters");
+  }
   if (trimmed.length < LIMITS.username.min) {
     throw new Error(`Name must be at least ${LIMITS.username.min} characters`);
   }
@@ -83,7 +100,7 @@ export function validateUsername(name: string): string {
 export function validateConversationTitle(title: unknown): string {
   if (typeof title !== "string") return "New chat";
 
-  const trimmed = title.trim().replace(/\s+/g, " ");
+  const trimmed = title.replace(/[\u0000-\u001F\u007F]/g, " ").trim().replace(/\s+/g, " ");
   if (!trimmed) return "New chat";
 
   return trimmed.slice(0, LIMITS.title.max);
@@ -122,15 +139,32 @@ export function validateUploadFiles(files: unknown): ValidatedUploadFile[] {
     }
 
     const candidate = file as Record<string, unknown>;
-    const type = typeof candidate.type === "string" ? candidate.type : "";
+    const type = typeof candidate.type === "string" ? candidate.type.toLowerCase() : "";
     const data = typeof candidate.data === "string" ? candidate.data : "";
-    const name = typeof candidate.name === "string" ? candidate.name.slice(0, 180) : "image";
+    const rawName = typeof candidate.name === "string" ? candidate.name : "image";
+    if (/[\u0000-\u001F\u007F]/.test(rawName)) {
+      throw new Error("Invalid file name");
+    }
+    const name = rawName.slice(0, 180) || "image";
 
     if (!ALLOWED_UPLOAD_TYPES.has(type)) {
       throw new Error("Unsupported file type");
     }
 
-    const base64Data = data.split(",")[1] || data;
+    const dataUrlMatch = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(data);
+    let base64Data = data;
+    if (data.includes(",")) {
+      if (!dataUrlMatch || dataUrlMatch[1].toLowerCase() !== type) {
+        throw new Error("Invalid file encoding");
+      }
+      base64Data = dataUrlMatch[2];
+    }
+
+    base64Data = base64Data.replace(/\s/g, "");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data) || base64Data.length % 4 === 1) {
+      throw new Error("Invalid file encoding");
+    }
+
     const estimatedBytes = Math.floor((base64Data.length * 3) / 4);
     if (!base64Data || estimatedBytes > LIMITS.files.maxBase64Bytes) {
       throw new Error("Image is too large");

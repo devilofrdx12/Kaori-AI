@@ -9,7 +9,7 @@ import { getDb, mapRows } from "./db";
  * Auth rate limit: 5 attempts per 15 minutes per IP.
  */
 export async function checkAuthRateLimit(
-  ip: string
+  bucket: string
 ): Promise<{ allowed: boolean; retryAfterMs: number }> {
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
@@ -20,8 +20,8 @@ export async function checkAuthRateLimit(
   const rows = mapRows<{ count: number; window_start: number }>(await db.execute(
     {
       sql: `SELECT count, window_start FROM rate_limits
-            WHERE user_id = ? AND bucket = 'auth' AND window_start > ?`,
-      args: [ip, windowStart],
+            WHERE user_id = 'anonymous' AND bucket = ? AND window_start > ?`,
+      args: [bucket, windowStart],
     }
   ));
   const row = rows[0];
@@ -29,8 +29,8 @@ export async function checkAuthRateLimit(
   if (!row) {
     await db.execute({
       sql: `INSERT OR REPLACE INTO rate_limits (user_id, bucket, count, window_start)
-            VALUES (?, 'auth', 1, ?)`,
-      args: [ip, now],
+            VALUES ('anonymous', ?, 1, ?)`,
+      args: [bucket, now],
     });
     return { allowed: true, retryAfterMs: 0 };
   }
@@ -42,27 +42,24 @@ export async function checkAuthRateLimit(
 
   await db.execute({
     sql: `UPDATE rate_limits SET count = count + 1
-          WHERE user_id = ? AND bucket = 'auth'`,
-    args: [ip],
+          WHERE user_id = 'anonymous' AND bucket = ?`,
+    args: [bucket],
   });
   return { allowed: true, retryAfterMs: 0 };
 }
 
 /**
- * Chat rate limit: 20 messages per minute per user.
+ * Chat rate limit: 20 messages per minute per user, with a higher but finite
+ * ceiling for Pro accounts. A paid account must not become an abuse bypass.
  */
 export async function checkChatRateLimit(
   userId: string,
   isPro: boolean = false
 ): Promise<{ allowed: boolean; retryAfterSec: number }> {
-  if (isPro) {
-    return { allowed: true, retryAfterSec: 0 };
-  }
-  
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   const WINDOW = 60; // 1 minute
-  const MAX = 20;
+  const MAX = isPro ? 60 : 20;
 
   const rows = mapRows<{ count: number; window_start: number }>(await db.execute({
     sql: `SELECT count, window_start FROM rate_limits
@@ -90,6 +87,50 @@ export async function checkChatRateLimit(
   await db.execute({
     sql: `UPDATE rate_limits SET count = count + 1
           WHERE user_id = ? AND bucket = 'chat'`,
+    args: [userId],
+  });
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+/**
+ * Tool endpoints are independently reachable API routes, so they need their
+ * own budget even though the chat route is rate-limited.
+ */
+export async function checkToolRateLimit(
+  userId: string,
+  isPro: boolean = false
+): Promise<{ allowed: boolean; retryAfterSec: number }> {
+  const db = await getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const WINDOW = 60;
+  const MAX = isPro ? 90 : 30;
+
+  const rows = mapRows<{ count: number; window_start: number }>(await db.execute({
+    sql: `SELECT count, window_start FROM rate_limits
+          WHERE user_id = ? AND bucket = 'tool'`,
+    args: [userId],
+  }));
+  const row = rows[0];
+
+  if (!row || now - row.window_start > WINDOW) {
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO rate_limits (user_id, bucket, count, window_start)
+            VALUES (?, 'tool', 1, ?)`,
+      args: [userId, now],
+    });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+
+  if (row.count >= MAX) {
+    return {
+      allowed: false,
+      retryAfterSec: WINDOW - (now - row.window_start),
+    };
+  }
+
+  await db.execute({
+    sql: `UPDATE rate_limits SET count = count + 1
+          WHERE user_id = ? AND bucket = 'tool'`,
     args: [userId],
   });
   return { allowed: true, retryAfterSec: 0 };

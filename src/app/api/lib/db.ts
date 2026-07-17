@@ -62,7 +62,13 @@ export async function getDb(): Promise<Client> {
   }
 
   if (!_initPromise) {
-    _initPromise = initializeDb(_db);
+    const db = _db;
+    _initPromise = initializeDb(db).catch((error) => {
+      // Do not permanently poison this process after a transient database or
+      // filesystem failure. A later request should be able to initialize again.
+      _initPromise = null;
+      throw error;
+    });
   }
 
   await _initPromise;
@@ -242,7 +248,7 @@ export async function getConversationMessages(
   conversationId: string
 ): Promise<DBMessage[]> {
   return getAll<DBMessage>(
-    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
+    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC",
     [conversationId]
   );
 }
@@ -270,16 +276,23 @@ export async function insertMessage(msg: {
 }
 
 export async function deleteMessagesFrom(conversationId: string, messageId: string) {
-  const targetMsg = await getOne<{ created_at: number }>(
-    "SELECT created_at FROM messages WHERE id = ? AND conversation_id = ?",
+  const targetMsg = await getOne<{ created_at: number; row_id: number }>(
+    "SELECT created_at, rowid AS row_id FROM messages WHERE id = ? AND conversation_id = ?",
     [messageId, conversationId]
   );
 
   if (targetMsg) {
-    await run("DELETE FROM messages WHERE conversation_id = ? AND created_at >= ?", [
-      conversationId,
-      targetMsg.created_at,
-    ]);
+    await run(
+      `DELETE FROM messages
+       WHERE conversation_id = ?
+         AND (created_at > ? OR (created_at = ? AND rowid >= ?))`,
+      [
+        conversationId,
+        targetMsg.created_at,
+        targetMsg.created_at,
+        targetMsg.row_id,
+      ]
+    );
   }
 }
 

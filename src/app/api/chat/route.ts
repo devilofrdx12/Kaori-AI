@@ -19,6 +19,8 @@ import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
 import { checkChatRateLimit } from "../lib/rate-limit";
+import { reserveChatSpend, refundChatSpend } from "../lib/spend-guard";
+import { getTrustedAppOrigin } from "../lib/app-origin";
 import { validateMessage, validateModel, validateUploadFiles } from "../lib/validation";
 import {
   logQuartzwallEvent,
@@ -41,6 +43,13 @@ type ToolUseBlock = {
   id: string;
   name: string;
   input: Record<string, unknown>;
+};
+
+type AppActionProposal = {
+  id: string;
+  appName: string;
+  uriScheme: string;
+  fallbackUrl: string;
 };
 
 type StreamEvent = {
@@ -71,8 +80,10 @@ function createTextStreamResponse(text: string) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-store, no-cache, max-age=0",
       Connection: "keep-alive",
+      "X-Content-Type-Options": "nosniff",
+      "X-Accel-Buffering": "no",
     },
   });
 }
@@ -89,6 +100,19 @@ function buildQuartzwallBlockReply(scan: ReturnType<typeof scanText>) {
   ].join("\n");
 }
 
+function buildAppActionProposal(tool: ToolUseBlock): AppActionProposal {
+  const appName = typeof tool.input.appName === "string" ? tool.input.appName.trim() : "Application";
+  const uriScheme = typeof tool.input.uriScheme === "string" ? tool.input.uriScheme.trim() : "";
+  const fallbackUrl = typeof tool.input.fallbackUrl === "string" ? tool.input.fallbackUrl.trim() : "";
+
+  return {
+    id: tool.id,
+    appName: appName.slice(0, 80) || "Application",
+    uriScheme: uriScheme.slice(0, 2048),
+    fallbackUrl: fallbackUrl.slice(0, 2048),
+  };
+}
+
 async function executeToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -96,7 +120,10 @@ async function executeToolCall(
   lastPdfBase64?: string,
   requestContext?: { baseUrl: string; cookieHeader?: string }
 ): Promise<string> {
-  const baseUrl = requestContext?.baseUrl || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const baseUrl = requestContext?.baseUrl;
+  if (!baseUrl) {
+    return "Tool execution is temporarily unavailable.";
+  }
   const internalHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
@@ -107,7 +134,7 @@ async function executeToolCall(
 
   try {
     if (toolName === "web_search") {
-      const resp = await fetch(`${baseUrl}/api/tools/web-search`, {
+      const resp = await fetch(new URL("/api/tools/web-search", baseUrl), {
         method: "POST",
         headers: internalHeaders,
         body: JSON.stringify({ query: toolInput.query }),
@@ -126,7 +153,7 @@ async function executeToolCall(
     }
 
     if (toolName === "web_fetch") {
-      const resp = await fetch(`${baseUrl}/api/tools/web-fetch`, {
+      const resp = await fetch(new URL("/api/tools/web-fetch", baseUrl), {
         method: "POST",
         headers: internalHeaders,
         body: JSON.stringify({ url: toolInput.url }),
@@ -136,20 +163,20 @@ async function executeToolCall(
 
       const headings = Array.isArray(data.headings) && data.headings.length
         ? data.headings
-            .map((h: { level: number; text: string }) => `${"  ".repeat(Math.max(0, h.level - 1))}- H${h.level}: ${h.text}`)
-            .join("\n")
+          .map((h: { level: number; text: string }) => `${"  ".repeat(Math.max(0, h.level - 1))}- H${h.level}: ${h.text}`)
+          .join("\n")
         : "No clear headings found.";
       const links = Array.isArray(data.links) && data.links.length
         ? data.links
-            .slice(0, 10)
-            .map((link: { text: string; url: string }) => `- ${link.text}: ${link.url}`)
-            .join("\n")
+          .slice(0, 10)
+          .map((link: { text: string; url: string }) => `- ${link.text}: ${link.url}`)
+          .join("\n")
         : "No key links found.";
       const images = Array.isArray(data.images) && data.images.length
         ? data.images
-            .slice(0, 8)
-            .map((image: { alt: string; url: string }) => `- ${image.alt || "Image"}: ${image.url}`)
-            .join("\n")
+          .slice(0, 8)
+          .map((image: { alt: string; url: string }) => `- ${image.alt || "Image"}: ${image.url}`)
+          .join("\n")
         : "No image hints found.";
       const colorHints = Array.isArray(data.colorHints) && data.colorHints.length
         ? data.colorHints.join(", ")
@@ -185,9 +212,9 @@ async function executeToolCall(
         .join("\n");
     }
     if (toolName === "open_application") {
-      return `Successfully sent command to client device to open ${toolInput.appName} at ${toolInput.uriScheme}. The user's device is now handling the request.`;
+      return "A verified application launch is waiting for the user's confirmation.";
     }
-    
+
     if (toolName === "create_document") {
       if (!userId) return "Error: User ID not found.";
       const docId = uuid();
@@ -205,6 +232,7 @@ async function executeToolCall(
       if (!lastPdfBase64) return "Error: No PDF was found in the recent upload context.";
       const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
       if (!apiKey) return "Error: Google API key not configured.";
+      if (userId) await reserveChatSpend(userId);
 
       const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
@@ -235,7 +263,7 @@ async function executeToolCall(
       });
       const html = await resp.text();
       const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)<\/a>/g;
-      
+
       let match;
       while ((match = resultRegex.exec(html)) !== null) {
         const url = decodeURIComponent(match[1].replace(/\/\/duckduckgo\.com\/l\/\?uddg=/, "").split("&")[0]);
@@ -262,7 +290,7 @@ async function executeToolCall(
       });
       const html = await resp.text();
       const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)<\/a>/g;
-      
+
       let match;
       while ((match = resultRegex.exec(html)) !== null) {
         const url = decodeURIComponent(match[1].replace(/\/\/duckduckgo\.com\/l\/\?uddg=/, "").split("&")[0]);
@@ -276,7 +304,8 @@ async function executeToolCall(
 
     return `Unknown tool: ${toolName}`;
   } catch (err) {
-    return `Tool execution error: ${err instanceof Error ? err.message : "Unknown error"}`;
+    logger.warn({ err, toolName }, "Tool execution failed");
+    return "Tool execution failed. Please try again or use a different request.";
   }
 }
 
@@ -297,6 +326,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { chatId, message, model, files, editMessageId, studyMode } = await req.json().catch(() => ({}));
+    const trustedAppOrigin = getTrustedAppOrigin(req);
 
     if (!chatId || (!message && !(files && files.length > 0))) {
       return new Response(
@@ -307,15 +337,15 @@ export async function POST(req: NextRequest) {
 
     // ── Input validation ──
     const validatedFiles = validateUploadFiles(files);
-    const validatedMessage = (!message || !message.trim()) && validatedFiles.length > 0 
-      ? "" 
+    const validatedMessage = (!message || !message.trim()) && validatedFiles.length > 0
+      ? ""
       : validateMessage(message);
     const validatedModel = validateModel(model);
     let lastPdfBase64: string | undefined;
     for (const f of validatedFiles) {
-       if (f.type === "application/pdf") {
-         lastPdfBase64 = f.data.split(",")[1] || f.data;
-       }
+      if (f.type === "application/pdf") {
+        lastPdfBase64 = f.data.split(",")[1] || f.data;
+      }
     }
 
     // ── Prompt injection check ──
@@ -381,7 +411,7 @@ export async function POST(req: NextRequest) {
         if (decrypted.trim().startsWith("[")) {
           content = JSON.parse(decrypted);
         }
-      } catch {}
+      } catch { }
       return {
         role: m.role as "user" | "assistant",
         content,
@@ -395,7 +425,7 @@ export async function POST(req: NextRequest) {
 
       for (const file of validatedFiles) {
         const base64Data = file.data.split(",")[1] || file.data;
-        
+
         if (file.type === "application/pdf") {
           try {
             const { extractPdfText } = await import("../lib/pdf-parser");
@@ -428,6 +458,7 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let spendReserved = false;
         try {
           const currentMessages = [...anthropicMessages];
           let fullAssistantContent = "";
@@ -439,8 +470,12 @@ export async function POST(req: NextRequest) {
 
             const resolvedModel = validatedModel;
             let response;
-            
+
             const attemptStream = async (model: string) => {
+              if (!spendReserved) {
+                await reserveChatSpend(user.id);
+                spendReserved = true;
+              }
               if (model.startsWith("nvidia/")) {
                 const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
                 return await streamNvidiaChatCompletion({
@@ -579,6 +614,18 @@ export async function POST(req: NextRequest) {
                     }
                   }
 
+                  // Forward thinking/reasoning tokens to client
+                  if (event.type === "thinking_delta") {
+                    controller.enqueue(
+                      encoder.encode(
+                        `data: ${JSON.stringify({
+                          type: "thinking_delta",
+                          text: event.delta?.text || (event as any).text || "",
+                        })}\n\n`
+                      )
+                    );
+                  }
+
                   if (event.type === "content_block_stop" && currentToolUse) {
                     try {
                       currentToolUse.input = JSON.parse(
@@ -632,16 +679,6 @@ export async function POST(req: NextRequest) {
               // Execute tools and add results
               const toolResults: KaoriContentBlock[] = [];
               for (const tool of toolUseBlocks) {
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: "tool_executing",
-                      tool: tool.name,
-                      input: tool.input,
-                    })}\n\n`
-                  )
-                );
-
                 logger.info(
                   { userId: user.id, tool: tool.name },
                   "Tool call"
@@ -667,31 +704,50 @@ export async function POST(req: NextRequest) {
                   );
                   result = `Lol, that won't work on me.\n\nQUARTZWALL blocked the ${tool.name} tool call because it looked like unsafe tool use: ${policyVerdict.reason}.\nRisk score: ${policyVerdict.risk}/100.`;
                 } else {
-                  result = await executeToolCall(tool.name, tool.input, user.id, lastPdfBase64, {
-                    baseUrl: req.nextUrl.origin,
-                    cookieHeader: req.headers.get("cookie") || undefined,
-                  });
-                  const resultScan = scanText(result, "tool_result");
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({
+                        type: "tool_executing",
+                        tool: tool.name,
+                      })}\n\n`
+                    )
+                  );
 
-                  if (resultScan.verdict !== "SAFE") {
-                    await logQuartzwallEvent({
-                      userId: user.id,
-                      type: "TOOL_RESULT_SCAN",
-                      verdict: resultScan.verdict,
-                      risk: resultScan.risk,
-                      reason: resultScan.reason,
-                      toolName: tool.name,
-                      signals: resultScan.signals,
-                      metadata: { sanitized: resultScan.verdict === "BLOCKED" },
-                    });
-                  }
-
-                  if (resultScan.verdict === "BLOCKED") {
-                    logger.warn(
-                      { userId: user.id, tool: tool.name, risk: resultScan.risk },
-                      "QUARTZWALL sanitized tool result"
+                  if (tool.name === "open_application") {
+                    const action = buildAppActionProposal(tool);
+                    controller.enqueue(
+                      encoder.encode(
+                        `data: ${JSON.stringify({ type: "action_proposal", action })}\n\n`
+                      )
                     );
-                    result = `${sanitizeToolResult(result)}\n\n[QUARTZWALL: indirect prompt injection removed before model context.]`;
+                    result = `A verified **${action.appName}** launch is ready, but it will only happen after the user explicitly approves it in the Action Passport card.`;
+                  } else {
+                    result = await executeToolCall(tool.name, tool.input, user.id, lastPdfBase64, {
+                      baseUrl: trustedAppOrigin,
+                      cookieHeader: req.headers.get("cookie") || undefined,
+                    });
+                    const resultScan = scanText(result, "tool_result");
+
+                    if (resultScan.verdict !== "SAFE") {
+                      await logQuartzwallEvent({
+                        userId: user.id,
+                        type: "TOOL_RESULT_SCAN",
+                        verdict: resultScan.verdict,
+                        risk: resultScan.risk,
+                        reason: resultScan.reason,
+                        toolName: tool.name,
+                        signals: resultScan.signals,
+                        metadata: { sanitized: resultScan.verdict === "BLOCKED" },
+                      });
+                    }
+
+                    if (resultScan.verdict === "BLOCKED") {
+                      logger.warn(
+                        { userId: user.id, tool: tool.name, risk: resultScan.risk },
+                        "QUARTZWALL sanitized tool result"
+                      );
+                      result = `${sanitizeToolResult(result)}\n\n[QUARTZWALL: indirect prompt injection removed before model context.]`;
+                    }
                   }
                 }
 
@@ -746,9 +802,14 @@ export async function POST(req: NextRequest) {
           );
           controller.close();
         } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Stream error";
+          if (spendReserved) {
+            await refundChatSpend(user.id).catch(e => logger.error({ err: e }, "Failed to refund spend"));
+          }
           logger.error({ err, userId: user.id }, "Chat stream error");
+          const message =
+            err instanceof Response && err.status === 429
+              ? "Usage limit reached. Please try again after your limit resets."
+              : "Kaori ran into a temporary issue. Please try again.";
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ type: "error", error: message })}\n\n`
@@ -762,15 +823,16 @@ export async function POST(req: NextRequest) {
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Cache-Control": "no-store, no-cache, max-age=0",
         Connection: "keep-alive",
+        "X-Content-Type-Options": "nosniff",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (err) {
     if (err instanceof Response) return err;
-    const message = err instanceof Error ? err.message : "Internal error";
     logger.error({ err }, "Chat route error");
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: "Unable to process this request right now." }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

@@ -1,4 +1,5 @@
 import { UploadFile } from "@/components/types";
+import type { ActionProposal } from "@/components/action-passport";
 
 export type ChatThreadSummary = {
   id: string;
@@ -119,6 +120,7 @@ export async function sendMessage({
   onThinking,
   onToolStart,
   onToolExecuting,
+  onActionProposal,
   onToolResult,
   onDone,
   onError,
@@ -133,7 +135,8 @@ export async function sendMessage({
   onText: (text: string) => void;
   onThinking?: (chunk: string) => void;
   onToolStart?: (tool: string) => void;
-  onToolExecuting?: (tool: string, input: unknown) => void;
+  onToolExecuting?: (tool: string) => void;
+  onActionProposal?: (action: ActionProposal) => void;
   onToolResult?: (tool: string, result: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
@@ -207,7 +210,18 @@ export async function sendMessage({
               onToolStart?.(event.tool);
               break;
             case "tool_executing":
-              onToolExecuting?.(event.tool, event.input);
+              onToolExecuting?.(event.tool);
+              break;
+            case "action_proposal":
+              if (
+                event.action &&
+                typeof event.action.id === "string" &&
+                typeof event.action.appName === "string" &&
+                typeof event.action.uriScheme === "string" &&
+                typeof event.action.fallbackUrl === "string"
+              ) {
+                onActionProposal?.(event.action as ActionProposal);
+              }
               break;
             case "tool_result":
               onToolResult?.(event.tool, event.result);

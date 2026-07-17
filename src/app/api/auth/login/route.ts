@@ -23,13 +23,13 @@ export async function POST(req: NextRequest) {
 
     // Rate limit by IP
     const ip = getClientIp(req);
-    const rateCheck = await checkAuthRateLimit(ip);
-    if (!rateCheck.allowed) {
-      logger.warn({ ip }, "Auth rate limit hit");
+    const ipRate = await checkAuthRateLimit(`login:ip:${ip}`);
+    if (!ipRate.allowed) {
+      logger.warn({ ip }, "Auth rate limit hit (IP)");
       return NextResponse.json(
         {
           error: "Too many login attempts. Try again later.",
-          retryAfterMs: rateCheck.retryAfterMs,
+          retryAfterMs: ipRate.retryAfterMs,
         },
         { status: 429 }
       );
@@ -46,6 +46,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
+      );
+    }
+
+    // Rate limit by Email (protect against botnets attacking one account)
+    const emailRate = await checkAuthRateLimit(`login:email:${email}`);
+    if (!emailRate.allowed) {
+      logger.warn({ email }, "Auth rate limit hit (Email)");
+      return NextResponse.json(
+        {
+          error: "Too many login attempts. Try again later.",
+          retryAfterMs: emailRate.retryAfterMs,
+        },
+        { status: 429 }
       );
     }
 

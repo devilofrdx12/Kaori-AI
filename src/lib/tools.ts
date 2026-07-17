@@ -97,21 +97,21 @@ export const TOOL_DEFINITIONS: KaoriTool[] = [
   },
   {
     name: "create_document",
-    description: "Create and offer a downloadable document (PDF, Word, or Markdown) for the user. Use this when the user asks you to write a report, essay, code file, or any content and provide it as a file. The tool will return a clickable download link that you MUST include in your final response to the user.",
+    description: "Create and offer a downloadable document (PDF, Word, Markdown, HTML, JS, CSS, JSON) for the user. Use this when the user asks you to write a report, essay, code file, or any content and provide it as a file. The tool will return a clickable download link that you MUST include in your final response to the user.",
     input_schema: {
       type: "object" as const,
       properties: {
         filename: {
           type: "string",
-          description: "The name of the file to create, including the extension (e.g. 'report.pdf', 'summary.docx', 'notes.md')",
+          description: "The name of the file to create, including the extension (e.g. 'index.html', 'styles.css', 'script.js')",
         },
         format: {
           type: "string",
-          description: "The format of the document. Must be exactly 'pdf', 'docx', or 'md'.",
+          description: "The format of the document. Must be exactly 'pdf', 'docx', 'md', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', or 'json'.",
         },
         content: {
           type: "string",
-          description: "The full content of the document, formatted in Markdown.",
+          description: "The full content of the document.",
         },
       },
       required: ["filename", "format", "content"],

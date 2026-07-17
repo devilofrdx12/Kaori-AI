@@ -6,6 +6,7 @@ import ChatInput from "./chat-input";
 import { ChatMessage } from "./types";
 import { ChatThread } from "./chat-types";
 import { sendMessage } from "@/lib/chat-api";
+import ActionPassport, { type ActionProposal } from "./action-passport";
 
 const BLOCKED_CUSTOM_URI_PROTOCOLS = new Set([
   "about:", "blob:", "chrome:", "chrome-extension:", "data:", "devtools:",
@@ -113,6 +114,7 @@ export default function ActiveChatArea({
   const [streamingThinking, setStreamingThinking] = useState("");
   const [toolInProgress, setToolInProgress] = useState<string | null>(null);
   const [toolResults, setToolResults] = useState<{ tool: string; result: string }[]>([]);
+  const [actionProposals, setActionProposals] = useState<(ActionProposal & { chatId: string })[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -158,13 +160,19 @@ export default function ActiveChatArea({
       return;
     }
 
+    const objectUrls: string[] = [];
+
     if (!skipLocalAdd) {
-      const mappedFiles = files ? files.map(f => ({
-        url: URL.createObjectURL(f),
-        name: f.name,
-        type: f.type,
-        size: f.size
-      })) : undefined;
+      const mappedFiles = files ? files.map(f => {
+        const url = URL.createObjectURL(f);
+        objectUrls.push(url);
+        return {
+          url,
+          name: f.name,
+          type: f.type,
+          size: f.size,
+        };
+      }) : undefined;
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -185,6 +193,7 @@ export default function ActiveChatArea({
     setStreamingThinking("");
     setToolInProgress(null);
     setToolResults([]);
+    setActionProposals([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -192,6 +201,8 @@ export default function ActiveChatArea({
     let fileData;
     if (files?.length) {
       fileData = await Promise.all(files.map(fileToDataUrl));
+      // Revoke blob URLs now that we have base64 data URLs — prevents memory leak
+      for (const url of objectUrls) URL.revokeObjectURL(url);
     }
 
     let fullText = "";
@@ -216,14 +227,15 @@ export default function ActiveChatArea({
           setStreamingThinking(prev => prev + chunk);
         },
         onToolStart: (tool) => setToolInProgress(tool),
-        onToolExecuting: (tool, input) => {
+        onToolExecuting: (tool) => {
           setToolInProgress(tool);
-          if (tool === "open_application" && input && typeof input === "object") {
-            const { uriScheme, fallbackUrl } = input as { uriScheme?: string; fallbackUrl?: string; };
-            if (navigateToCustomUri(uriScheme)) {
-              setTimeout(() => openSafeHttpsUrl(fallbackUrl), 1500);
-            }
-          }
+        },
+        onActionProposal: (action) => {
+          setActionProposals((previous) =>
+            previous.some((proposal) => proposal.id === action.id && proposal.chatId === currentChatId)
+              ? previous
+              : [...previous, { ...action, chatId: currentChatId }]
+          );
         },
         onToolResult: (tool, result) => {
           setToolResults((prev) => [...prev, { tool, result }]);
@@ -261,7 +273,7 @@ export default function ActiveChatArea({
           const errMsg: ChatMessage = {
             id: `error-${Date.now()}`,
             role: "assistant",
-            content: `⚠️ **Error:** ${error}`,
+            content: `${error}`,
             timestamp: new Date().toISOString(),
           };
           updateChat(currentChatId, (c) => ({
@@ -308,6 +320,7 @@ export default function ActiveChatArea({
     setStreamingThinking("");
     setToolInProgress(null);
     setToolResults([]);
+    setActionProposals([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -334,7 +347,13 @@ export default function ActiveChatArea({
         onToolStart: (tool) => setToolInProgress(tool),
         onToolExecuting: (tool) => {
           setToolInProgress(tool);
-          // same application logic
+        },
+        onActionProposal: (action) => {
+          setActionProposals((previous) =>
+            previous.some((proposal) => proposal.id === action.id && proposal.chatId === currentChatId)
+              ? previous
+              : [...previous, { ...action, chatId: currentChatId }]
+          );
         },
         onToolResult: (tool, result) => {
           setToolResults((prev) => [...prev, { tool, result }]);
@@ -358,9 +377,22 @@ export default function ActiveChatArea({
           setToolResults([]);
           abortRef.current = null;
         },
-        onError: (err) => {
-          console.error(err);
+        onError: (error) => {
+          console.error("Edit chat error:", error);
+          const errMsg: ChatMessage = {
+            id: `error-${Date.now()}`,
+            role: "assistant",
+            content: `${error}`,
+            timestamp: new Date().toISOString(),
+          };
+          updateChat(currentChatId, (c) => ({
+            ...c,
+            messages: [...c.messages, errMsg],
+          }));
           setTyping(false);
+          setStreamingText("");
+          setStreamingThinking("");
+          setToolInProgress(null);
           abortRef.current = null;
         },
       });
@@ -407,6 +439,17 @@ export default function ActiveChatArea({
         streamingThinking={streamingThinking}
         bottomRef={bottomRef}
       />
+      {actionProposals
+        .filter((proposal) => proposal.chatId === activeChat.id)
+        .map((action) => (
+          <ActionPassport
+            key={action.id}
+            action={action}
+            onDismiss={(id) =>
+              setActionProposals((previous) => previous.filter((proposal) => proposal.id !== id))
+            }
+          />
+        ))}
       <div className="w-full shrink-0 animate-spring-down transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
         <ChatInput
           onSend={(t, f) => handleSendInternal(t, f)}

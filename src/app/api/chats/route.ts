@@ -32,8 +32,7 @@ export async function GET() {
     return NextResponse.json(convs);
   } catch (err) {
     console.error("[GET /api/chats] Error:", err);
-    const message = err instanceof Error ? err.message : "Internal error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load chats right now." }, { status: 500 });
   }
 }
 
