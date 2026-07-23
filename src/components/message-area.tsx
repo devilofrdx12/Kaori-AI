@@ -63,9 +63,8 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
         {/* Chevron */}
         <ChevronDown
           size={13}
-          className={`shrink-0 text-[hsl(var(--muted-foreground)/0.6)] transition-transform duration-300 ${
-            open ? "rotate-180" : ""
-          }`}
+          className={`shrink-0 text-[hsl(var(--muted-foreground)/0.6)] transition-transform duration-300 ${open ? "rotate-180" : ""
+            }`}
         />
       </button>
 
@@ -121,27 +120,27 @@ const memoizedComponents: Components = {
 };
 
 const MessageRow = memo((
-{
-  msg,
-  isEditing,
-  editText,
-  setEditText,
-  setEditingMessageId,
-  onEditSubmit,
-  isCopied,
-  copyMessage,
-  streamingThinking,
-}: {
-  msg: ChatMessage;
-  isEditing: boolean;
-  editText: string;
-  setEditText: (v: string) => void;
-  setEditingMessageId: (id: string | null) => void;
-  onEditSubmit?: (messageId: string, newText: string) => void;
-  isCopied: boolean;
-  copyMessage: (id: string, text: string) => void;
-  streamingThinking?: string;
-}) => {
+  {
+    msg,
+    isEditing,
+    editText,
+    setEditText,
+    setEditingMessageId,
+    onEditSubmit,
+    isCopied,
+    copyMessage,
+    streamingThinking,
+  }: {
+    msg: ChatMessage;
+    isEditing: boolean;
+    editText: string;
+    setEditText: (v: string) => void;
+    setEditingMessageId: (id: string | null) => void;
+    onEditSubmit?: (messageId: string, newText: string) => void;
+    isCopied: boolean;
+    copyMessage: (id: string, text: string) => void;
+    streamingThinking?: string;
+  }) => {
   return (
     <div className="message-enter group relative">
       {msg.role === "user" ? (

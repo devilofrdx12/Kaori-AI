@@ -1,5 +1,9 @@
 const ALLOWED_MODELS = new Set([
   "llama-3.3-70b-versatile",
+  "gemini-2.7-pro",
+  "gemini-2.7-flash",
+  "gemini-2.6-pro",
+  "gemini-2.6-flash",
   "gemini-2.5-pro",
   "gemini-2.5-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
@@ -14,9 +18,52 @@ export const LIMITS = {
   email: { max: 254 },
   password: { min: 8, max: 128 },
   title: { max: 120 },
+  project: { nameMax: 80, descriptionMax: 500, instructionsMax: 8_000 },
+  memory: { contentMax: 2_000, tagMax: 32, maxTags: 10 },
   searchQuery: { max: 300 },
   files: { maxCount: 3, maxBase64Bytes: 5 * 1024 * 1024 },
 };
+
+function cleanSingleLine(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") return fallback;
+  return value.replace(/[\u0000-\u001F\u007F]/g, " ").trim().replace(/\s+/g, " ");
+}
+
+export function validateProjectInput(input: unknown): {
+  name: string;
+  description: string;
+  instructions: string;
+} {
+  const candidate = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const name = cleanSingleLine(candidate.name);
+  const description = cleanSingleLine(candidate.description);
+  const instructions = typeof candidate.instructions === "string"
+    ? candidate.instructions.replace(/\u0000/g, "").trim()
+    : "";
+
+  if (!name) throw new Error("Project name is required");
+  if (name.length > LIMITS.project.nameMax) throw new Error("Project name is too long");
+  if (description.length > LIMITS.project.descriptionMax) throw new Error("Project description is too long");
+  if (instructions.length > LIMITS.project.instructionsMax) throw new Error("Project instructions are too long");
+
+  return { name, description, instructions };
+}
+
+export function validateMemoryInput(input: unknown): { content: string; tags: string[] } {
+  const candidate = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const content = typeof candidate.content === "string"
+    ? candidate.content.replace(/\u0000/g, "").trim()
+    : "";
+  if (!content) throw new Error("Memory content is required");
+  if (content.length > LIMITS.memory.contentMax) throw new Error("Memory is too long");
+
+  const rawTags = Array.isArray(candidate.tags) ? candidate.tags : [];
+  if (rawTags.length > LIMITS.memory.maxTags) throw new Error("Too many memory tags");
+  const tags = [...new Set(rawTags.map((tag) => cleanSingleLine(tag).toLowerCase()).filter(Boolean))];
+  if (tags.some((tag) => tag.length > LIMITS.memory.tagMax)) throw new Error("Memory tag is too long");
+
+  return { content, tags };
+}
 
 export type ValidatedUploadFile = {
   name: string;

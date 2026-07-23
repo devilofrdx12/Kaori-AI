@@ -21,8 +21,8 @@ export default function ToolResultCard({ toolName, result }: ToolResultProps) {
     toolName === "web_search"
       ? "Web Search"
       : toolName === "web_fetch"
-      ? "Page Content"
-      : toolName;
+        ? "Page Content"
+        : toolName;
 
   return (
     <div className="tool-card px-3 py-2 my-2 text-xs bg-white/55 dark:bg-white/5">

@@ -7,6 +7,7 @@ import {
   deleteUserConversations,
 } from "../lib/db";
 import { validateConversationTitle } from "../lib/validation";
+import { requireProjectOwner } from "../lib/ownership";
 
 export async function GET() {
   try {
@@ -21,6 +22,7 @@ export async function GET() {
       id: c.id,
       title: c.title,
       isStarred: c.is_starred === 1,
+      projectId: c.project_id,
       createdAt: c.created_at
         ? new Date(c.created_at * 1000).toISOString()
         : new Date().toISOString(),
@@ -50,16 +52,25 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const title = validateConversationTitle(body.title);
+  const projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : null;
+  if (projectId) {
+    const ownership = await requireProjectOwner(projectId, user.id);
+    if (!ownership.ok) {
+      return NextResponse.json({ error: ownership.error }, { status: ownership.status });
+    }
+  }
 
   const conv = await createConversation({
     id: uuid(),
     user_id: user.id,
     title,
+    project_id: projectId,
   });
 
   return NextResponse.json({
     id: conv.id,
     title: conv.title,
+    projectId: conv.project_id,
     createdAt: new Date(conv.created_at * 1000).toISOString(),
     updatedAt: new Date(conv.updated_at * 1000).toISOString(),
   });

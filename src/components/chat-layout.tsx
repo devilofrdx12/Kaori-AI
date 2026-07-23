@@ -8,9 +8,11 @@ import EmptyChatState from "./empty-chat-state";
 import ActiveChatArea from "./active-chat-area";
 import AnimatedAvatar from "./animated-avatar";
 import SettingsModal from "./settings-modal";
+import ProjectsWorkspace from "./projects-workspace";
 import { PomodoroProvider, usePomodoro } from "./pomodoro-context";
 import { ChatMessage, DEFAULT_MODEL } from "./types";
 import { ChatThread } from "./chat-types";
+import type { Project } from "@/lib/workspace-api";
 import { me, logout as apiLogout, AuthUser } from "./auth";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import {
@@ -132,6 +134,7 @@ function ChatLayoutInner() {
             title: c.title || "New chat",
             messages: [],
             isStarred: c.isStarred,
+            projectId: c.projectId,
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
           }));
@@ -173,7 +176,7 @@ function ChatLayoutInner() {
   };
 
   // ── NEW CHAT ──
-  function handleNewChat() {
+  function handleNewChat(projectId: string | null = null) {
     if (window.innerWidth < 1024) setSidebarOpen(false);
 
     // Optimistic UI: Immediately render an empty placeholder chat
@@ -184,13 +187,14 @@ function ChatLayoutInner() {
       messages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      projectId,
     };
 
     setChats((prev) => [thread, ...prev]);
     setActiveChatId(thread.id);
 
     // Run the actual API creation in the background
-    createChat().then((newChat) => {
+    createChat(undefined, projectId).then((newChat) => {
       // Swap the temporary local ID with the real database ID
       setChats((prev) => prev.map(c => c.id === tempId ? { ...c, id: newChat.id, title: newChat.title } : c));
       setActiveChatId((current) => current === tempId ? newChat.id : current);
@@ -200,6 +204,11 @@ function ChatLayoutInner() {
       setChats((prev) => prev.filter(c => c.id !== tempId));
       setActiveChatId((current) => current === tempId ? null : current);
     });
+  }
+
+  function handleStartProjectChat(project: Project) {
+    handleNewChat(project.id);
+    setActiveTab("chats");
   }
 
   // ── SELECT CHAT ──
@@ -316,7 +325,7 @@ function ChatLayoutInner() {
         chats={chats}
         activeChatId={activeChatId || ""}
         onSelectChat={handleSelectChat}
-        onNewChat={handleNewChat}
+        onNewChat={() => handleNewChat()}
         onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
         onToggleStarChat={handleToggleStarChat}
@@ -365,6 +374,8 @@ function ChatLayoutInner() {
                 />
               )}
             </>
+          ) : activeTab === "projects" ? (
+            <ProjectsWorkspace onStartChat={handleStartProjectChat} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in p-8">
               <div className="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">

@@ -619,7 +619,6 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                             ? [{ value: "gemini-2.5-flash", label: "gemini-2.5-flash" }] 
                             : [
                                 { value: "llama-3.3-70b-versatile", label: "llama-3.3-70b-versatile" },
-                                { value: "mixtral-8x7b-32768", label: "mixtral-8x7b-32768" }
                               ]
                           }
                           label="Default Model"

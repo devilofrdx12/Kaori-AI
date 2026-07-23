@@ -19,6 +19,7 @@ export type ToolUseBlock = {
 export type ToolResultData = {
   toolName: string;
   result: unknown;
+  input?: unknown;
   isError?: boolean;
 };
 
@@ -56,11 +57,47 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: false,
   },
   {
+    id: "gemini-2.7-pro",
+    label: "Gemini 2.7 Pro",
+    provider: "google",
+    description: "Google's next-gen flagship 2.7 model",
+    badge: "Ultra",
+    supportsVision: true,
+    supportsThinking: true,
+  },
+  {
+    id: "gemini-2.7-flash",
+    label: "Gemini 2.7 Flash",
+    provider: "google",
+    description: "Google's ultra-fast 2.7 next-gen model",
+    badge: "Next-Gen",
+    supportsVision: true,
+    supportsThinking: false,
+  },
+  {
+    id: "gemini-2.6-pro",
+    label: "Gemini 2.6 Pro",
+    provider: "google",
+    description: "Google 2.6 high intelligence model",
+    badge: "Pro",
+    supportsVision: true,
+    supportsThinking: true,
+  },
+  {
+    id: "gemini-2.6-flash",
+    label: "Gemini 2.6 Flash",
+    provider: "google",
+    description: "Google 2.6 fast & responsive AI",
+    badge: "Flash",
+    supportsVision: true,
+    supportsThinking: false,
+  },
+  {
     id: "gemini-2.5-pro",
     label: "Gemini 2.5 Pro",
     provider: "google",
-    description: "Google's most capable model, great for complex tasks",
-    badge: "Most Powerful",
+    description: "Google's capable 2.5 model for complex tasks",
+    badge: "Capable",
     supportsVision: true,
     supportsThinking: true,
   },
@@ -78,7 +115,7 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: "Nemotron 3 Ultra",
     provider: "nvidia",
     description: "Ultra-massive 550B chat model by Nvidia",
-    badge: "Massive & Thinking",
+    badge: "Massive",
     supportsVision: false,
     supportsThinking: true,
   },
@@ -94,3 +131,4 @@ export const MODEL_OPTIONS: ModelOption[] = [
 ];
 
 export const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+

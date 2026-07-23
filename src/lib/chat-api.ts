@@ -5,6 +5,7 @@ export type ChatThreadSummary = {
   id: string;
   title: string;
   isStarred?: boolean;
+  projectId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,11 +72,11 @@ export async function listChats(): Promise<ChatThreadSummary[]> {
   });
 }
 
-export async function createChat(title?: string): Promise<ChatThreadSummary> {
+export async function createChat(title?: string, projectId?: string | null): Promise<ChatThreadSummary> {
   return jsonFetchWithRetry("/api/chats", {
     method: "POST",
     headers: { ...AJAX_HEADERS, "Content-Type": "application/json" },
-    body: JSON.stringify({ title: title ?? "New chat" }),
+    body: JSON.stringify({ title: title ?? "New chat", projectId: projectId || null }),
   });
 }
 
@@ -137,7 +138,7 @@ export async function sendMessage({
   onToolStart?: (tool: string) => void;
   onToolExecuting?: (tool: string) => void;
   onActionProposal?: (action: ActionProposal) => void;
-  onToolResult?: (tool: string, result: string) => void;
+  onToolResult?: (tool: string, result: string, input?: any) => void;
   onDone: () => void;
   onError: (error: string) => void;
   signal?: AbortSignal;
@@ -224,7 +225,7 @@ export async function sendMessage({
               }
               break;
             case "tool_result":
-              onToolResult?.(event.tool, event.result);
+              onToolResult?.(event.tool, event.result, event.input);
               break;
             case "done":
               onDone();

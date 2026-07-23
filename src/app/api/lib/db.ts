@@ -54,6 +54,18 @@ async function initializeDb(db: Client) {
   } catch (error) {
     if (!isDuplicateColumnError(error)) throw error;
   }
+
+  try {
+    await db.execute(
+      "ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL"
+    );
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) throw error;
+  }
+
+  await db.execute(
+    "CREATE INDEX IF NOT EXISTS idx_convs_project ON conversations(project_id, updated_at DESC)"
+  );
 }
 
 export async function getDb(): Promise<Client> {
@@ -158,6 +170,7 @@ export async function updateUserProStatus(id: string, isPro: boolean) {
 export type DBConversation = {
   id: string;
   user_id: string;
+  project_id: string | null;
   title: string;
   provider: string;
   model: string;
@@ -181,21 +194,141 @@ export async function createConversation(conv: {
   id: string;
   user_id: string;
   title: string;
+  project_id?: string | null;
   provider?: string;
   model?: string;
 }): Promise<DBConversation> {
   await run(
-    `INSERT INTO conversations (id, user_id, title, provider, model)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO conversations (id, user_id, project_id, title, provider, model)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       conv.id,
       conv.user_id,
+      conv.project_id || null,
       conv.title,
       conv.provider || "google",
       conv.model || "gemini-1.5-pro",
     ]
   );
   return (await findConversation(conv.id))!;
+}
+
+// PROJECT HELPERS
+
+export type DBProject = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export async function getUserProjects(userId: string): Promise<DBProject[]> {
+  return getAll<DBProject>(
+    "SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC",
+    [userId]
+  );
+}
+
+export async function findProject(id: string): Promise<DBProject | undefined> {
+  return getOne<DBProject>("SELECT * FROM projects WHERE id = ?", [id]);
+}
+
+export async function createProject(project: {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  instructions: string;
+}): Promise<DBProject> {
+  await run(
+    `INSERT INTO projects (id, user_id, name, description, instructions)
+     VALUES (?, ?, ?, ?, ?)`,
+    [project.id, project.user_id, project.name, project.description, project.instructions]
+  );
+  return (await findProject(project.id))!;
+}
+
+export async function updateProject(
+  id: string,
+  fields: { name: string; description: string; instructions: string }
+): Promise<DBProject> {
+  await run(
+    `UPDATE projects
+     SET name = ?, description = ?, instructions = ?, updated_at = unixepoch()
+     WHERE id = ?`,
+    [fields.name, fields.description, fields.instructions, id]
+  );
+  return (await findProject(id))!;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await run("DELETE FROM projects WHERE id = ?", [id]);
+}
+
+export async function getProjectConversationCount(projectId: string): Promise<number> {
+  const result = await getOne<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM conversations WHERE project_id = ?",
+    [projectId]
+  );
+  return Number(result?.count || 0);
+}
+
+// MEMORY HELPERS
+
+export type DBUserMemory = {
+  id: string;
+  user_id: string;
+  content: string;
+  tags: string;
+  source_conv_id: string | null;
+  created_at: number;
+  updated_at: number;
+  expires_at: number | null;
+};
+
+export async function getUserMemories(userId: string): Promise<DBUserMemory[]> {
+  return getAll<DBUserMemory>(
+    "SELECT * FROM user_memories WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC",
+    [userId]
+  );
+}
+
+export async function findUserMemory(id: string): Promise<DBUserMemory | undefined> {
+  return getOne<DBUserMemory>("SELECT * FROM user_memories WHERE id = ?", [id]);
+}
+
+export async function createUserMemory(memory: {
+  id: string;
+  user_id: string;
+  content: string;
+  tags: string[];
+}): Promise<DBUserMemory> {
+  await run(
+    `INSERT INTO user_memories (id, user_id, content, tags)
+     VALUES (?, ?, ?, ?)`,
+    [memory.id, memory.user_id, memory.content, JSON.stringify(memory.tags)]
+  );
+  return (await findUserMemory(memory.id))!;
+}
+
+export async function updateUserMemory(
+  id: string,
+  fields: { content: string; tags: string[] }
+): Promise<DBUserMemory> {
+  await run(
+    `UPDATE user_memories
+     SET content = ?, tags = ?, updated_at = unixepoch()
+     WHERE id = ?`,
+    [fields.content, JSON.stringify(fields.tags), id]
+  );
+  return (await findUserMemory(id))!;
+}
+
+export async function deleteUserMemory(id: string): Promise<void> {
+  await run("DELETE FROM user_memories WHERE id = ?", [id]);
 }
 
 export async function updateConversationTitle(id: string, title: string) {

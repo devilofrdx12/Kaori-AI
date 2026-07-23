@@ -113,7 +113,7 @@ export default function ActiveChatArea({
   const [streamingText, setStreamingText] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
   const [toolInProgress, setToolInProgress] = useState<string | null>(null);
-  const [toolResults, setToolResults] = useState<{ tool: string; result: string }[]>([]);
+  const [toolResults, setToolResults] = useState<{ tool: string; result: string; input?: any }[]>([]);
   const [actionProposals, setActionProposals] = useState<(ActionProposal & { chatId: string })[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -237,8 +237,8 @@ export default function ActiveChatArea({
               : [...previous, { ...action, chatId: currentChatId }]
           );
         },
-        onToolResult: (tool, result) => {
-          setToolResults((prev) => [...prev, { tool, result }]);
+        onToolResult: (tool, result, input) => {
+          setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
           if (tool === "play_spotify" && result.includes("spotify:")) {
             const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
@@ -355,8 +355,8 @@ export default function ActiveChatArea({
               : [...previous, { ...action, chatId: currentChatId }]
           );
         },
-        onToolResult: (tool, result) => {
-          setToolResults((prev) => [...prev, { tool, result }]);
+        onToolResult: (tool, result, input) => {
+          setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
         },
         onDone: () => {

@@ -41,18 +41,21 @@ function unwrapDuckDuckGoUrl(rawUrl: string): string {
 function extractSearchResults(html: string) {
   const results: { title: string; url: string; snippet: string }[] = [];
   const seen = new Set<string>();
-  const resultBlockRegex = /<div[^>]+class="[^"]*\bresult\b[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]+class="[^"]*\bresult\b[^"]*"|<\/body>|$)/gi;
+  
+  // DDG Lite uses a table structure where links and snippets are in separate rows
+  const linkRegex = /<a[^>]+class=['"][^'"]*\bresult-link\b[^'"]*['"][^>]*>([\s\S]*?)<\/a>/gi;
+  const snippetRegex = /<td[^>]+class=['"][^'"]*\bresult-snippet\b[^'"]*['"][^>]*>([\s\S]*?)<\/td>/gi;
 
-  let blockMatch;
-  while ((blockMatch = resultBlockRegex.exec(html)) !== null && results.length < 8) {
-    const block = blockMatch[1];
-    const linkMatch = block.match(/<a[^>]+class="[^"]*\bresult__a\b[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-    if (!linkMatch) continue;
+  const links = [...html.matchAll(linkRegex)];
+  const snippets = [...html.matchAll(snippetRegex)];
 
-    const url = unwrapDuckDuckGoUrl(linkMatch[1]);
-    const title = decodeHtml(linkMatch[2]);
-    const snippetMatch = block.match(/<[^>]+class="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/i);
-    const snippet = snippetMatch ? decodeHtml(snippetMatch[1]) : "";
+  for (let i = 0; i < links.length && i < snippets.length && results.length < 8; i++) {
+    const linkTagMatch = links[i][0];
+    const hrefMatch = linkTagMatch.match(/href=['"]([^'"]+)['"]/i);
+    
+    const url = hrefMatch ? unwrapDuckDuckGoUrl(hrefMatch[1]) : "";
+    const title = decodeHtml(links[i][1]);
+    const snippet = decodeHtml(snippets[i][1]);
 
     if (!title || !url || seen.has(url)) continue;
 
@@ -95,14 +98,15 @@ export async function POST(req: NextRequest) {
     const { query } = await req.json().catch(() => ({}));
     const validatedQuery = validateSearchQuery(query);
 
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(
-      validatedQuery
-    )}`;
+    const searchUrl = `https://lite.duckduckgo.com/lite/`;
     const resp = await fetch(searchUrl, {
+      method: "POST",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: `q=${encodeURIComponent(validatedQuery)}`,
       signal: AbortSignal.timeout(10000),
     });
 
