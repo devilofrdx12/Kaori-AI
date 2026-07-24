@@ -73,8 +73,15 @@ export default function AnimeCharacter({
 
     async function init() {
       try {
+        let attempts = 0;
+        while (!(window as any).Live2DCubismCore && attempts < 40) {
+          if (destroyed) return;
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+        }
+
         if (!(window as any).Live2DCubismCore) {
-          console.error("Live2D Cubism runtime missing");
+          console.error("Live2D Cubism runtime missing after wait");
           return;
         }
 

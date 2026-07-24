@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2, ChevronDown } from "lucide-react";
+import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2, ChevronDown, Info } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { motion, useDragControls, AnimatePresence } from "framer-motion";import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -688,8 +688,20 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
               {/* USAGE */}
               {activeTab === "usage" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Usage & Limits</h3>
-                  <p className="text-neutral-500 dark:text-neutral-400 text-sm">Monitor your API spend and limits.</p>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Usage limits</h3>
+                    {isPro && (
+                      <span className="px-2 py-0.5 rounded-md bg-neutral-200 dark:bg-white/10 text-[10px] uppercase font-semibold tracking-wider text-neutral-600 dark:text-neutral-400">
+                        Pro
+                      </span>
+                    )}
+                  </div>
+                  
+                  <p className="text-neutral-600 dark:text-neutral-400 text-[15px] leading-relaxed max-w-[90%]">
+                    Your plan's limits determine how much you can use Kaori over time. Advanced models and features can take up more usage. <a href="#" className="text-blue-500 hover:underline">Learn more</a>
+                  </p>
+                  
+                  <p className="text-neutral-500 dark:text-neutral-500 text-sm font-medium">Updated just now</p>
                   
                   {usageLoading ? (
                     <div className="flex items-center justify-center py-12">
@@ -697,42 +709,50 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                       <span className="ml-2 text-sm text-neutral-500">Loading usage data...</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                        <div className="text-sm text-neutral-500 mb-1">Messages Today</div>
-                        <div className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">
-                          {usageData?.messagesToday ?? 0} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ {usageData?.messageLimit ?? 100}</span>}
+                    <div className="flex flex-col gap-2">
+                      
+                      {/* Section 1: Messages */}
+                      <div className="settings-glass-card p-5 sm:p-6 rounded-[1.25rem] border border-white/45 bg-white/30 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                        <div className="flex justify-between items-end mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-semibold text-neutral-900 dark:text-neutral-100">Current usage</span>
+                            <Info size={16} className="text-neutral-400" />
+                          </div>
+                          <span className="text-[15px] font-bold text-neutral-900 dark:text-neutral-100">
+                            {isPro ? "Unlimited" : `${Math.round(((usageData?.messagesToday ?? 0) / (usageData?.messageLimit ?? 100)) * 100)}% used`}
+                          </span>
+                        </div>
+                        
+                        <div className="h-2.5 w-full bg-neutral-200 dark:bg-black rounded-full overflow-hidden mb-3">
+                          {!isPro && (
+                            <div 
+                              className="h-full bg-neutral-800 dark:bg-neutral-200 rounded-full transition-all duration-1000 ease-out" 
+                              style={{ width: `${Math.min(100, ((usageData?.messagesToday ?? 0) / (usageData?.messageLimit ?? 100)) * 100)}%` }}
+                            />
+                          )}
+                          {isPro && (
+                            <div className="h-full w-full bg-gradient-to-r from-blue-400 to-indigo-500" />
+                          )}
+                        </div>
+                        
+                        <div className="text-[13px] font-medium text-neutral-500 dark:text-neutral-400">
+                          {isPro ? "No daily limit" : "Resets at midnight"}
                         </div>
                       </div>
-                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                        <div className="text-sm text-neutral-500 mb-1">Daily Spend</div>
-                        <div className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">
-                          ${(usageData?.dailySpendUsd ?? 0).toFixed(2)} {isPro ? <span className="text-sm text-green-500 dark:text-green-400 ml-2 font-medium bg-green-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider text-[10px]">Unlimited</span> : <span className="text-lg text-neutral-400">/ ${(usageData?.dailyLimitUsd ?? 2).toFixed(2)}</span>}
-                        </div>
-                      </div>
-                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                        <div className="text-sm text-neutral-500 mb-1">Tools Used</div>
-                        <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">{usageData?.toolsUsed ?? 0}</div>
-                      </div>
-                      <div className="settings-glass-card rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                        <div className="text-sm text-neutral-500 mb-1">Est. Session Cost</div>
-                        <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 sm:text-3xl">${(usageData?.dailySpendUsd ?? 0).toFixed(4)}</div>
-                      </div>
+
                     </div>
                   )}
 
-                  <div className="settings-glass-card mt-6 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 font-medium text-neutral-900 dark:text-neutral-100">
-                          Kaori Pro 
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {isPro ? "ACTIVE" : "BETA"}
-                          </span>
+                  {!isPro && (
+                    <div className="settings-glass-card mt-8 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 font-medium text-neutral-900 dark:text-neutral-100">
+                            Kaori Pro 
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">BETA</span>
+                          </div>
+                          <div className="text-sm text-neutral-500">Try Kaori Pro for free during our beta period.</div>
                         </div>
-                        <div className="text-sm text-neutral-500">{isPro ? "Unlimited messages and priority access." : "Try Kaori Pro for free during our beta period."}</div>
-                      </div>
-                      {!isPro && (
                         <button 
                           onClick={() => {
                             setIsPro(true);
@@ -744,9 +764,9 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         >
                           Join Beta
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const stateCookie = getOAuthStateCookieName("spotify");
 
   if (error) {
-    return NextResponse.redirect(buildTrustedAppUrl("/settings?error=spotify_auth_failed", req));
+    return NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_auth_failed", req));
   }
 
   if (!code || !state) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const stateUserId = verifyOAuthState("spotify", state, req.cookies.get(stateCookie)?.value);
   const user = await getSessionUser();
   if (!stateUserId || !user || user.id !== stateUserId) {
-    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=spotify_state_invalid", req));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_state_invalid", req));
     response.cookies.delete(stateCookie);
     return response;
   }
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
       console.error("Spotify OAuth token exchange failed", { status: tokenRes.status });
-      const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=spotify_token_failed", req));
+      const response = NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_token_failed", req));
       response.cookies.delete(stateCookie);
       return response;
     }
@@ -74,12 +74,12 @@ export async function GET(req: NextRequest) {
       scope: data.scope || null,
     });
 
-    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?success=spotify_connected", req));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/?success=spotify_connected", req));
     response.cookies.delete(stateCookie);
     return response;
   } catch (err) {
     console.error("Spotify token exchange failed:", err);
-    const response = NextResponse.redirect(buildTrustedAppUrl("/settings?error=spotify_internal_error", req));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_internal_error", req));
     response.cookies.delete(stateCookie);
     return response;
   }

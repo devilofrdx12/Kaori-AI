@@ -34,6 +34,7 @@ export type ChatMessage = {
   toolResults?: ToolResultData[];
   thinking?: string;
   timestamp?: string;
+  stopped?: boolean;
 };
 
 export type ModelOption = {
@@ -57,49 +58,13 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: false,
   },
   {
-    id: "gemini-2.7-pro",
-    label: "Gemini 2.7 Pro",
-    provider: "google",
-    description: "Google's next-gen flagship 2.7 model",
-    badge: "Ultra",
-    supportsVision: true,
-    supportsThinking: true,
-  },
-  {
-    id: "gemini-2.7-flash",
-    label: "Gemini 2.7 Flash",
-    provider: "google",
-    description: "Google's ultra-fast 2.7 next-gen model",
-    badge: "Next-Gen",
+    id: "llama-3.2-90b-vision-preview",
+    label: "LLaMA 3.2 90B Vision",
+    provider: "groq",
+    description: "Groq's fastest vision model for image understanding",
+    badge: "Vision+",
     supportsVision: true,
     supportsThinking: false,
-  },
-  {
-    id: "gemini-2.6-pro",
-    label: "Gemini 2.6 Pro",
-    provider: "google",
-    description: "Google 2.6 high intelligence model",
-    badge: "Pro",
-    supportsVision: true,
-    supportsThinking: true,
-  },
-  {
-    id: "gemini-2.6-flash",
-    label: "Gemini 2.6 Flash",
-    provider: "google",
-    description: "Google 2.6 fast & responsive AI",
-    badge: "Flash",
-    supportsVision: true,
-    supportsThinking: false,
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    provider: "google",
-    description: "Google's capable 2.5 model for complex tasks",
-    badge: "Capable",
-    supportsVision: true,
-    supportsThinking: true,
   },
   {
     id: "gemini-2.5-flash",
@@ -128,7 +93,25 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsVision: false,
     supportsThinking: true,
   },
+
+  {
+    id: "deepseek-ai/deepseek-v4-pro",
+    label: "DeepSeek V4 Pro",
+    provider: "nvidia",
+    description: "DeepSeek V4 Pro on Nvidia NIM",
+    badge: "Pro",
+    supportsVision: false,
+    supportsThinking: true,
+  },
+  {
+    id: "deepseek-ai/deepseek-v4-flash",
+    label: "DeepSeek V4 Flash",
+    provider: "nvidia",
+    description: "DeepSeek V4 Flash on Nvidia NIM",
+    badge: "Fast",
+    supportsVision: false,
+    supportsThinking: true,
+  },
 ];
 
 export const DEFAULT_MODEL = "llama-3.3-70b-versatile";
-

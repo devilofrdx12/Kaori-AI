@@ -42,6 +42,8 @@ const MODEL_OPTIONS_MAP: Record<string, string> = {
   "gemini-2.5-pro": "Gemini 2.5 Pro",
   "nvidia/nemotron-3-ultra-550b-a55b": "Nemotron 3 Ultra",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "Nemotron Nano Omni",
+  "deepseek-ai/deepseek-v4-pro": "DeepSeek V4 Pro",
+  "deepseek-ai/deepseek-v4-flash": "DeepSeek V4 Flash",
 };
 
 type ToolUseBlock = {
@@ -482,9 +484,9 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let spendReserved = false;
+        let fullAssistantContent = "";
         try {
           const currentMessages = [...anthropicMessages];
-          let fullAssistantContent = "";
           let toolUseBlocks: ToolUseBlock[] = [];
           let shouldContinue = true;
 
@@ -503,6 +505,15 @@ export async function POST(req: NextRequest) {
                 const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
                 return await streamNvidiaChatCompletion({
                   model,
+                  messages: currentMessages,
+                  system: systemPrompt,
+                  tools: TOOL_DEFINITIONS,
+                  maxTokens: 8192,
+                });
+              } else if (model.startsWith("deepseek-ai/") || model.includes("deepseek")) {
+                const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
+                return await streamNvidiaChatCompletion({
+                  model: model.startsWith("deepseek-ai/") ? model : `deepseek-ai/${model}`,
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: TOOL_DEFINITIONS,
@@ -533,13 +544,13 @@ export async function POST(req: NextRequest) {
               response = await attemptStream(resolvedModel);
             } catch (err: any) {
               const errMsg = err.message || "";
-              const isRateLimit = errMsg.includes("quota") || errMsg.includes("Rate limit") || errMsg.includes("429");
-              const isOverloaded = errMsg.includes("503") || errMsg.includes("high demand") || errMsg.includes("UNAVAILABLE");
+              const isRateLimit = /quota|rate limit|resourceexhausted|429/i.test(errMsg);
+              const isOverloaded = /500|503|high demand|unavailable/i.test(errMsg);
 
               if (isRateLimit || isOverloaded) {
                 const fallbackChain: string[] = [];
                 if (!resolvedModel.startsWith("gemini-")) fallbackChain.push("gemini-2.5-flash");
-                if (!resolvedModel.startsWith("nvidia/")) fallbackChain.push("nvidia/nemotron-3-ultra-550b-a55b");
+                if (!resolvedModel.startsWith("nvidia/") && !resolvedModel.startsWith("deepseek-ai/")) fallbackChain.push("nvidia/nemotron-3-ultra-550b-a55b");
                 if (!resolvedModel.startsWith("llama-") && !resolvedModel.startsWith("mixtral-")) fallbackChain.push("llama-3.3-70b-versatile");
 
                 const reason = isRateLimit ? "quota reached" : "model overloaded";
@@ -825,16 +836,34 @@ export async function POST(req: NextRequest) {
           if (spendReserved) {
             await refundChatSpend(user.id);
           }
+          
+          if (fullAssistantContent.trim()) {
+            try {
+              await insertMessage({
+                id: uuid(),
+                conversation_id: chatId,
+                role: "assistant",
+                content: encryptContent(fullAssistantContent),
+              });
+            } catch (dbErr) {
+              logger.error({ dbErr, userId: user.id }, "Failed to save partial message on stream error");
+            }
+          }
+
           logger.error({ err, userId: user.id }, "Stream error");
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error",
-                error: err.message || "An unexpected error occurred",
-              })}\n\n`
-            )
-          );
-          controller.close();
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "error",
+                  error: err.message || "An unexpected error occurred",
+                })}\n\n`
+              )
+            );
+            controller.close();
+          } catch (e) {
+            // Controller might be already closed if the user aborted
+          }
         }
       },
     });

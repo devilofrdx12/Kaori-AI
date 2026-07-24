@@ -16,24 +16,28 @@ export async function streamNvidiaChatCompletion({
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<Response> {
-  const apiKey = model.includes("ultra") 
-    ? process.env.NVIDIA_API_KEY_ULTRA?.trim() || process.env.NVIDIA_API_KEY?.trim()
-    : process.env.NVIDIA_API_KEY_NANO?.trim() || process.env.NVIDIA_API_KEY?.trim();
-
-  if (!apiKey) {
-    throw new Error(`API Key for ${model} is not configured.`);
+  let apiKey = process.env.NVIDIA_API_KEY?.trim();
+  if (model.includes("nano")) {
+    apiKey = process.env.NVIDIA_API_KEY_NANO?.trim() || apiKey;
+  } else if (model.includes("ultra")) {
+    apiKey = process.env.NVIDIA_API_KEY_ULTRA?.trim() || apiKey;
+  } else if (model.startsWith("deepseek-ai/")) {
+    apiKey = process.env.NVIDIA_DEEPSEEK_API_KEY?.trim() || apiKey;
   }
 
-  // The Python snippet specifies extra_body for thinking capability
+  if (!apiKey) {
+    throw new Error(`NVIDIA API Key for ${model} is not configured.`);
+  }
+
   const extraBody: Record<string, unknown> = {};
-  
-  if (model.includes("ultra") || model.includes("reasoning")) {
-    // Enable reasoning budget per user Python snippet
+
+  if (model.startsWith("deepseek-ai/")) {
+    extraBody.reasoning_effort = model.endsWith("-pro") ? "max" : "high";
+  } else if (model.includes("ultra") || model.includes("reasoning")) {
     extraBody.chat_template_kwargs = { enable_thinking: true };
     extraBody.reasoning_budget = 16384;
     maxTokens = 16384;
   }
-
   return streamOpenAiCompatible({
     apiUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
     apiKey,

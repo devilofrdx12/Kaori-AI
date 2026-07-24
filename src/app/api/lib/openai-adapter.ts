@@ -1,5 +1,63 @@
 import { KaoriMessage, KaoriTool } from "./core-types";
 
+async function verifyStreamStart(response: Response): Promise<ReadableStream<Uint8Array>> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Provider returned an empty response body");
+
+  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    chunks.push(value);
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (!data || data === "[DONE]") continue;
+
+      try {
+        const event = JSON.parse(data);
+        if (event?.error?.message) {
+          throw new Error(`Provider stream error: ${event.error.message}`);
+        }
+      } catch (error) {
+        if (error instanceof SyntaxError) continue;
+        throw error;
+      }
+
+      return new ReadableStream({
+        async start(controller) {
+          for (const chunk of chunks) controller.enqueue(chunk);
+          try {
+            while (true) {
+              const next = await reader.read();
+              if (next.done) break;
+              controller.enqueue(next.value);
+            }
+            controller.close();
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      });
+    }
+  }
+
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+}
+
 // Convert Kaori messages to OpenAI format
 function convertMessages(messages: KaoriMessage[]) {
   const openAiMessages: any[] = [];
@@ -8,12 +66,21 @@ function convertMessages(messages: KaoriMessage[]) {
     if (typeof msg.content === "string") {
       openAiMessages.push({ role: msg.role, content: msg.content });
     } else {
-      let textContent = "";
       const toolCalls: any[] = [];
+      const contentArray: any[] = [];
+      let hasImage = false;
       
       for (const block of msg.content) {
         if (block.type === "text") {
-          textContent += block.text + "\n";
+          contentArray.push({ type: "text", text: block.text });
+        } else if (block.type === "image" && block.source) {
+          hasImage = true;
+          contentArray.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${block.source.media_type};base64,${block.source.data}`
+            }
+          });
         } else if (block.type === "tool_use") {
           toolCalls.push({
             id: block.id,
@@ -32,9 +99,17 @@ function convertMessages(messages: KaoriMessage[]) {
         }
       }
       
-      if (textContent || toolCalls.length > 0) {
+      if (contentArray.length > 0 || toolCalls.length > 0) {
         const m: any = { role: msg.role };
-        if (textContent) m.content = textContent.trim();
+
+        if (contentArray.length > 0) {
+          if (hasImage) {
+            m.content = contentArray;
+          } else {
+            m.content = contentArray.map(c => c.text).join("\n").trim();
+          }
+        }
+
         if (toolCalls.length > 0) m.tool_calls = toolCalls;
         openAiMessages.push(m);
       }
@@ -155,6 +230,8 @@ export async function streamOpenAiCompatible({
     throw new Error(userMsg);
   }
 
+  const providerStream = await verifyStreamStart(resp);
+
   // Return a TransformStream that converts OpenAI SSE to Anthropic SSE
   let buffer = "";
   const decoder = new TextDecoder();
@@ -228,7 +305,7 @@ export async function streamOpenAiCompatible({
     }
   });
 
-  return new Response(resp.body!.pipeThrough(transformStream), {
+  return new Response(providerStream.pipeThrough(transformStream), {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",

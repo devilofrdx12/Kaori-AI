@@ -409,18 +409,19 @@ export default function ActiveChatArea({
       abortRef.current = null;
       setTyping(false);
 
-      if (streamingText) {
-        const msg: ChatMessage = {
-          id: `stopped-${Date.now()}`,
-          role: "assistant",
-          content: streamingText + "\n\n*[Generation stopped]*",
-          timestamp: new Date().toISOString(),
-        };
-        updateChat(activeChat.id, (c) => ({
-          ...c,
-          messages: [...c.messages, msg],
-        }));
-      }
+      const msg: ChatMessage = {
+        id: `stopped-${Date.now()}`,
+        role: "assistant",
+        content: streamingText || "",
+        thinking: streamingThinking || undefined,
+        timestamp: new Date().toISOString(),
+        stopped: true,
+      };
+      updateChat(activeChat.id, (c) => ({
+        ...c,
+        messages: [...c.messages, msg],
+      }));
+
       setStreamingText("");
       setStreamingThinking("");
       setToolInProgress(null);

@@ -184,6 +184,39 @@ export async function sendMessage({
     const decoder = new TextDecoder();
     let buffer = "";
 
+    let pendingTextChunk = "";
+    let pendingThinkingChunk = "";
+    let lastFlushTime = Date.now();
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      if (pendingTextChunk) {
+        onText(pendingTextChunk);
+        pendingTextChunk = "";
+      }
+      if (pendingThinkingChunk) {
+        onThinking?.(pendingThinkingChunk);
+        pendingThinkingChunk = "";
+      }
+      lastFlushTime = Date.now();
+    };
+
+    const scheduleFlush = () => {
+      const now = Date.now();
+      if (now - lastFlushTime > 50) {
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        flush();
+      } else if (!flushTimer) {
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          flush();
+        }, 50 - (now - lastFlushTime));
+      }
+    };
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -202,15 +235,19 @@ export async function sendMessage({
 
           switch (event.type) {
             case "text":
-              onText(event.text);
+              pendingTextChunk += event.text;
+              scheduleFlush();
               break;
             case "thinking_delta":
-              onThinking?.(event.text);
+              pendingThinkingChunk += event.text;
+              scheduleFlush();
               break;
             case "tool_use_start":
+              flush();
               onToolStart?.(event.tool);
               break;
             case "tool_executing":
+              flush();
               onToolExecuting?.(event.tool);
               break;
             case "action_proposal":
@@ -221,16 +258,22 @@ export async function sendMessage({
                 typeof event.action.uriScheme === "string" &&
                 typeof event.action.fallbackUrl === "string"
               ) {
+                flush();
                 onActionProposal?.(event.action as ActionProposal);
               }
               break;
             case "tool_result":
+              flush();
               onToolResult?.(event.tool, event.result, event.input);
               break;
             case "done":
+              if (flushTimer) clearTimeout(flushTimer);
+              flush();
               onDone();
               return;
             case "error":
+              if (flushTimer) clearTimeout(flushTimer);
+              flush();
               onError(event.error);
               return;
           }
@@ -240,6 +283,8 @@ export async function sendMessage({
       }
     }
 
+    if (flushTimer) clearTimeout(flushTimer);
+    flush();
     onDone();
   } catch (err) {
     if (signal?.aborted) return;

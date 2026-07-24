@@ -46,6 +46,15 @@ const nextConfig: NextConfig = {
   },
   productionBrowserSourceMaps: false,
   serverExternalPackages: ["pino", "pino-pretty"],
+  async redirects() {
+    return [
+      {
+        source: "/settings",
+        destination: "/",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

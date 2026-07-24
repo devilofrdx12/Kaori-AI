@@ -88,7 +88,13 @@ function ChatLayoutInner() {
   const [activeTab, setActiveTab] = useState("chats");
   const [greeting] = useState(getTimeGreeting);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("success") && !params.has("error")) return;
 
+    const timeoutId = window.setTimeout(() => setShowSettings(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   // Setup hydration
   useEffect(() => {

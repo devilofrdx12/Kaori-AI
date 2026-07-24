@@ -5,7 +5,7 @@ import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { Copy, Check, User, Pencil, ChevronDown, Brain } from "lucide-react";
+import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw } from "lucide-react";
 import { ChatMessage } from "./types";
 import CodeBlock from "./code-block";
 import TypingIndicator from "./typing-indicator";
@@ -130,6 +130,7 @@ const MessageRow = memo((
     isCopied,
     copyMessage,
     streamingThinking,
+    onRegenerate,
   }: {
     msg: ChatMessage;
     isEditing: boolean;
@@ -140,6 +141,7 @@ const MessageRow = memo((
     isCopied: boolean;
     copyMessage: (id: string, text: string) => void;
     streamingThinking?: string;
+    onRegenerate?: (messageId: string) => void;
   }) => {
   return (
     <div className="message-enter group relative">
@@ -175,41 +177,49 @@ const MessageRow = memo((
               </div>
             ) : (
               <div className="group/user flex flex-col items-end gap-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 w-full max-w-full items-end">
+                  {msg.files && msg.files.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-end mb-1">
+                      {msg.files.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm max-w-full overflow-hidden">
+                          {f.type.startsWith("image/") ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={f.url} alt={f.name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-md" />
+                          ) : (
+                            <div className="flex items-center gap-2 px-1">
+                              <span className="text-2xl">📄</span>
+                              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300 max-w-[120px] truncate">{f.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {msg.content && (
+                    <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
+                {/* Actions Row */}
+                <div className="flex items-center gap-1 mt-1 opacity-60 sm:opacity-0 group-hover/user:opacity-100 transition-opacity mr-2">
+                  <button
+                    onClick={() => copyMessage(msg.id, msg.content)}
+                    title="Copy"
+                    className="p-1.5 rounded-full text-secondary hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
+                  >
+                    {isCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                  </button>
                   <button
                     onClick={() => {
                       setEditingMessageId(msg.id);
                       setEditText(msg.content);
                     }}
                     title="Edit"
-                    className="p-1.5 rounded-full text-secondary opacity-60 sm:opacity-0 group-hover/user:opacity-100 hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
+                    className="p-1.5 rounded-full text-secondary hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
                   >
                     <Pencil size={14} />
                   </button>
-                  <div className="flex flex-col gap-2 w-full max-w-full items-end">
-                    {msg.files && msg.files.length > 0 && (
-                      <div className="flex flex-wrap gap-2 justify-end mb-1">
-                        {msg.files.map((f, i) => (
-                          <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm max-w-full overflow-hidden">
-                            {f.type.startsWith("image/") ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={f.url} alt={f.name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-md" />
-                            ) : (
-                              <div className="flex items-center gap-2 px-1">
-                                <span className="text-2xl">📄</span>
-                                <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300 max-w-[120px] truncate">{f.name}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {msg.content && (
-                      <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
-                        {msg.content}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             )}
@@ -221,20 +231,23 @@ const MessageRow = memo((
       ) : (
         /* ── ASSISTANT MESSAGE ── */
         <div className="flex flex-col mb-4">
-          <div className="flex items-end gap-3">
-            <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-[hsl(var(--border))]">
-              <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
-            </div>
-            <div className="flex-1 min-w-0">
-              {msg.toolResults?.map((tr, i) => (
-                <ToolResultCard
-                  key={i}
-                  toolName={tr.toolName}
-                  result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
-                />
-              ))}
+          {(msg.content || streamingThinking || msg.thinking || (msg.toolResults && msg.toolResults.length > 0)) && (
+            <div className="flex items-end gap-3">
+              <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-[hsl(var(--border))]">
+                <Image src="/kaori-avatar.png" alt="Kaori" width={28} height={28} className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {msg.toolResults?.map((tr, i) => (
+                  <ToolResultCard
+                    key={i}
+                    toolName={tr.toolName}
+                    result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
+                  />
+                ))}
 
-              <div className="glass-panel p-4 sm:p-5 rounded-[1.5rem] rounded-bl-md transition-colors duration-300">
+                {(msg.content || streamingThinking || msg.thinking) && (
+                  <div className="glass-panel p-4 sm:p-5 rounded-[1.5rem] rounded-bl-md transition-colors duration-300">
+
                 {/* Show thinking block if this is the streaming message with thinking, or a saved message with thinking */}
                 {(streamingThinking || msg.thinking) && (
                   <ThinkingBlock
@@ -252,11 +265,13 @@ const MessageRow = memo((
                   </ReactMarkdown>
                 </div>
               </div>
+            )}
             </div>
           </div>
+          )}
 
           {/* Copy button */}
-          {msg.id !== "__streaming__" && (
+          {msg.id !== "__streaming__" && msg.content && (
             <div className="pl-10">
               <button
                 onClick={() => copyMessage(msg.id, msg.content)}
@@ -274,6 +289,26 @@ const MessageRow = memo((
                   </>
                 )}
               </button>
+            </div>
+          )}
+
+          {/* Stopped divider */}
+          {msg.stopped && (
+            <div className="mt-6 mb-2 flex flex-col items-start opacity-70 animate-fade-in pl-10">
+              <div className="w-full flex items-center gap-4">
+                <div className="flex-1 h-[1px] bg-gradient-to-r from-[hsl(var(--border))] to-transparent"></div>
+                <span className="text-[11px] font-medium text-secondary tracking-wide">You stopped this response</span>
+                <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-[hsl(var(--border))]"></div>
+              </div>
+              <div className="mt-1 flex items-center">
+                <button
+                  onClick={() => onRegenerate?.(msg.id)}
+                  className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-black/5 dark:hover:bg-white/10 text-secondary hover:text-on-surface transition-all active:scale-95 -ml-1"
+                  title="Retry response"
+                >
+                  <RotateCcw size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -343,6 +378,20 @@ export default function MessageArea({
     return null; // Empty state is handled by ChatLayout
   }
 
+  const handleRegenerate = (id: string) => {
+    const idx = allMessages.findIndex((m) => m.id === id);
+    if (idx > 0 && onEditSubmit) {
+      // Find the last user message before this stopped message
+      for (let i = idx - 1; i >= 0; i--) {
+        if (allMessages[i].role === "user") {
+          const userMsg = allMessages[i];
+          onEditSubmit(userMsg.id, userMsg.content);
+          break;
+        }
+      }
+    }
+  };
+
   const renderItem = (index: number, msg: ChatMessage) => (
     <div className="max-w-3xl mx-auto py-0.5">
       <MessageRow
@@ -355,6 +404,7 @@ export default function MessageArea({
         isCopied={copiedId === msg.id}
         copyMessage={copyMessage}
         streamingThinking={msg.id === "__streaming__" ? streamingThinking : undefined}
+        onRegenerate={handleRegenerate}
       />
     </div>
   );
