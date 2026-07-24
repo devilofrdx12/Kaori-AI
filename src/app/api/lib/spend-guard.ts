@@ -29,13 +29,15 @@ export async function checkSpend(
   const rows = mapRows<{
     daily_spend_usd: number;
     spend_reset_date: number;
+    is_pro: number;
   }>(await db.execute({
-    sql: "SELECT daily_spend_usd, spend_reset_date FROM users WHERE id = ?",
+    sql: "SELECT daily_spend_usd, spend_reset_date, is_pro FROM users WHERE id = ?",
     args: [userId],
   }));
   const user = rows[0];
 
   if (!user) return;
+  if (user.is_pro === 1) return;
 
   const today = startOfCurrentUtcDay();
 
@@ -73,7 +75,7 @@ export async function reserveSpend(userId: string, estimatedCostUsd: number): Pr
   const result = await db.execute({
     sql: `UPDATE users
           SET daily_spend_usd = daily_spend_usd + ?
-          WHERE id = ? AND daily_spend_usd + ? <= ?`,
+          WHERE id = ? AND (is_pro = 1 OR daily_spend_usd + ? <= ?)`,
     args: [estimatedCostUsd, userId, estimatedCostUsd, DAILY_LIMIT],
   });
 
