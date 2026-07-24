@@ -14,15 +14,7 @@ function startOfCurrentUtcDay() {
 }
 
 function spendLimitResponse() {
-  return new Response(
-    JSON.stringify({
-      error: `Daily spend limit ($${DAILY_LIMIT.toFixed(2)}) reached. Resets tomorrow.`,
-    }),
-    {
-      status: 429,
-      headers: { "Content-Type": "application/json" },
-    }
-  );
+  return new Error(`Daily spend limit ($${DAILY_LIMIT.toFixed(2)}) reached. Resets tomorrow.`);
 }
 
 /**
