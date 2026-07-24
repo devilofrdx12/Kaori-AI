@@ -98,30 +98,71 @@ export async function POST(req: NextRequest) {
     const { query } = await req.json().catch(() => ({}));
     const validatedQuery = validateSearchQuery(query);
 
-    const searchUrl = `https://lite.duckduckgo.com/lite/`;
-    const resp = await fetch(searchUrl, {
-      method: "POST",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: `q=${encodeURIComponent(validatedQuery)}`,
-      signal: AbortSignal.timeout(10000),
-    });
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
 
-    if (!resp.ok) {
-      return NextResponse.json({ error: "Search failed" }, { status: 502 });
+    if (tavilyApiKey) {
+      // Use Tavily Search API
+      const resp = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: tavilyApiKey,
+          query: validatedQuery,
+          search_depth: "basic",
+          include_answer: false,
+          include_images: false,
+          include_raw_content: false,
+          max_results: 8,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        return NextResponse.json({ error: errData.detail || "Search failed via Tavily API" }, { status: 502 });
+      }
+
+      const data = await resp.json();
+      const results = (data.results || []).map((r: any) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.content,
+      }));
+
+      return NextResponse.json({
+        query: validatedQuery,
+        results,
+        resultCount: results.length,
+      });
+    } else {
+      // Fallback to DuckDuckGo Scraper (works locally, might fail on Vercel)
+      const searchUrl = `https://lite.duckduckgo.com/lite/`;
+      const resp = await fetch(searchUrl, {
+        method: "POST",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: `q=${encodeURIComponent(validatedQuery)}`,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        return NextResponse.json({ error: "Search failed" }, { status: 502 });
+      }
+
+      const html = await readResponseTextWithLimit(resp, MAX_SEARCH_RESPONSE_BYTES);
+      const results = extractSearchResults(html);
+
+      return NextResponse.json({
+        query: validatedQuery,
+        results,
+        resultCount: results.length,
+      });
     }
-
-    const html = await readResponseTextWithLimit(resp, MAX_SEARCH_RESPONSE_BYTES);
-    const results = extractSearchResults(html);
-
-    return NextResponse.json({
-      query: validatedQuery,
-      results,
-      resultCount: results.length,
-    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     const safeMessages = new Set(["Query is required", "Query too long (max 300 characters)"]);
