@@ -12,6 +12,7 @@
     "backup": "npx tsx scripts/backup-db.ts"
   },
   "dependencies": {
+    "@pixi/unsafe-eval": "^6.5.10",
     "@tursodatabase/serverless": "^1.2.3",
     "@types/nodemailer": "^8.0.1",
     "bcryptjs": "^3.0.3",

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
+import { install } from "@pixi/unsafe-eval";
+install(PIXI);
 import { setExpression } from "../animation/ExpressionController";
 import { playEmotion } from "../animation/AnimationController";
 import { startIdleBehavior } from "../animation/IdleBehavior";
