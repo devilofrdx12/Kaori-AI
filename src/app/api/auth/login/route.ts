@@ -13,6 +13,7 @@ import { insertRefreshToken } from "../../lib/db";
 import { checkAuthRateLimit } from "../../lib/rate-limit";
 import { validateEmail, validatePassword } from "../../lib/validation";
 import { logger } from "../../lib/logger";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 
 const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
 
@@ -20,6 +21,10 @@ export async function POST(req: NextRequest) {
   try {
     // CSRF check
     requireAjax(req);
+
+    // Parse and bound the body before touching external infrastructure so malformed
+    // requests are classified consistently even during a database outage.
+    const body = await readJsonBodyWithLimit(req, 16 * 1024);
 
     // Rate limit by IP
     const ip = getClientIp(req);
@@ -35,13 +40,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-
     let email: string;
     let password: string;
     try {
-      email = validateEmail(body.email);
-      password = validatePassword(body.password);
+      email = validateEmail(typeof body.email === "string" ? body.email : "");
+      password = validatePassword(typeof body.password === "string" ? body.password : "");
     } catch {
       return NextResponse.json(
         { error: "Invalid credentials" },
@@ -105,12 +108,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof Response) return err; // CSRF / validation throws
-    if (err instanceof Error && err.message) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err instanceof RequestBodyError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     logger.error({ err }, "Login error");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Unable to sign in right now." },
       { status: 500 }
     );
   }

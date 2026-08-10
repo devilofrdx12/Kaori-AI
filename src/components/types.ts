@@ -6,7 +6,11 @@ export type UploadFile = {
   type: string;
   size?: number;
   data?: string;
+  detail?: ImageDetail;
 };
+
+export type ImageDetail = "fast" | "balanced" | "high";
+export type ChatFeatureMode = "auto" | "web" | "deep" | "thinking";
 
 export type MessageMode = "chat" | "image";
 
@@ -35,6 +39,8 @@ export type ChatMessage = {
   thinking?: string;
   timestamp?: string;
   stopped?: boolean;
+  error?: boolean;
+  retryable?: boolean;
 };
 
 export type ModelOption = {
@@ -55,15 +61,6 @@ export const MODEL_OPTIONS: ModelOption[] = [
     description: "Lightning fast, open-weights model",
     badge: "Fastest",
     supportsVision: false,
-    supportsThinking: false,
-  },
-  {
-    id: "llama-3.2-90b-vision-preview",
-    label: "LLaMA 3.2 90B Vision",
-    provider: "groq",
-    description: "Groq's fastest vision model for image understanding",
-    badge: "Vision+",
-    supportsVision: true,
     supportsThinking: false,
   },
   {
@@ -93,18 +90,18 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsVision: false,
     supportsThinking: true,
   },
-
   {
-    id: "deepseek-ai/deepseek-v4-pro",
-    label: "DeepSeek V4 Pro",
+    id: "z-ai/glm-5.2",
+    label: "GLM 5.2",
     provider: "nvidia",
-    description: "DeepSeek V4 Pro on Nvidia NIM",
-    badge: "Pro",
+    description: "Flagship 753B model for long reasoning and coding",
+    badge: "1M Context",
     supportsVision: false,
     supportsThinking: true,
   },
+
   {
-    id: "deepseek-ai/deepseek-v4-flash",
+    id: "deepseek-ai/deepseek-v4-flash-0731",
     label: "DeepSeek V4 Flash",
     provider: "nvidia",
     description: "DeepSeek V4 Flash on Nvidia NIM",

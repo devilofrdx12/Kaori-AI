@@ -1,14 +1,23 @@
 const ALLOWED_MODELS = new Set([
   "llama-3.3-70b-versatile",
-  "llama-3.2-90b-vision-preview",
   "gemini-2.5-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-  "deepseek-ai/deepseek-v4-pro",
-  "deepseek-ai/deepseek-v4-flash",
+  "z-ai/glm-5.2",
+  "deepseek-ai/deepseek-v4-flash-0731",
 ]);
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
+const VISION_MODELS = new Set([
+  "gemini-2.5-flash",
+]);
+
+export class InputValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InputValidationError";
+  }
+}
 
 export const LIMITS = {
   message: { max: 32_000 },
@@ -19,7 +28,11 @@ export const LIMITS = {
   project: { nameMax: 80, descriptionMax: 500, instructionsMax: 8_000 },
   memory: { contentMax: 2_000, tagMax: 32, maxTags: 10 },
   searchQuery: { max: 300 },
-  files: { maxCount: 3, maxBase64Bytes: 5 * 1024 * 1024 },
+  files: {
+    maxCount: 3,
+    maxBase64Bytes: 5 * 1024 * 1024,
+    maxTotalBase64Bytes: 8 * 1024 * 1024,
+  },
 };
 
 function cleanSingleLine(value: unknown, fallback = ""): string {
@@ -39,10 +52,10 @@ export function validateProjectInput(input: unknown): {
     ? candidate.instructions.replace(/\u0000/g, "").trim()
     : "";
 
-  if (!name) throw new Error("Project name is required");
-  if (name.length > LIMITS.project.nameMax) throw new Error("Project name is too long");
-  if (description.length > LIMITS.project.descriptionMax) throw new Error("Project description is too long");
-  if (instructions.length > LIMITS.project.instructionsMax) throw new Error("Project instructions are too long");
+  if (!name) throw new InputValidationError("Project name is required");
+  if (name.length > LIMITS.project.nameMax) throw new InputValidationError("Project name is too long");
+  if (description.length > LIMITS.project.descriptionMax) throw new InputValidationError("Project description is too long");
+  if (instructions.length > LIMITS.project.instructionsMax) throw new InputValidationError("Project instructions are too long");
 
   return { name, description, instructions };
 }
@@ -52,13 +65,13 @@ export function validateMemoryInput(input: unknown): { content: string; tags: st
   const content = typeof candidate.content === "string"
     ? candidate.content.replace(/\u0000/g, "").trim()
     : "";
-  if (!content) throw new Error("Memory content is required");
-  if (content.length > LIMITS.memory.contentMax) throw new Error("Memory is too long");
+  if (!content) throw new InputValidationError("Memory content is required");
+  if (content.length > LIMITS.memory.contentMax) throw new InputValidationError("Memory is too long");
 
   const rawTags = Array.isArray(candidate.tags) ? candidate.tags : [];
-  if (rawTags.length > LIMITS.memory.maxTags) throw new Error("Too many memory tags");
+  if (rawTags.length > LIMITS.memory.maxTags) throw new InputValidationError("Too many memory tags");
   const tags = [...new Set(rawTags.map((tag) => cleanSingleLine(tag).toLowerCase()).filter(Boolean))];
-  if (tags.some((tag) => tag.length > LIMITS.memory.tagMax)) throw new Error("Memory tag is too long");
+  if (tags.some((tag) => tag.length > LIMITS.memory.tagMax)) throw new InputValidationError("Memory tag is too long");
 
   return { content, tags };
 }
@@ -67,6 +80,7 @@ export type ValidatedUploadFile = {
   name: string;
   type: string;
   data: string;
+  detail: "fast" | "balanced" | "high";
 };
 
 export function validateMessage(content: string): string {
@@ -158,6 +172,10 @@ export function validateModel(model: unknown): string {
   return model;
 }
 
+export function modelSupportsVision(model: string): boolean {
+  return VISION_MODELS.has(model);
+}
+
 export function validateSearchQuery(query: unknown): string {
   if (typeof query !== "string") {
     throw new Error("Query is required");
@@ -178,6 +196,7 @@ export function validateUploadFiles(files: unknown): ValidatedUploadFile[] {
     throw new Error(`Too many files (max ${LIMITS.files.maxCount})`);
   }
 
+  let totalBytes = 0;
   return files.map((file) => {
     if (!file || typeof file !== "object") {
       throw new Error("Invalid file upload");
@@ -187,6 +206,9 @@ export function validateUploadFiles(files: unknown): ValidatedUploadFile[] {
     const type = typeof candidate.type === "string" ? candidate.type.toLowerCase() : "";
     const data = typeof candidate.data === "string" ? candidate.data : "";
     const rawName = typeof candidate.name === "string" ? candidate.name : "image";
+    const detail = candidate.detail === "fast" || candidate.detail === "high"
+      ? candidate.detail
+      : "balanced";
     if (/[\u0000-\u001F\u007F]/.test(rawName)) {
       throw new Error("Invalid file name");
     }
@@ -214,7 +236,11 @@ export function validateUploadFiles(files: unknown): ValidatedUploadFile[] {
     if (!base64Data || estimatedBytes > LIMITS.files.maxBase64Bytes) {
       throw new Error("Image is too large");
     }
+    totalBytes += estimatedBytes;
+    if (totalBytes > LIMITS.files.maxTotalBase64Bytes) {
+      throw new Error("Combined upload is too large");
+    }
 
-    return { name, type, data };
+    return { name, type, data, detail };
   });
 }

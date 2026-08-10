@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import {
   findConversation,
+  getConversationAttachments,
   getConversationMessages,
   updateConversationTitle,
   toggleConversationStar,
@@ -9,8 +10,20 @@ import {
 } from "../../lib/db";
 import { decryptContent } from "../../lib/crypto";
 import { validateConversationTitle } from "../../lib/validation";
+import { logger } from "../../lib/logger";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 
 type Params = { params: Promise<{ id: string }> };
+
+async function findConversationWithReplicaRetry(id: string) {
+  let conversation = await findConversation(id);
+  for (const delayMs of [100, 250]) {
+    if (conversation) break;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    conversation = await findConversation(id);
+  }
+  return conversation;
+}
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
@@ -21,22 +34,26 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const { id } = await params;
     
-    let conv = await findConversation(id);
-    if (!conv) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      conv = await findConversation(id);
-      if (!conv) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        conv = await findConversation(id);
-      }
-    }
+    const conv = await findConversationWithReplicaRetry(id);
 
     // IDOR: return 404 if not owner or not found
     if (!conv || conv.user_id !== user.id) {
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
     }
 
-    const rawMessages = (await getConversationMessages(id)).map((m) => ({
+    const [storedMessages, attachments] = await Promise.all([
+      getConversationMessages(id),
+      getConversationAttachments(id),
+    ]);
+
+    const attachmentsByMessage = new Map<string, typeof attachments>();
+    for (const attachment of attachments) {
+      const existing = attachmentsByMessage.get(attachment.message_id) ?? [];
+      existing.push(attachment);
+      attachmentsByMessage.set(attachment.message_id, existing);
+    }
+
+    const rawMessages = storedMessages.map((m) => ({
       ...m,
       content: decryptContent(m.content),
     }));
@@ -90,11 +107,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
       } catch {}
 
       if (!skip) {
+        const files = (attachmentsByMessage.get(m.id) ?? []).map((attachment) => {
+          const dataUrl = `data:${attachment.mime_type};base64,${attachment.encrypted_data}`;
+          return {
+            url: dataUrl,
+            data: dataUrl,
+            name: attachment.filename,
+            type: attachment.mime_type,
+            size: attachment.byte_size,
+            detail: attachment.detail,
+          };
+        });
+
         parsedMessages.push({
           id: m.id,
           role: m.role,
           content,
           toolResults,
+          files: files.length > 0 ? files : undefined,
           timestamp: new Date(m.created_at * 1000).toISOString(),
         });
       }
@@ -110,7 +140,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       updatedAt: new Date(conv.updated_at * 1000).toISOString(),
     });
   } catch (err: any) {
-    console.error("[GET /api/chats/[id]] Error:", err);
+    logger.error({ err, route: "GET /api/chats/[id]" }, "Chat load failed");
     return NextResponse.json({ error: "Unable to load this chat right now." }, { status: 500 });
   }
 }
@@ -129,18 +159,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const { id } = await params;
-    const body = await req.json().catch(() => ({}));
+    const body = await readJsonBodyWithLimit(req, 16 * 1024);
     
-    let conv = await findConversation(id);
-    // Handle potential Turso edge replication delay (read-your-own-writes lag)
-    if (!conv) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      conv = await findConversation(id);
-      if (!conv) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        conv = await findConversation(id);
-      }
-    }
+    const conv = await findConversationWithReplicaRetry(id);
 
     if (!conv || conv.user_id !== user.id) {
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
@@ -161,8 +182,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       createdAt: new Date(updated.created_at * 1000).toISOString(),
       updatedAt: new Date(updated.updated_at * 1000).toISOString(),
     });
-  } catch (error: any) {
-    console.error("PATCH chat error:", error);
+  } catch (error: unknown) {
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    logger.error({ error, route: "PATCH /api/chats/[id]" }, "Chat update failed");
     return NextResponse.json({ error: "Unable to update this chat right now." }, { status: 500 });
   }
 }

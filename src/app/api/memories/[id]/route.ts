@@ -1,39 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
-import { deleteUserMemory, updateUserMemory } from "../../lib/db";
+import { deleteUserMemory } from "../../lib/db";
 import { requireMemoryOwner } from "../../lib/ownership";
-import { validateMemoryInput } from "../../lib/validation";
+import { InputValidationError, validateMemoryInput } from "../../lib/validation";
+import { memoryDto } from "../../lib/memory-dto";
+import { setMemoryStatus, updateStructuredMemory, type MemoryStatus } from "../../lib/memory/service";
 
 type Context = { params: Promise<{ id: string }> };
-
-async function authorize(id: string) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  await requireMemoryOwner(id, user.id);
-  return null;
-}
 
 export async function PATCH(req: NextRequest, context: Context) {
   try {
     requireAjax(req);
     const { id } = await context.params;
-    const denied = await authorize(id);
-    if (denied) return denied;
-    const fields = validateMemoryInput(await req.json().catch(() => ({})));
-    const memory = await updateUserMemory(id, fields);
-    return NextResponse.json({
-      id: memory.id,
-      content: memory.content,
-      tags: fields.tags,
-      createdAt: new Date(memory.created_at * 1000).toISOString(),
-      updatedAt: new Date(memory.updated_at * 1000).toISOString(),
-    });
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    await requireMemoryOwner(id, user.id);
+    const body = await req.json().catch(() => ({}));
+    const requestedStatus = typeof body.status === "string" ? body.status as MemoryStatus : null;
+    if (requestedStatus) {
+      if (!["pending", "approved", "rejected", "outdated", "archived"].includes(requestedStatus)) {
+        return NextResponse.json({ error: "Invalid memory status" }, { status: 400 });
+      }
+      await setMemoryStatus(user.id, id, requestedStatus);
+      return NextResponse.json({ success: true, status: requestedStatus });
+    }
+    const fields = validateMemoryInput(body);
+    const memory = await updateStructuredMemory(user.id, id, fields);
+    return NextResponse.json(memoryDto(memory));
   } catch (error) {
     if (error instanceof Response) return error;
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid memory" },
-      { status: 400 }
-    );
+    if (error instanceof InputValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "Secrets and credentials cannot be saved as memory") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Unable to update memory" }, { status: 500 });
   }
 }
 
@@ -41,8 +43,9 @@ export async function DELETE(req: NextRequest, context: Context) {
   try {
     requireAjax(req);
     const { id } = await context.params;
-    const denied = await authorize(id);
-    if (denied) return denied;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    await requireMemoryOwner(id, user.id);
     await deleteUserMemory(id);
     return NextResponse.json({ success: true });
   } catch (error) {

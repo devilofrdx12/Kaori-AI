@@ -12,9 +12,22 @@ export type Memory = {
   id: string;
   content: string;
   tags: string[];
+  category: string;
+  scope: string;
+  status: string;
+  projectId?: string | null;
+  sourceType: string;
   sourceConversationId?: string | null;
+  expiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type MemorySettings = {
+  enabled: boolean;
+  readEnabled: boolean;
+  suggestionsEnabled: boolean;
+  autoSavePreferences: boolean;
 };
 
 const HEADERS = { "X-Requested-With": "XMLHttpRequest" };
@@ -54,5 +67,29 @@ export const createMemory = (content: string, tags: string[]) =>
     body: JSON.stringify({ content, tags }),
   });
 
+export const updateMemory = (id: string, content: string, tags: string[]) =>
+  request<Memory>(`/api/memories/${id}`, {
+    method: "PATCH",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ content, tags }),
+  });
+
 export const deleteMemory = (id: string) =>
   request<{ success: true }>(`/api/memories/${id}`, { method: "DELETE", headers: HEADERS });
+
+export const updateMemoryStatus = (id: string, status: Memory["status"]) =>
+  request<{ success: true; status: string }>(`/api/memories/${id}`, {
+    method: "PATCH",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+
+export const getMemorySettings = () =>
+  request<MemorySettings>("/api/memory-settings", { headers: HEADERS });
+
+export const saveMemorySettings = (settings: Partial<MemorySettings>) =>
+  request<MemorySettings>("/api/memory-settings", {
+    method: "PATCH",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });

@@ -79,6 +79,19 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT 'balanced',
+  encrypted_data TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 -- ══════════════════════════════════════════
 -- MEMORY SYSTEM
 -- ══════════════════════════════════════════
@@ -89,9 +102,37 @@ CREATE TABLE IF NOT EXISTS user_memories (
   content TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
   source_conv_id TEXT,
+  category TEXT NOT NULL DEFAULT 'fact',
+  scope TEXT NOT NULL DEFAULT 'global',
+  status TEXT NOT NULL DEFAULT 'approved',
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  confidence REAL NOT NULL DEFAULT 1.0,
+  importance REAL NOT NULL DEFAULT 0.5,
+  sensitivity TEXT NOT NULL DEFAULT 'normal',
+  embedding TEXT,
+  embedding_model TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
   expires_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS memory_settings (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  read_enabled INTEGER NOT NULL DEFAULT 1,
+  suggestions_enabled INTEGER NOT NULL DEFAULT 1,
+  auto_save_preferences INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS memory_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  memory_id TEXT,
+  action TEXT NOT NULL,
+  metadata TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 -- ══════════════════════════════════════════
@@ -220,9 +261,11 @@ CREATE TABLE IF NOT EXISTS snippets (
 -- ══════════════════════════════════════════
 
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON message_attachments(message_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_convs_user ON conversations(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_events_user ON memory_events(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, done, due_at);
 CREATE INDEX IF NOT EXISTS idx_snippets_user ON snippets(user_id, created_at DESC);

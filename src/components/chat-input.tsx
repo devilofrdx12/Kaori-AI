@@ -1,8 +1,15 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check } from "lucide-react";
+import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check, Upload, Search, BrainCircuit, Sparkles } from "lucide-react";
 import ModelSelector from "./model-selector";
+import type { ChatFeatureMode, ImageDetail } from "./types";
+
+const FEATURE_OPTIONS = [
+  { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
+  { id: "deep" as const, label: "Deep Research", description: "Nemotron Ultra · multi-source", icon: BrainCircuit },
+  { id: "thinking" as const, label: "Thinking", description: "GLM 5.2 · long reasoning", icon: Sparkles },
+];
 
 const VOICE_LANGUAGES = [
   { value: "en-US", label: "English" },
@@ -23,7 +30,7 @@ export default function ChatInput({
   onModelChange,
   placeholder,
 }: {
-  onSend: (text: string, files?: File[] | null) => void;
+  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) => void;
   disabled?: boolean;
   onStop?: () => void;
   model: string;
@@ -32,6 +39,9 @@ export default function ChatInput({
 }) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [imageDetail, setImageDetail] = useState<ImageDetail>("balanced");
+  const [featureMode, setFeatureMode] = useState<ChatFeatureMode>("auto");
+  const [showFeatureMenu, setShowFeatureMenu] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceLang, setVoiceLang] = useState("en-US");
@@ -42,11 +52,15 @@ export default function ChatInput({
   const voiceRecognitionRef = useRef<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
+  const featureMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
         setShowLangMenu(false);
+      }
+      if (featureMenuRef.current && !featureMenuRef.current.contains(e.target as Node)) {
+        setShowFeatureMenu(false);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -122,7 +136,7 @@ export default function ChatInput({
   const handleSend = () => {
     const text = value.trim();
     if (!text && !files.length) return;
-    onSend(text, files.length ? files : null);
+    onSend(text, files.length ? files : null, imageDetail, featureMode);
     setValue("");
     setFiles([]);
     setTimeout(() => {
@@ -281,7 +295,28 @@ export default function ChatInput({
         >
           {/* File previews */}
           {filePreviews.length > 0 && (
-            <div className="flex flex-wrap gap-3 pt-4 sm:pt-5 px-4 sm:px-5 pb-1">
+            <div className="pt-4 sm:pt-5 px-4 sm:px-5 pb-1">
+              {filePreviews.some((preview) => preview.isImage) && (
+                <div className="mb-3 flex items-center gap-1 rounded-xl bg-black/[0.035] dark:bg-white/[0.04] p-1 w-fit" aria-label="Image analysis detail">
+                  {(["fast", "balanced", "high"] as ImageDetail[]).map((detail) => (
+                    <button
+                      key={detail}
+                      type="button"
+                      onClick={() => setImageDetail(detail)}
+                      aria-pressed={imageDetail === detail}
+                      className={`rounded-lg px-2.5 py-1.5 text-[11px] capitalize transition-colors ${
+                        imageDetail === detail
+                          ? "bg-white dark:bg-white/10 text-primary shadow-sm"
+                          : "text-secondary hover:text-on-surface"
+                      }`}
+                      title={detail === "high" ? "Preserves small text and document detail" : `${detail} image analysis`}
+                    >
+                      {detail}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-3">
               {filePreviews.map((preview, i) => (
                 <div key={i} className="relative group animate-fade-in">
                   {preview.isImage ? (
@@ -306,6 +341,7 @@ export default function ChatInput({
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           )}
 
@@ -338,13 +374,72 @@ export default function ChatInput({
           <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full flex-wrap">
             {/* Left: attach + model */}
             <div className="flex items-center gap-1 min-w-0 flex-1">
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10 hover-lift active-press"
-                title="Attach file"
-              >
-                <Plus size={20} strokeWidth={1.5} />
-              </button>
+              <div ref={featureMenuRef} className="relative z-30 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowFeatureMenu((open) => !open)}
+                  aria-expanded={showFeatureMenu}
+                  aria-haspopup="menu"
+                  className={`h-10 w-10 grid place-items-center rounded-[1.25rem] hover-lift active-press ${showFeatureMenu || featureMode !== "auto" ? "text-primary bg-primary/10" : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"}`}
+                  title="Add files or choose a feature"
+                >
+                  <Plus size={20} strokeWidth={1.5} className={`transition-transform ${showFeatureMenu ? "rotate-45" : ""}`} />
+                </button>
+
+                {showFeatureMenu ? (
+                  <div role="menu" className="absolute bottom-full left-0 mb-2 w-64 rounded-2xl border border-white/70 dark:border-white/10 bg-white/95 dark:bg-neutral-950/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        fileRef.current?.click();
+                        setShowFeatureMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface hover:bg-black/[0.04] dark:hover:bg-white/[0.07]"
+                    >
+                      <Upload size={17} className="text-secondary" />
+                      <span><span className="block font-medium">Upload</span><span className="block text-xs text-secondary">Images or PDF</span></span>
+                    </button>
+                    <div className="my-1 h-px bg-black/[0.06] dark:bg-white/10" />
+                    {FEATURE_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const selected = featureMode === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selected}
+                          onClick={() => {
+                            const nextMode = selected ? "auto" : option.id;
+                            setFeatureMode(nextMode);
+                            if (nextMode === "deep") onModelChange("nvidia/nemotron-3-ultra-550b-a55b");
+                            if (nextMode === "thinking") onModelChange("z-ai/glm-5.2");
+                            setShowFeatureMenu(false);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${selected ? "bg-primary/10 text-primary" : "text-on-surface hover:bg-black/[0.04] dark:hover:bg-white/[0.07]"}`}
+                        >
+                          <Icon size={17} />
+                          <span className="min-w-0 flex-1"><span className="block font-medium">{option.label}</span><span className="block text-xs text-secondary">{option.description}</span></span>
+                          {selected ? <Check size={15} /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+
+              {featureMode !== "auto" ? (
+                <button
+                  type="button"
+                  onClick={() => setFeatureMode("auto")}
+                  className="hidden sm:flex h-8 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+                  title="Turn off feature mode"
+                >
+                  {FEATURE_OPTIONS.find((option) => option.id === featureMode)?.label}
+                  <X size={12} />
+                </button>
+              ) : null}
 
               <div className="relative z-10 min-w-0 ml-1 max-w-[calc(100vw-7.5rem)] sm:max-w-none">
                 <ModelSelector

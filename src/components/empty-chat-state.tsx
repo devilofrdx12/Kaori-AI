@@ -2,6 +2,7 @@
 
 import { Sparkles, Code2, BookOpen, PenLine, ListChecks } from "lucide-react";
 import ChatInput from "./chat-input";
+import type { ChatFeatureMode, ImageDetail } from "./types";
 
 export default function EmptyChatState({
   greeting,
@@ -12,7 +13,7 @@ export default function EmptyChatState({
 }: {
   greeting: string;
   userName: string;
-  onSend: (text: string, files?: File[] | null) => void;
+  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) => void;
   model: string;
   setModel: (m: string) => void;
 }) {

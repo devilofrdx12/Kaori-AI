@@ -1,4 +1,5 @@
 import { getDb } from "../lib/db";
+import { logger } from "../lib/logger";
 
 // Health check endpoint — UptimeRobot / Vercel pings this
 export async function GET() {
@@ -10,7 +11,8 @@ export async function GET() {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    logger.error({ error }, "Health check failed");
     return Response.json({ status: "down" }, { status: 503 });
   }
 }

@@ -58,6 +58,47 @@ async function verifyStreamStart(response: Response): Promise<ReadableStream<Uin
   });
 }
 
+function withIdleTimeout(
+  stream: ReadableStream<Uint8Array>,
+  timeoutMs = 120_000
+): ReadableStream<Uint8Array> {
+  const reader = stream.getReader();
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
+      const armTimeout = () => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          timedOut = true;
+          void reader.cancel("Provider stream idle timeout");
+          controller.error(new Error("The AI provider stopped responding. Please retry."));
+        }, timeoutMs);
+      };
+
+      try {
+        armTimeout();
+        while (true) {
+          const next = await reader.read();
+          if (timedOut) return;
+          if (next.done) break;
+          armTimeout();
+          controller.enqueue(next.value);
+        }
+        if (timeout) clearTimeout(timeout);
+        controller.close();
+      } catch (error) {
+        if (timeout) clearTimeout(timeout);
+        if (timedOut) return;
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      await reader.cancel(reason);
+    },
+  });
+}
+
 // Convert Kaori messages to OpenAI format
 function convertMessages(messages: KaoriMessage[]) {
   const openAiMessages: any[] = [];
@@ -78,7 +119,8 @@ function convertMessages(messages: KaoriMessage[]) {
           contentArray.push({
             type: "image_url",
             image_url: {
-              url: `data:${block.source.media_type};base64,${block.source.data}`
+              url: `data:${block.source.media_type};base64,${block.source.data}`,
+              detail: block.source.detail === "fast" ? "low" : block.source.detail === "high" ? "high" : "auto",
             }
           });
         } else if (block.type === "tool_use") {
@@ -159,10 +201,11 @@ export async function streamOpenAiCompatible({
   const body: Record<string, unknown> = {
     model,
     messages: openAiMessages,
-    max_tokens: maxTokens,
     stream: true,
     ...(extraBody || {}),
   };
+  if (model.startsWith("gpt-5")) body.max_completion_tokens = maxTokens;
+  else body.max_tokens = maxTokens;
 
   if (openAiTools && openAiTools.length > 0) {
     body.tools = openAiTools;
@@ -251,6 +294,10 @@ export async function streamOpenAiCompatible({
         
         try {
           const event = JSON.parse(data);
+          if (event?.error) {
+            controller.error(new Error("The AI provider stopped responding. Please retry."));
+            return;
+          }
           const delta = event.choices?.[0]?.delta;
           const finishReason = event.choices?.[0]?.finish_reason;
           
@@ -305,7 +352,7 @@ export async function streamOpenAiCompatible({
     }
   });
 
-  return new Response(providerStream.pipeThrough(transformStream), {
+  return new Response(withIdleTimeout(providerStream).pipeThrough(transformStream), {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",

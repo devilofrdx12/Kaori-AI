@@ -2,11 +2,14 @@
 
 import { X, Palette, Cpu, Link as LinkIcon, Activity, Database, LogOut, Timer, Shield, Loader2, ChevronDown, Info } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { motion, useDragControls, AnimatePresence } from "framer-motion";import JSZip from "jszip";
+import { useRouter } from "next/navigation";
+import { motion, useDragControls, AnimatePresence } from "framer-motion";
+import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
 import PomodoroTimer from "./pomodoro-timer";
 import SessionManager from "./session-manager";
+import { DEFAULT_MODEL, MODEL_OPTIONS } from "./types";
 
 type Props = {
   isOpen: boolean;
@@ -161,6 +164,7 @@ function CustomSelect({
 }
 
 export default function SettingsModal({ isOpen, onClose }: Props) {
+  const router = useRouter();
   const dragControls = useDragControls();
   const [activeTab, setActiveTab] = useState<Tab>("appearance");
   const [statusMsg, setStatusMsg] = useState("");
@@ -168,8 +172,14 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const [theme, setTheme] = useState(() => getStoredValue("kaori_theme", "system"));
   const [accent, setAccent] = useState(() => getStoredValue("kaori_accent", "orange"));
   const [font, setFont] = useState(() => getStoredValue("kaori_font", "Kaori UI"));
-  const [provider, setProvider] = useState(() => getStoredValue("kaori_provider", "google"));
-  const [model, setModel] = useState(() => getStoredValue("kaori_model", "gemini-2.5-flash"));
+  const [model, setModel] = useState(() => {
+    const storedModel = getStoredValue("kaori_model", DEFAULT_MODEL);
+    return MODEL_OPTIONS.some((option) => option.id === storedModel) ? storedModel : DEFAULT_MODEL;
+  });
+  const [provider, setProvider] = useState(() => {
+    const storedModel = getStoredValue("kaori_model", DEFAULT_MODEL);
+    return MODEL_OPTIONS.find((option) => option.id === storedModel)?.provider || "groq";
+  });
   const [studyMode, setStudyMode] = useState(() => getStoredValue("kaori_study_mode", "false") === "true");
   const [isPro, setIsPro] = useState(false);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
@@ -244,9 +254,17 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   };
 
   const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider);
-    localStorage.setItem("kaori_provider", newProvider);
-    const defaultModel = newProvider === "google" ? "gemini-2.5-flash" : "llama-3.3-70b-versatile";
+    const supportedProvider = (["google", "groq", "nvidia"] as const).find(
+      (candidate) => candidate === newProvider
+    ) || "groq";
+    setProvider(supportedProvider);
+    localStorage.setItem("kaori_provider", supportedProvider);
+    const defaultModels: Record<string, string> = {
+      google: "gemini-2.5-flash",
+      groq: "llama-3.3-70b-versatile",
+      nvidia: "nvidia/nemotron-3-ultra-550b-a55b",
+    };
+    const defaultModel = defaultModels[supportedProvider];
     setModel(defaultModel);
     localStorage.setItem("kaori_model", defaultModel);
     window.dispatchEvent(new Event("kaori_settings_changed"));
@@ -359,7 +377,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
       // Clear all local storage
       localStorage.clear();
 
-      window.location.href = '/login';
+      router.replace('/login');
     } catch (e: unknown) {
       setStatusMsg(`Error deleting account: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
@@ -483,7 +501,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
             <button 
               onClick={async () => {
                 await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
-                window.location.href = '/login';
+                router.replace('/login');
               }}
               className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-red-600 hover-lift active-press hover:bg-red-50/70 dark:text-red-400 dark:hover:bg-red-500/10"
             >
@@ -605,7 +623,8 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           onChange={handleProviderChange}
                           options={[
                             { value: "google", label: "Google" },
-                            { value: "groq", label: "Groq" }
+                            { value: "groq", label: "Groq" },
+                            { value: "nvidia", label: "NVIDIA" },
                           ]}
                           label="Default Provider"
                         />
@@ -615,12 +634,9 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         <CustomSelect
                           value={model}
                           onChange={handleModelChange}
-                          options={provider === "google" 
-                            ? [{ value: "gemini-2.5-flash", label: "gemini-2.5-flash" }] 
-                            : [
-                                { value: "llama-3.3-70b-versatile", label: "llama-3.3-70b-versatile" },
-                              ]
-                          }
+                          options={MODEL_OPTIONS
+                            .filter((option) => option.provider === provider)
+                            .map((option) => ({ value: option.id, label: option.label }))}
                           label="Default Model"
                         />
                       </div>
@@ -698,7 +714,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   </div>
                   
                   <p className="text-neutral-600 dark:text-neutral-400 text-[15px] leading-relaxed max-w-[90%]">
-                    Your plan's limits determine how much you can use Kaori over time. Advanced models and features can take up more usage. <a href="#" className="text-blue-500 hover:underline">Learn more</a>
+                    Your plan&apos;s limits determine how much you can use Kaori over time. Advanced models and features can take up more usage. <a href="#" className="text-blue-500 hover:underline">Learn more</a>
                   </p>
                   
                   <p className="text-neutral-500 dark:text-neutral-500 text-sm font-medium">Updated just now</p>
@@ -850,7 +866,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                         <button 
                           onClick={async () => {
                             await fetch('/api/auth/logout', { method: 'POST', headers: AJAX_HEADERS });
-                            window.location.href = '/login';
+                            router.replace('/login');
                           }} 
                           className="inline-flex h-10 items-center justify-center rounded-xl bg-red-100 px-4 text-sm font-medium text-red-700 hover-lift active-press hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
                         >

@@ -72,8 +72,11 @@ const BLOCKED_APP_SCHEMES = new Set([
   "vbscript:",
 ]);
 
-const SENSITIVE_CONTENT_PATTERN =
-  /\b(api[_ -]?key|secret|password|token|credential|private key|recovery phrase|credit card|ssn|social security|\.env)\b/i;
+const PRIVATE_KEY_PATTERN = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i;
+const SECRET_ASSIGNMENT_PATTERN =
+  /\b(api[_ -]?key|client[_ -]?secret|access[_ -]?token|auth[_ -]?token|password|credential)\s*[:=]\s*["']?([^\s"'`]{8,})/gi;
+const PLACEHOLDER_SECRET_PATTERN =
+  /^(?:your[_-]|example|sample|placeholder|replace[_-]?me|process\.env|env\.|\$\{|<)/i;
 
 const ABUSIVE_SEARCH_PATTERN =
   /\b(credit card numbers?|password dump|leaked credentials?|api[_ -]?keys?|private keys?|site:pastebin\.com|site:ghostbin|dork|dump)\b/i;
@@ -109,6 +112,17 @@ function userAskedForDocument(userMessage: string) {
   return /\b(create|make|generate|write|export|download|save)\b[\s\S]{0,100}\b(document|file|pdf|docx|markdown|md|report|essay|notes|html|css|javascript|typescript|json)\b/i.test(
     userMessage
   );
+}
+
+function containsExposedSecret(content: string) {
+  if (PRIVATE_KEY_PATTERN.test(content)) return true;
+
+  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+  for (const match of content.matchAll(SECRET_ASSIGNMENT_PATTERN)) {
+    const value = match[2] || "";
+    if (value.length >= 16 && !PLACEHOLDER_SECRET_PATTERN.test(value)) return true;
+  }
+  return false;
 }
 
 function userAskedToOpenApp(userMessage: string) {
@@ -214,7 +228,13 @@ export function validateToolCall(
     ]);
   }
 
-  const argScan = scanText(toolInput, "tool_argument");
+  // Document bodies are inert stored content, not executable tool commands.
+  // Scan their capability-bearing metadata here; validate body size and actual
+  // credential-shaped values in the document-specific policy below.
+  const scannedInput = toolName === "create_document"
+    ? { filename: toolInput.filename, format: toolInput.format }
+    : toolInput;
+  const argScan = scanText(scannedInput, "tool_argument");
   if (argScan.verdict === "BLOCKED") {
     return result(false, Math.max(75, argScan.risk), argScan.reason, argScan.signals);
   }
@@ -309,9 +329,9 @@ export function validateToolCall(
       ]);
     }
 
-    if (SENSITIVE_CONTENT_PATTERN.test(content)) {
+    if (containsExposedSecret(content)) {
       return result(false, 86, "Document content appears to contain sensitive data", [
-        signal("sensitive-document-content", 86, "Document content appears sensitive"),
+        signal("sensitive-document-content", 86, "Document contains a credential-shaped value"),
       ]);
     }
 

@@ -4,13 +4,29 @@ export const TOOL_DEFINITIONS: KaoriTool[] = [
   {
     name: "web_search",
     description:
-      "Search the public web for information to answer the user's question. Use this for current events, recent news, live data, people, companies, products, prices, laws, sports, software versions, recommendations, or any factual claim that may have changed. Returns search results with titles, URLs, and snippets. Use the returned sources when answering.",
+      "Search the public web with relevance-ranked evidence. Use this for current events, recent news, live data, people, companies, products, prices, laws, sports, software versions, recommendations, or any factual claim that may have changed. For broad, ambiguous, or contested questions, run focused searches for separate angles and corroborate claims across sources. Prefer primary/official sources when available and cite the returned URLs near each supported claim.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: {
           type: "string",
-          description: "The search query to look up on the web",
+          description: "A focused, standalone search query with essential names, dates, places, and constraints",
+        },
+        queries: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 3,
+          description: "Optional set of up to three distinct focused queries for complex research. Omit for simple questions.",
+        },
+        topic: {
+          type: "string",
+          enum: ["auto", "general", "news", "finance"],
+          description: "Search vertical. Use auto unless the request is clearly news or finance.",
+        },
+        time_range: {
+          type: "string",
+          enum: ["day", "week", "month", "year"],
+          description: "Optional freshness filter when the user asks for a recent time window.",
         },
       },
       required: ["query"],
@@ -118,7 +134,3 @@ export const TOOL_DEFINITIONS: KaoriTool[] = [
     },
   }
 ];
-
-export function getToolByName(name: string) {
-  return TOOL_DEFINITIONS.find((t) => t.name === name);
-}

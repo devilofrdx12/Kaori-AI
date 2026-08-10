@@ -6,6 +6,7 @@ import {
   FolderPlus,
   MessageSquarePlus,
   Plus,
+  Pencil,
   Save,
   Trash2,
   X,
@@ -13,6 +14,7 @@ import {
   Hash,
   FileText,
   ChevronRight,
+  Check,
 } from "lucide-react";
 import {
   createMemory,
@@ -21,8 +23,13 @@ import {
   deleteProject,
   listMemories,
   listProjects,
+  getMemorySettings,
+  saveMemorySettings,
   updateProject,
+  updateMemory,
+  updateMemoryStatus,
   type Memory,
+  type MemorySettings,
   type Project,
 } from "@/lib/workspace-api";
 
@@ -32,11 +39,26 @@ const EMPTY_PROJECT: ProjectDraft = {
   description: "",
   instructions: "",
 };
+const DEFAULT_MEMORY_SETTINGS: MemorySettings = {
+  enabled: true,
+  readEnabled: true,
+  suggestionsEnabled: true,
+  autoSavePreferences: false,
+};
 
 export default function ProjectsWorkspace({
   onStartChat,
+  onOpenChat,
+  projectChats,
 }: {
   onStartChat: (project: Project) => void;
+  onOpenChat: (chatId: string) => void;
+  projectChats: Array<{
+    id: string;
+    title: string;
+    projectId?: string | null;
+    updatedAt?: string;
+  }>;
 }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -45,18 +67,23 @@ export default function ProjectsWorkspace({
   const [draft, setDraft] = useState<ProjectDraft>(EMPTY_PROJECT);
   const [memoryText, setMemoryText] = useState("");
   const [memoryTags, setMemoryTags] = useState("");
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
+  const [memorySettings, setMemorySettings] = useState(DEFAULT_MEMORY_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [projectData, memoryData] = await Promise.all([
+      const [projectData, memoryData, settingsData] = await Promise.all([
         listProjects(),
         listMemories(),
+        getMemorySettings(),
       ]);
       setProjects(projectData);
       setMemories(memoryData);
+      setMemorySettings(settingsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load workspace");
     }
@@ -110,20 +137,73 @@ export default function ProjectsWorkspace({
     setBusy(true);
     setError("");
     try {
-      const saved = await createMemory(
-        memoryText,
-        memoryTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean)
+      const tags = memoryTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+      const saved = editingMemory
+        ? await updateMemory(editingMemory.id, memoryText, tags)
+        : await createMemory(memoryText, tags);
+      setMemories((items) =>
+        editingMemory
+          ? items.map((item) => (item.id === saved.id ? saved : item))
+          : [saved, ...items]
       );
-      setMemories((items) => [saved, ...items]);
       setMemoryText("");
       setMemoryTags("");
+      setEditingMemory(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save memory");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function beginMemoryEdit(memory: Memory) {
+    setEditingMemory(memory);
+    setMemoryText(memory.content);
+    setMemoryTags(memory.tags.join(", "));
+    setError("");
+  }
+
+  function cancelMemoryEdit() {
+    setEditingMemory(null);
+    setMemoryText("");
+    setMemoryTags("");
+  }
+
+  async function removeMemory(memory: Memory) {
+    try {
+      setError("");
+      await deleteMemory(memory.id);
+      setMemories((items) => items.filter((item) => item.id !== memory.id));
+      if (editingMemory?.id === memory.id) cancelMemoryEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete memory");
+    }
+  }
+
+  async function changeMemoryStatus(memory: Memory, status: Memory["status"]) {
+    try {
+      setError("");
+      await updateMemoryStatus(memory.id, status);
+      setMemories((items) => status === "rejected"
+        ? items.filter((item) => item.id !== memory.id)
+        : items.map((item) => item.id === memory.id ? { ...item, status } : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update memory");
+    }
+  }
+
+  async function toggleMemorySetting(key: keyof MemorySettings) {
+    const previous = memorySettings;
+    const next = { ...previous, [key]: !previous[key] };
+    setMemorySettings(next);
+    try {
+      setMemorySettings(await saveMemorySettings({ [key]: next[key] }));
+    } catch (err) {
+      setMemorySettings(previous);
+      setError(err instanceof Error ? err.message : "Unable to update memory settings");
     }
   }
 
@@ -292,7 +372,14 @@ export default function ProjectsWorkspace({
 
             {/* Project Cards */}
             <div className="grid md:grid-cols-2 gap-4 stagger-children">
-              {projects.map((project) => (
+              {projects.map((project) => {
+                const chatsForProject = projectChats
+                  .filter((chat) => chat.projectId === project.id)
+                  .sort((left, right) =>
+                    new Date(right.updatedAt || 0).getTime() - new Date(left.updatedAt || 0).getTime()
+                  );
+                const isExpanded = expandedProjectId === project.id;
+                return (
                 <article
                   key={project.id}
                   className="settings-glass-card glass-shine rounded-[1.75rem] border border-white/45 dark:border-white/10 bg-white/30 dark:bg-white/[0.04] p-5 sm:p-6 flex flex-col min-h-[13rem] backdrop-blur-xl shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] group"
@@ -330,11 +417,17 @@ export default function ProjectsWorkspace({
                   )}
 
                   <div className="mt-auto pt-5 flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-secondary bg-white/40 dark:bg-white/[0.06] px-2.5 py-1.5 rounded-lg font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedProjectId(isExpanded ? null : project.id)}
+                      disabled={chatsForProject.length === 0}
+                      className="inline-flex items-center gap-1.5 text-xs text-secondary bg-white/40 dark:bg-white/[0.06] px-2.5 py-1.5 rounded-lg font-medium disabled:cursor-default hover:text-primary transition-colors"
+                      aria-expanded={isExpanded}
+                    >
                       <Hash size={12} />
                       {project.chatCount}{" "}
                       {project.chatCount === 1 ? "chat" : "chats"}
-                    </span>
+                    </button>
                     <div className="flex gap-2">
                       <button
                         onClick={() => openEditForm(project)}
@@ -343,20 +436,53 @@ export default function ProjectsWorkspace({
                         Edit
                       </button>
                       <button
-                        onClick={() => onStartChat(project)}
+                        type="button"
+                        onClick={() => setExpandedProjectId(isExpanded ? null : project.id)}
+                        disabled={chatsForProject.length === 0}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-[hsl(var(--primary))] text-white font-medium hover-lift active-press hover:brightness-110 transition-all shadow-[0_6px_20px_-4px_hsl(var(--primary)/0.3)]"
                       >
                         <MessageSquarePlus size={15} />
-                        Start chat
+                        {chatsForProject.length ? "View chats" : "No chats"}
                         <ChevronRight
                           size={14}
-                          className="opacity-60 group-hover:translate-x-0.5 transition-transform"
+                          className={`opacity-60 transition-transform ${isExpanded ? "rotate-90" : ""}`}
                         />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onStartChat(project)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-primary bg-primary/10 hover:bg-primary/15 transition-all"
+                        aria-label={`Start a new chat in ${project.name}`}
+                      >
+                        <Plus size={15} />
+                        New
                       </button>
                     </div>
                   </div>
+
+                  {isExpanded && chatsForProject.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/40 dark:border-white/10 space-y-2 animate-fade-in">
+                      <p className="text-xs uppercase tracking-[0.18em] text-secondary font-medium">
+                        Previous chats
+                      </p>
+                      {chatsForProject.map((chat) => (
+                        <button
+                          key={chat.id}
+                          type="button"
+                          onClick={() => onOpenChat(chat.id)}
+                          className="w-full flex items-center justify-between gap-3 rounded-xl bg-white/35 dark:bg-white/[0.04] px-3.5 py-3 text-left hover:bg-white/60 dark:hover:bg-white/[0.08] transition-colors group/chat"
+                        >
+                          <span className="truncate text-sm text-neutral-800 dark:text-neutral-200">
+                            {chat.title || "Untitled chat"}
+                          </span>
+                          <ChevronRight size={14} className="shrink-0 text-secondary group-hover/chat:text-primary group-hover/chat:translate-x-0.5 transition-all" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </article>
-              ))}
+                );
+              })}
 
               {projects.length === 0 && (
                 <div className="md:col-span-2 rounded-[1.75rem] border border-dashed border-primary/25 dark:border-primary/15 p-12 text-center text-secondary backdrop-blur-xl animate-fade-in">
@@ -384,11 +510,33 @@ export default function ProjectsWorkspace({
               onSubmit={submitMemory}
               className="settings-glass-pane rounded-[1.75rem] border border-white/45 dark:border-white/10 bg-white/30 dark:bg-white/[0.04] p-5 sm:p-6 h-fit space-y-4 backdrop-blur-xl shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] animate-slide-in-left"
             >
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["enabled", "Memory"],
+                  ["readEnabled", "Use in chat"],
+                  ["suggestionsEnabled", "Suggestions"],
+                  ["autoSavePreferences", "Auto-save preferences"],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => void toggleMemorySetting(key)}
+                    className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors ${
+                      memorySettings[key]
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-white/40 dark:border-white/10 text-secondary"
+                    }`}
+                    aria-pressed={memorySettings[key]}
+                  >
+                    {label}: {memorySettings[key] ? "On" : "Off"}
+                  </button>
+                ))}
+              </div>
               <h2 className="font-headline text-lg text-neutral-900 dark:text-neutral-100 flex items-center gap-2.5 font-light tracking-tight">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                   <Brain size={18} className="text-primary" />
                 </div>
-                Add a memory
+                {editingMemory ? "Edit memory" : "Add a memory"}
               </h2>
               <p className="text-sm text-secondary font-light">
                 Only save information you want Kaori to reuse later.
@@ -409,13 +557,26 @@ export default function ProjectsWorkspace({
                 className={inputClass}
                 placeholder="Tags separated by commas"
               />
-              <button
-                disabled={busy}
-                className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-medium text-white disabled:opacity-50 hover-lift active-press hover:brightness-110 transition-all duration-300 shadow-[0_8px_24px_-6px_hsl(var(--primary)/0.35)]"
-              >
-                <Plus size={16} />
-                {busy ? "Saving…" : "Save memory"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-medium text-white disabled:opacity-50 hover-lift active-press hover:brightness-110 transition-all duration-300 shadow-[0_8px_24px_-6px_hsl(var(--primary)/0.35)]"
+                >
+                  {editingMemory ? <Save size={16} /> : <Plus size={16} />}
+                  {busy ? "Saving…" : editingMemory ? "Update memory" : "Save memory"}
+                </button>
+                {editingMemory && (
+                  <button
+                    type="button"
+                    onClick={cancelMemoryEdit}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm text-secondary hover:bg-white/50 dark:hover:bg-white/[0.06] disabled:opacity-50 transition-colors"
+                  >
+                    <X size={16} />
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
 
             {/* Memory List */}
@@ -432,6 +593,16 @@ export default function ProjectsWorkspace({
                     <p className="text-neutral-900 dark:text-neutral-100 whitespace-pre-wrap font-light leading-relaxed">
                       {memory.content}
                     </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {memory.status === "pending" && (
+                        <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300 font-medium">
+                          Suggested · review needed
+                        </span>
+                      )}
+                      <span className="rounded-full bg-black/5 dark:bg-white/5 px-2.5 py-1 text-xs text-secondary">
+                        {memory.scope} · {memory.category}
+                      </span>
+                    </div>
                     {memory.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-3">
                         {memory.tags.map((tag) => (
@@ -445,18 +616,44 @@ export default function ProjectsWorkspace({
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={async () => {
-                      await deleteMemory(memory.id);
-                      setMemories((items) =>
-                        items.filter((item) => item.id !== memory.id)
-                      );
-                    }}
-                    className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-red-500 hover:bg-red-50/70 dark:hover:bg-red-500/10 hover-lift active-press transition-all shrink-0 self-start opacity-0 group-hover:opacity-100"
-                    aria-label="Delete memory"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex gap-1 shrink-0 self-start opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {memory.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => void changeMemoryStatus(memory, "approved")}
+                        className="h-9 w-9 grid place-items-center rounded-xl text-emerald-600 hover:bg-emerald-500/10 transition-all"
+                        aria-label="Approve suggested memory"
+                      >
+                        <Check size={16} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => beginMemoryEdit(memory)}
+                      className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-primary hover:bg-primary/10 hover-lift active-press transition-all"
+                      aria-label="Edit memory"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    {memory.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => void changeMemoryStatus(memory, "rejected")}
+                        className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-red-500 hover:bg-red-500/10 transition-all"
+                        aria-label="Reject suggested memory"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void removeMemory(memory)}
+                      className="h-9 w-9 grid place-items-center rounded-xl text-secondary hover:text-red-500 hover:bg-red-50/70 dark:hover:bg-red-500/10 hover-lift active-press transition-all"
+                      aria-label="Delete memory"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </article>
               ))}
 

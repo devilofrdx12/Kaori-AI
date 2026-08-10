@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import Sidebar from "./sidebar";
 import ChatHeader from "./chat-header";
@@ -10,7 +11,7 @@ import AnimatedAvatar from "./animated-avatar";
 import SettingsModal from "./settings-modal";
 import ProjectsWorkspace from "./projects-workspace";
 import { PomodoroProvider, usePomodoro } from "./pomodoro-context";
-import { ChatMessage, DEFAULT_MODEL } from "./types";
+import { ChatMessage, DEFAULT_MODEL, MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 import { ChatThread } from "./chat-types";
 import type { Project } from "@/lib/workspace-api";
 import { me, logout as apiLogout, AuthUser } from "./auth";
@@ -75,10 +76,11 @@ function MiniPomodoroTimer() {
 }
 
 function ChatLayoutInner() {
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [model, setModel] = useState(getInitialModel);
-  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null } | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode } | null>(null);
   const [avatarState, setAvatarState] = useState<{ emotion: AvatarEmotion; speaking: boolean }>({ emotion: "idle", speaking: false });
 
   const [chats, setChats] = useState<ChatThread[]>([]);
@@ -100,9 +102,11 @@ function ChatLayoutInner() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedModel = localStorage.getItem("kaori_model");
-      if (storedModel) {
+      if (storedModel && MODEL_OPTIONS.some((option) => option.id === storedModel)) {
         // Use timeout to avoid synchronous setState cascading render warning
         setTimeout(() => setModel(storedModel), 0);
+      } else if (storedModel) {
+        localStorage.setItem("kaori_model", DEFAULT_MODEL);
       }
 
       // Fix hydration mismatch for sidebar by checking window size after initial render
@@ -116,7 +120,9 @@ function ChatLayoutInner() {
   useEffect(() => {
     const handleSettingsChange = () => {
       const storedModel = localStorage.getItem("kaori_model");
-      if (storedModel) setModel(storedModel);
+      if (storedModel && MODEL_OPTIONS.some((option) => option.id === storedModel)) {
+        setModel(storedModel);
+      }
     };
     window.addEventListener("kaori_settings_changed", handleSettingsChange);
     return () => window.removeEventListener("kaori_settings_changed", handleSettingsChange);
@@ -129,7 +135,7 @@ function ChatLayoutInner() {
         const u = await me();
         setUser(u);
         if (!u) {
-          window.location.href = "/login";
+          router.replace("/login");
           return;
         }
 
@@ -170,7 +176,7 @@ function ChatLayoutInner() {
         await handleNewChat();
       }
     })();
-  }, []);
+  }, [router]);
 
 
 
@@ -215,6 +221,11 @@ function ChatLayoutInner() {
   function handleStartProjectChat(project: Project) {
     handleNewChat(project.id);
     setActiveTab("chats");
+  }
+
+  async function handleOpenProjectChat(chatId: string) {
+    setActiveTab("chats");
+    await handleSelectChat(chatId);
   }
 
   // ── SELECT CHAT ──
@@ -276,11 +287,11 @@ function ChatLayoutInner() {
   // ── LOGOUT ──
   async function handleLogout() {
     await apiLogout();
-    window.location.href = "/login";
+    router.replace("/login");
   }
 
   // ── SEND INITIAL MESSAGE ──
-  function handleSendInitial(text: string, files?: File[] | null) {
+  function handleSendInitial(text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) {
     if (!activeChatId || (!text && !files?.length)) return;
 
     if (activeChatId.startsWith("temp-")) {
@@ -313,7 +324,7 @@ function ChatLayoutInner() {
       handleRenameChat(activeChatId, title);
     }
 
-    setPendingPrompt({ text, files });
+    setPendingPrompt({ text, files, imageDetail, featureMode });
   }
 
   return (
@@ -381,7 +392,11 @@ function ChatLayoutInner() {
               )}
             </>
           ) : activeTab === "projects" ? (
-            <ProjectsWorkspace onStartChat={handleStartProjectChat} />
+            <ProjectsWorkspace
+              onStartChat={handleStartProjectChat}
+              onOpenChat={(chatId) => void handleOpenProjectChat(chatId)}
+              projectChats={chats}
+            />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in p-8">
               <div className="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">

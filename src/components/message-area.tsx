@@ -292,12 +292,14 @@ const MessageRow = memo((
             </div>
           )}
 
-          {/* Stopped divider */}
-          {msg.stopped && (
+          {/* Recoverable response state */}
+          {(msg.stopped || msg.retryable) && (
             <div className="mt-6 mb-2 flex flex-col items-start opacity-70 animate-fade-in pl-10">
               <div className="w-full flex items-center gap-4">
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-[hsl(var(--border))] to-transparent"></div>
-                <span className="text-[11px] font-medium text-secondary tracking-wide">You stopped this response</span>
+                <span className="text-[11px] font-medium text-secondary tracking-wide">
+                  {msg.error ? "The request failed" : "You stopped this response"}
+                </span>
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-[hsl(var(--border))]"></div>
               </div>
               <div className="mt-1 flex items-center">
@@ -322,6 +324,9 @@ const MessageRow = memo((
     (prevProps.isEditing ? prevProps.editText === nextProps.editText : true) &&
     prevProps.isCopied === nextProps.isCopied &&
     prevProps.streamingThinking === nextProps.streamingThinking &&
+    prevProps.msg.stopped === nextProps.msg.stopped &&
+    prevProps.msg.error === nextProps.msg.error &&
+    prevProps.msg.retryable === nextProps.msg.retryable &&
     prevProps.msg.toolResults?.length === nextProps.msg.toolResults?.length
   );
 });
@@ -337,6 +342,7 @@ export default function MessageArea({
   streamingText,
   streamingThinking,
   onEditSubmit,
+  onRetryMessage,
   bottomRef,
 }: {
   messages?: ChatMessage[];
@@ -346,6 +352,7 @@ export default function MessageArea({
   streamingText?: string;
   streamingThinking?: string;
   onEditSubmit?: (messageId: string, newText: string) => void;
+  onRetryMessage?: (message: ChatMessage) => void;
   bottomRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -380,12 +387,13 @@ export default function MessageArea({
 
   const handleRegenerate = (id: string) => {
     const idx = allMessages.findIndex((m) => m.id === id);
-    if (idx > 0 && onEditSubmit) {
+    if (idx > 0 && (onRetryMessage || onEditSubmit)) {
       // Find the last user message before this stopped message
       for (let i = idx - 1; i >= 0; i--) {
         if (allMessages[i].role === "user") {
           const userMsg = allMessages[i];
-          onEditSubmit(userMsg.id, userMsg.content);
+          if (onRetryMessage) onRetryMessage(userMsg);
+          else onEditSubmit?.(userMsg.id, userMsg.content);
           break;
         }
       }

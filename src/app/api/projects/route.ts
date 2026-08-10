@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../lib/auth-utils";
 import { createProject, getProjectConversationCount, getUserProjects } from "../lib/db";
-import { validateProjectInput } from "../lib/validation";
+import { InputValidationError, validateProjectInput } from "../lib/validation";
 
 function projectDto(project: Awaited<ReturnType<typeof createProject>>, chatCount: number) {
   return {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(projectDto(project, 0), { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;
-    if (error instanceof Error && !/database|sql|turso/i.test(error.message)) {
+    if (error instanceof InputValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: "Unable to create project" }, { status: 500 });

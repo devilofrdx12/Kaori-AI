@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Kaori AI — Your Intelligent Assistant",
   description: "A premium AI chat experience powered by Kaori. Search the web, generate documents, analyze code, and more.",
-  keywords: ["Kaori", "AI", "Chat", "Assistant", "Anthropic"],
+  keywords: ["Kaori", "AI", "Chat", "Assistant"],
   authors: [{ name: "Kaori AI App" }],
   openGraph: {
     title: "Kaori AI — Your Intelligent Assistant",

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import MessageArea from "./message-area";
 import ChatInput from "./chat-input";
-import { ChatMessage } from "./types";
+import { ChatMessage, MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail, type UploadFile } from "./types";
 import { ChatThread } from "./chat-types";
 import { sendMessage } from "@/lib/chat-api";
 import ActionPassport, { type ActionProposal } from "./action-passport";
@@ -73,23 +73,49 @@ function openSafeHttpsUrl(value: unknown) {
   }
 }
 
-async function fileToDataUrl(
-  file: File
-): Promise<{ url: string; name: string; type: string; data: string }> {
+function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const data = typeof reader.result === "string" ? reader.result : "";
-      resolve({
-        url: data,
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        data,
-      });
-    };
-    reader.onerror = () => reject(new Error(`Failed to read: ${file.name}`));
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Failed to read processed upload"));
     reader.readAsDataURL(file);
   });
+}
+
+async function fileToDataUrl(
+  file: File,
+  detail: ImageDetail = "balanced"
+): Promise<{ url: string; name: string; type: string; data: string; detail: ImageDetail }> {
+  let payload: Blob = file;
+  let type = file.type || "application/octet-stream";
+
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    const bitmap = await createImageBitmap(file);
+    const maxDimension = detail === "fast" ? 1280 : detail === "high" ? 4096 : 2048;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const shouldPreserveOriginal = detail === "high" && file.type === "image/png"
+      && scale === 1 && file.size <= 4.5 * 1024 * 1024;
+    if (!shouldPreserveOriginal && (scale < 1 || file.size > 2 * 1024 * 1024 || detail !== "high")) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Image preprocessing is unavailable");
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      payload = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error("Image compression failed")),
+          detail === "high" && file.type === "image/png" ? "image/png" : "image/webp",
+          detail === "fast" ? 0.78 : detail === "high" ? 0.96 : 0.86
+        )
+      );
+      type = detail === "high" && file.type === "image/png" ? "image/png" : "image/webp";
+    }
+    bitmap.close();
+  }
+
+  const data = await readFileAsDataUrl(payload);
+  return { url: data, name: file.name, type, data, detail };
 }
 
 export default function ActiveChatArea({
@@ -106,7 +132,7 @@ export default function ActiveChatArea({
   setModel: (m: string) => void;
   updateChat: (id: string, updater: (c: ChatThread) => ChatThread) => void;
   onAvatarStateChange: (emotion: any, speaking: boolean) => void;
-  pendingPrompt: { text: string; files?: File[] | null } | null;
+  pendingPrompt: { text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode } | null;
   clearPendingPrompt: () => void;
 }) {
   const [typing, setTyping] = useState(false);
@@ -134,9 +160,9 @@ export default function ActiveChatArea({
 
   useEffect(() => {
     if (pendingPrompt) {
-      const { text, files } = pendingPrompt;
+      const { text, files, imageDetail, featureMode } = pendingPrompt;
       clearPendingPrompt();
-      handleSendInternal(text, files, true);
+      handleSendInternal(text, files, true, imageDetail, featureMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPrompt]);
@@ -153,14 +179,30 @@ export default function ActiveChatArea({
     };
   }, [activeChat.id]);
 
-  async function handleSendInternal(text: string, files?: File[] | null, skipLocalAdd = false) {
+  async function handleSendInternal(
+    text: string,
+    files?: File[] | null,
+    skipLocalAdd = false,
+    imageDetail: ImageDetail = "balanced",
+    featureMode: ChatFeatureMode = "auto"
+  ) {
     if (!text && !files?.length) return;
     if (activeChat.id.startsWith("temp-")) {
       console.warn("Please wait a moment for the new chat to initialize on the server.");
       return;
     }
 
+    const hasImages = files?.some((file) => file.type.startsWith("image/")) ?? false;
+    const selectedModelSupportsVision = MODEL_OPTIONS.some(
+      (option) => option.id === model && option.supportsVision
+    );
+    const effectiveModel = hasImages && !selectedModelSupportsVision
+      ? "gemini-2.5-flash"
+      : model;
+    if (effectiveModel !== model) setModel(effectiveModel);
+
     const objectUrls: string[] = [];
+    const userMessageId = crypto.randomUUID();
 
     if (!skipLocalAdd) {
       const mappedFiles = files ? files.map(f => {
@@ -175,7 +217,7 @@ export default function ActiveChatArea({
       }) : undefined;
 
       const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
+        id: userMessageId,
         role: "user",
         content: text,
         files: mappedFiles,
@@ -198,9 +240,15 @@ export default function ActiveChatArea({
     const controller = new AbortController();
     abortRef.current = controller;
 
-    let fileData;
+    let fileData: UploadFile[] | undefined;
     if (files?.length) {
-      fileData = await Promise.all(files.map(fileToDataUrl));
+      fileData = await Promise.all(files.map((file) => fileToDataUrl(file, imageDetail)));
+      updateChat(activeChat.id, (chat) => ({
+        ...chat,
+        messages: chat.messages.map((message) =>
+          message.id === userMessageId ? { ...message, files: fileData } : message
+        ),
+      }));
       // Revoke blob URLs now that we have base64 data URLs — prevents memory leak
       for (const url of objectUrls) URL.revokeObjectURL(url);
     }
@@ -214,9 +262,11 @@ export default function ActiveChatArea({
       await sendMessage({
         chatId: currentChatId,
         message: text,
-        model,
+        messageId: userMessageId,
+        model: effectiveModel,
         files: fileData,
         studyMode,
+        featureMode,
         signal: controller.signal,
         onText: (chunk) => {
           fullText += chunk;
@@ -270,11 +320,14 @@ export default function ActiveChatArea({
         },
         onError: (error) => {
           console.error("Chat error:", error);
+          const retryable = error !== "UNAUTHORIZED" && !/invalid|required|unsupported|too large/i.test(error);
           const errMsg: ChatMessage = {
             id: `error-${Date.now()}`,
             role: "assistant",
             content: `${error}`,
             timestamp: new Date().toISOString(),
+            error: true,
+            retryable,
           };
           updateChat(currentChatId, (c) => ({
             ...c,
@@ -294,7 +347,7 @@ export default function ActiveChatArea({
     }
   }
 
-  async function handleEditSend(messageId: string, text: string) {
+  async function handleEditSend(messageId: string, text: string, retryFiles?: UploadFile[]) {
     if (!text) return;
 
     const msgIndex = activeChat.messages.findIndex(m => m.id === messageId);
@@ -305,6 +358,7 @@ export default function ActiveChatArea({
       id: messageId,
       role: "user",
       content: text,
+      files: retryFiles,
       timestamp: new Date().toISOString(),
     };
     newMessages.push(editedMsg);
@@ -334,6 +388,7 @@ export default function ActiveChatArea({
         chatId: currentChatId,
         message: text,
         model,
+        files: retryFiles,
         editMessageId: messageId,
         studyMode,
         signal: controller.signal,
@@ -379,11 +434,14 @@ export default function ActiveChatArea({
         },
         onError: (error) => {
           console.error("Edit chat error:", error);
+          const retryable = error !== "UNAUTHORIZED" && !/invalid|required|unsupported|too large/i.test(error);
           const errMsg: ChatMessage = {
             id: `error-${Date.now()}`,
             role: "assistant",
             content: `${error}`,
             timestamp: new Date().toISOString(),
+            error: true,
+            retryable,
           };
           updateChat(currentChatId, (c) => ({
             ...c,
@@ -436,6 +494,7 @@ export default function ActiveChatArea({
         toolInProgress={toolInProgress}
         toolResults={toolResults}
         onEditSubmit={handleEditSend}
+        onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files)}
         streamingText={streamingText}
         streamingThinking={streamingThinking}
         bottomRef={bottomRef}
@@ -453,7 +512,7 @@ export default function ActiveChatArea({
         ))}
       <div className="w-full shrink-0 animate-spring-down transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
         <ChatInput
-          onSend={(t, f) => handleSendInternal(t, f)}
+          onSend={(t, f, detail, feature) => handleSendInternal(t, f, false, detail, feature)}
           disabled={typing}
           onStop={handleStop}
           model={model}

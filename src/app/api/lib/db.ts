@@ -32,6 +32,14 @@ function isDuplicateColumnError(error: unknown) {
   return error instanceof Error && error.message.toLowerCase().includes("duplicate column");
 }
 
+async function addColumnIfMissing(db: Client, sql: string) {
+  try {
+    await db.execute(sql);
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) throw error;
+  }
+}
+
 async function initializeDb(db: Client) {
   const schemaPath = path.join(process.cwd(), "db", "schema.sql");
   const schema = await fs.readFile(schemaPath, "utf-8");
@@ -39,32 +47,26 @@ async function initializeDb(db: Client) {
   await db.execute("PRAGMA foreign_keys = ON");
   await db.executeMultiple(schema);
 
-  try {
-    await db.execute(
-      "ALTER TABLE conversations ADD COLUMN is_starred INTEGER NOT NULL DEFAULT 0"
-    );
-  } catch (error) {
-    if (!isDuplicateColumnError(error)) throw error;
-  }
-
-  try {
-    await db.execute(
-      "ALTER TABLE users ADD COLUMN is_pro INTEGER NOT NULL DEFAULT 0"
-    );
-  } catch (error) {
-    if (!isDuplicateColumnError(error)) throw error;
-  }
-
-  try {
-    await db.execute(
-      "ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL"
-    );
-  } catch (error) {
-    if (!isDuplicateColumnError(error)) throw error;
-  }
+  await addColumnIfMissing(db, "ALTER TABLE conversations ADD COLUMN is_starred INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(db, "ALTER TABLE users ADD COLUMN is_pro INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(db, "ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN category TEXT NOT NULL DEFAULT 'fact'");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE CASCADE");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual'");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN importance REAL NOT NULL DEFAULT 0.5");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'normal'");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN embedding TEXT");
+  await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN embedding_model TEXT");
+  await addColumnIfMissing(db, "ALTER TABLE message_attachments ADD COLUMN detail TEXT NOT NULL DEFAULT 'balanced'");
 
   await db.execute(
     "CREATE INDEX IF NOT EXISTS idx_convs_project ON conversations(project_id, updated_at DESC)"
+  );
+  await db.execute(
+    "CREATE INDEX IF NOT EXISTS idx_memories_retrieval ON user_memories(user_id, status, scope, project_id, updated_at DESC)"
   );
 }
 
@@ -284,48 +286,20 @@ export type DBUserMemory = {
   content: string;
   tags: string;
   source_conv_id: string | null;
+  category: string;
+  scope: string;
+  status: string;
+  project_id: string | null;
+  source_type: string;
+  confidence: number;
+  importance: number;
+  sensitivity: string;
+  embedding: string | null;
+  embedding_model: string | null;
   created_at: number;
   updated_at: number;
   expires_at: number | null;
 };
-
-export async function getUserMemories(userId: string): Promise<DBUserMemory[]> {
-  return getAll<DBUserMemory>(
-    "SELECT * FROM user_memories WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC",
-    [userId]
-  );
-}
-
-export async function findUserMemory(id: string): Promise<DBUserMemory | undefined> {
-  return getOne<DBUserMemory>("SELECT * FROM user_memories WHERE id = ?", [id]);
-}
-
-export async function createUserMemory(memory: {
-  id: string;
-  user_id: string;
-  content: string;
-  tags: string[];
-}): Promise<DBUserMemory> {
-  await run(
-    `INSERT INTO user_memories (id, user_id, content, tags)
-     VALUES (?, ?, ?, ?)`,
-    [memory.id, memory.user_id, memory.content, JSON.stringify(memory.tags)]
-  );
-  return (await findUserMemory(memory.id))!;
-}
-
-export async function updateUserMemory(
-  id: string,
-  fields: { content: string; tags: string[] }
-): Promise<DBUserMemory> {
-  await run(
-    `UPDATE user_memories
-     SET content = ?, tags = ?, updated_at = unixepoch()
-     WHERE id = ?`,
-    [fields.content, JSON.stringify(fields.tags), id]
-  );
-  return (await findUserMemory(id))!;
-}
 
 export async function deleteUserMemory(id: string): Promise<void> {
   await run("DELETE FROM user_memories WHERE id = ?", [id]);
@@ -427,6 +401,50 @@ export async function deleteMessagesFrom(conversationId: string, messageId: stri
       ]
     );
   }
+}
+
+export type DBMessageAttachment = {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string;
+  detail: "fast" | "balanced" | "high";
+  encrypted_data: string;
+  byte_size: number;
+  created_at: number;
+};
+
+export async function insertMessageAttachment(attachment: {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string;
+  detail: "fast" | "balanced" | "high";
+  base64_data: string;
+}) {
+  await run(
+    `INSERT INTO message_attachments
+      (id, user_id, conversation_id, message_id, filename, mime_type, detail, encrypted_data, byte_size)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [attachment.id, attachment.user_id, attachment.conversation_id, attachment.message_id,
+      attachment.filename, attachment.mime_type, attachment.detail, encryptContent(attachment.base64_data),
+      Math.floor((attachment.base64_data.length * 3) / 4)]
+  );
+}
+
+export async function getConversationAttachments(conversationId: string): Promise<DBMessageAttachment[]> {
+  const rows = await getAll<DBMessageAttachment>(
+    "SELECT * FROM message_attachments WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC",
+    [conversationId]
+  );
+  return rows.map((attachment) => ({
+    ...attachment,
+    encrypted_data: decryptContent(attachment.encrypted_data),
+  }));
 }
 
 // REFRESH TOKEN HELPERS

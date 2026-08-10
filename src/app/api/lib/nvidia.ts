@@ -30,23 +30,50 @@ export async function streamNvidiaChatCompletion({
   }
 
   const extraBody: Record<string, unknown> = {};
+  let requestSignal = signal;
+  let startupTimer: ReturnType<typeof setTimeout> | undefined;
+  let startupController: AbortController | undefined;
+  let forwardAbort: (() => void) | undefined;
 
-  if (model.startsWith("deepseek-ai/")) {
+  if (model === "z-ai/glm-5.2") {
+    // GLM 5.2 can spend a long time reasoning before its final answer.
+    // Streaming plus a larger output budget prevents valid responses from
+    // being cut off while keeping usage below NVIDIA's 32K hard limit.
+    maxTokens = 16384;
+    startupController = new AbortController();
+    forwardAbort = () => startupController?.abort(signal?.reason);
+    if (signal?.aborted) forwardAbort();
+    else signal?.addEventListener("abort", forwardAbort, { once: true });
+    startupTimer = setTimeout(
+      () => startupController?.abort(new Error("GLM 5.2 startup timeout")),
+      150_000
+    );
+    requestSignal = startupController.signal;
+  } else if (model.startsWith("deepseek-ai/")) {
     extraBody.reasoning_effort = model.endsWith("-pro") ? "max" : "high";
   } else if (model.includes("ultra") || model.includes("reasoning")) {
     extraBody.chat_template_kwargs = { enable_thinking: true };
     extraBody.reasoning_budget = 16384;
     maxTokens = 16384;
   }
-  return streamOpenAiCompatible({
-    apiUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
-    apiKey,
-    model,
-    messages,
-    system,
-    tools,
-    maxTokens,
-    extraBody,
-    signal,
-  });
+  try {
+    return await streamOpenAiCompatible({
+      apiUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
+      apiKey,
+      model,
+      messages,
+      system,
+      tools,
+      maxTokens,
+      extraBody,
+      signal: requestSignal,
+    });
+  } catch (error) {
+    if (model === "z-ai/glm-5.2" && startupController?.signal.aborted && !signal?.aborted) {
+      throw new Error("GLM 5.2 is temporarily unavailable (startup timeout).");
+    }
+    throw error;
+  } finally {
+    if (startupTimer) clearTimeout(startupTimer);
+  }
 }

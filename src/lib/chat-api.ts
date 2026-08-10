@@ -1,4 +1,4 @@
-import { UploadFile } from "@/components/types";
+import { UploadFile, type ChatFeatureMode } from "@/components/types";
 import type { ActionProposal } from "@/components/action-passport";
 
 export type ChatThreadSummary = {
@@ -113,10 +113,12 @@ export async function toggleStarChat(chatId: string, isStarred: boolean) {
 export async function sendMessage({
   chatId,
   message,
+  messageId,
   model,
   files,
   editMessageId,
   studyMode,
+  featureMode,
   onText,
   onThinking,
   onToolStart,
@@ -129,10 +131,12 @@ export async function sendMessage({
 }: {
   chatId: string;
   message: string;
+  messageId?: string;
   model: string;
   files?: UploadFile[];
   editMessageId?: string;
   studyMode?: boolean;
+  featureMode?: ChatFeatureMode;
   onText: (text: string) => void;
   onThinking?: (chunk: string) => void;
   onToolStart?: (tool: string) => void;
@@ -143,6 +147,15 @@ export async function sendMessage({
   onError: (error: string) => void;
   signal?: AbortSignal;
 }) {
+  // Blob/data preview URLs belong to the browser UI. Sending both `url` and
+  // `data` duplicated every base64 image and could nearly double request size.
+  const uploadPayload = files?.map(({ name, type, data, size, detail }) => ({
+    name,
+    type,
+    data,
+    size,
+    detail,
+  }));
   try {
     let res = await fetch("/api/chat", {
       method: "POST",
@@ -151,7 +164,7 @@ export async function sendMessage({
         ...AJAX_HEADERS,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ chatId, message, model, files, editMessageId, studyMode }),
+      body: JSON.stringify({ chatId, message, messageId, model, files: uploadPayload, editMessageId, studyMode, featureMode }),
       signal,
     });
 
@@ -165,7 +178,7 @@ export async function sendMessage({
             ...AJAX_HEADERS,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ chatId, message, model, files, editMessageId, studyMode }),
+          body: JSON.stringify({ chatId, message, messageId, model, files: uploadPayload, editMessageId, studyMode, featureMode }),
           signal,
         });
       } else {

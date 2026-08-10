@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { deleteProject, findProject, getProjectConversationCount, updateProject } from "../../lib/db";
 import { requireProjectOwner } from "../../lib/ownership";
-import { validateProjectInput } from "../../lib/validation";
+import { InputValidationError, validateProjectInput } from "../../lib/validation";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -47,10 +47,10 @@ export async function PATCH(req: NextRequest, context: Context) {
     return NextResponse.json(dto(project, await getProjectConversationCount(id)));
   } catch (error) {
     if (error instanceof Response) return error;
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid project" },
-      { status: 400 }
-    );
+    if (error instanceof InputValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Unable to update project" }, { status: 500 });
   }
 }
 

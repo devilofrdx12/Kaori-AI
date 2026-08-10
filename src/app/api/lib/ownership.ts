@@ -49,22 +49,6 @@ export async function requireProjectOwner(projectId: string, userId: string) {
   }));
   const project = rows[0];
   if (!project) return { ok: false as const, status: 404, error: "Project not found" };
-  if (project.user_id !== userId) return { ok: false as const, status: 403, error: "Forbidden" };
+  if (project.user_id !== userId) return { ok: false as const, status: 404, error: "Project not found" };
   return { ok: true as const };
-}
-
-export async function requireTaskOwner(taskId: string, userId: string) {
-  const db = await getDb();
-  const rows = mapRows<{ user_id: string }>(await db.execute({
-    sql: "SELECT user_id FROM tasks WHERE id = ?",
-    args: [taskId],
-  }));
-  const task = rows[0];
-
-  if (!task || task.user_id !== userId) {
-    throw new Response(JSON.stringify({ error: "Not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
 }

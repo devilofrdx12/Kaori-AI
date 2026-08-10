@@ -7,6 +7,8 @@ import {
   issueRefreshToken,
   requireAjax,
   setAuthCookies,
+  getClientIp,
+  clearAuthCookies,
 } from "../../lib/auth-utils";
 import {
   findRefreshTokenByHash,
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
     const stored = await findRefreshTokenByHash(hash);
 
     if (!stored || stored.expires_at < Math.floor(Date.now() / 1000)) {
+      await clearAuthCookies();
       return NextResponse.json(
         { error: "Invalid or expired refresh token" },
         { status: 401 }
@@ -49,6 +52,7 @@ export async function POST(req: Request) {
     const user = await findUserById(stored.user_id);
     if (!user) {
       await deleteRefreshToken(stored.id);
+      await clearAuthCookies();
       return NextResponse.json(
         { error: "User not found" },
         { status: 401 }
@@ -65,7 +69,7 @@ export async function POST(req: Request) {
       token_hash: newHash,
       expires_at: Math.floor(Date.now() / 1000) + REFRESH_TTL,
       user_agent: req.headers.get("user-agent") || undefined,
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined,
+      ip: getClientIp(req),
     });
 
     const newAccess = issueAccessToken(user.id, user.email);
@@ -77,10 +81,9 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof Response) return err;
 
-    const errorMessage = err instanceof Error ? err.stack || err.message : String(err);
-    logger.error({ err, errorMessage }, "Refresh token error");
+    logger.error({ err }, "Refresh token error");
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Unable to refresh the session right now." },
       { status: 500 }
     );
   }
