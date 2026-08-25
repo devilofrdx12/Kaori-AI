@@ -36,7 +36,7 @@ export async function GET(
   const { id } = await params;
   if (!id) return new NextResponse("Document ID required", { status: 400 });
 
-  const doc = await getDocument(id);
+  const doc = await getDocument(id, user.id);
   if (!doc || doc.user_id !== user.id) {
     return new NextResponse("Document not found", { status: 404 });
   }

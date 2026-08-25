@@ -15,12 +15,12 @@ import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body"
 
 type Params = { params: Promise<{ id: string }> };
 
-async function findConversationWithReplicaRetry(id: string) {
-  let conversation = await findConversation(id);
+async function findConversationWithReplicaRetry(id: string, userId: string) {
+  let conversation = await findConversation(id, userId);
   for (const delayMs of [100, 250]) {
     if (conversation) break;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
-    conversation = await findConversation(id);
+    conversation = await findConversation(id, userId);
   }
   return conversation;
 }
@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const { id } = await params;
     
-    const conv = await findConversationWithReplicaRetry(id);
+    const conv = await findConversationWithReplicaRetry(id, user.id);
 
     // IDOR: return 404 if not owner or not found
     if (!conv || conv.user_id !== user.id) {
@@ -42,8 +42,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     const [storedMessages, attachments] = await Promise.all([
-      getConversationMessages(id),
-      getConversationAttachments(id),
+      getConversationMessages(id, user.id),
+      getConversationAttachments(id, user.id),
     ]);
 
     const attachmentsByMessage = new Map<string, typeof attachments>();
@@ -161,7 +161,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const body = await readJsonBodyWithLimit(req, 16 * 1024);
     
-    const conv = await findConversationWithReplicaRetry(id);
+    const conv = await findConversationWithReplicaRetry(id, user.id);
 
     if (!conv || conv.user_id !== user.id) {
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
@@ -171,16 +171,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (typeof body.title !== "string") {
         return NextResponse.json({ error: "Title must be a string" }, { status: 400 });
       }
-      await updateConversationTitle(id, validateConversationTitle(body.title));
+      await updateConversationTitle(id, user.id, validateConversationTitle(body.title));
     }
     if (body.is_starred !== undefined) {
       if (typeof body.is_starred !== "boolean") {
         return NextResponse.json({ error: "is_starred must be a boolean" }, { status: 400 });
       }
-      await toggleConversationStar(id, body.is_starred ? 1 : 0);
+      await toggleConversationStar(id, user.id, body.is_starred ? 1 : 0);
     }
 
-    const updated = (await findConversation(id))!;
+    const updated = (await findConversation(id, user.id))!;
     return NextResponse.json({
       id: updated.id,
       title: updated.title,
@@ -210,12 +210,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const conv = await findConversation(id);
+  const conv = await findConversation(id, user.id);
 
   if (!conv || conv.user_id !== user.id) {
     return NextResponse.json({ error: "Chat not found" }, { status: 404 });
   }
 
-  await deleteConversation(id);
+  await deleteConversation(id, user.id);
   return NextResponse.json({ ok: true });
 }

@@ -46,7 +46,7 @@ export async function DELETE(req: NextRequest, context: Context) {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     await requireMemoryOwner(id, user.id);
-    await deleteUserMemory(id);
+    await deleteUserMemory(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Response) return error;

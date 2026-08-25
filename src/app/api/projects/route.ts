@@ -22,7 +22,7 @@ export async function GET() {
 
   const projects = await getUserProjects(user.id);
   return NextResponse.json(await Promise.all(projects.map(async (project) =>
-    projectDto(project, await getProjectConversationCount(project.id))
+    projectDto(project, await getProjectConversationCount(project.id, user.id))
   )));
 }
 

@@ -531,7 +531,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Ownership check ──
-    const conv = await findConversation(chatId);
+    const conv = await findConversation(chatId, user.id);
     if (!conv || conv.user_id !== user.id) {
       return new Response(JSON.stringify({ error: "Chat not found" }), {
         status: 404,
@@ -541,7 +541,7 @@ export async function POST(req: NextRequest) {
 
     // ── Handle message edit (truncation) ──
     if (editMessageId) {
-      await deleteMessagesFrom(chatId, editMessageId);
+      await deleteMessagesFrom(chatId, user.id, editMessageId);
     }
 
     // ── Save user message (encrypted) ──
@@ -569,7 +569,7 @@ export async function POST(req: NextRequest) {
         base64_data: base64Data,
       });
     }
-    await touchConversation(chatId);
+    await touchConversation(chatId, user.id);
 
     const memoryCommandReply = await handleExplicitMemoryCommand({
       userId: user.id,
@@ -588,8 +588,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build message history from DB ──
-    const dbMessages = await getConversationMessages(chatId);
-    const attachments = await getConversationAttachments(chatId);
+    const dbMessages = await getConversationMessages(chatId, user.id);
+    const attachments = await getConversationAttachments(chatId, user.id);
     const latestAttachmentMessageId = attachments.at(-1)?.message_id;
     const attachmentsByMessage = new Map<string, typeof attachments>();
     for (const attachment of attachments) {
@@ -662,7 +662,7 @@ export async function POST(req: NextRequest) {
 
     // ── Dynamic system prompt ──
     const [project, memories] = await Promise.all([
-      conv.project_id ? findProject(conv.project_id) : Promise.resolve(null),
+      conv.project_id ? findProject(conv.project_id, user.id) : Promise.resolve(null),
       retrieveRelevantMemories({
         userId: user.id,
         projectId: conv.project_id,

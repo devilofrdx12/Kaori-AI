@@ -32,8 +32,8 @@ export async function GET(_req: NextRequest, context: Context) {
   const { id } = await context.params;
   const auth = await authorize(id);
   if (auth.response) return auth.response;
-  const project = await findProject(id);
-  return NextResponse.json(dto(project!, await getProjectConversationCount(id)));
+  const project = await findProject(id, auth.user.id);
+  return NextResponse.json(dto(project!, await getProjectConversationCount(id, auth.user.id)));
 }
 
 export async function PATCH(req: NextRequest, context: Context) {
@@ -43,8 +43,8 @@ export async function PATCH(req: NextRequest, context: Context) {
     const auth = await authorize(id);
     if (auth.response) return auth.response;
     const fields = validateProjectInput(await req.json().catch(() => ({})));
-    const project = await updateProject(id, fields);
-    return NextResponse.json(dto(project, await getProjectConversationCount(id)));
+    const project = await updateProject(id, auth.user.id, fields);
+    return NextResponse.json(dto(project, await getProjectConversationCount(id, auth.user.id)));
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof InputValidationError) {
@@ -60,7 +60,7 @@ export async function DELETE(req: NextRequest, context: Context) {
     const { id } = await context.params;
     const auth = await authorize(id);
     if (auth.response) return auth.response;
-    await deleteProject(id);
+    await deleteProject(id, auth.user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Response) return error;

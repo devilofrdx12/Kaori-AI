@@ -188,8 +188,8 @@ export async function getUserConversations(userId: string): Promise<DBConversati
   );
 }
 
-export async function findConversation(id: string): Promise<DBConversation | undefined> {
-  return getOne<DBConversation>("SELECT * FROM conversations WHERE id = ?", [id]);
+export async function findConversation(id: string, userId: string): Promise<DBConversation | undefined> {
+  return getOne<DBConversation>("SELECT * FROM conversations WHERE id = ? AND user_id = ?", [id, userId]);
 }
 
 export async function createConversation(conv: {
@@ -212,7 +212,7 @@ export async function createConversation(conv: {
       conv.model || "gemini-1.5-pro",
     ]
   );
-  return (await findConversation(conv.id))!;
+  return (await findConversation(conv.id, conv.user_id))!;
 }
 
 // PROJECT HELPERS
@@ -234,8 +234,8 @@ export async function getUserProjects(userId: string): Promise<DBProject[]> {
   );
 }
 
-export async function findProject(id: string): Promise<DBProject | undefined> {
-  return getOne<DBProject>("SELECT * FROM projects WHERE id = ?", [id]);
+export async function findProject(id: string, userId: string): Promise<DBProject | undefined> {
+  return getOne<DBProject>("SELECT * FROM projects WHERE id = ? AND user_id = ?", [id, userId]);
 }
 
 export async function createProject(project: {
@@ -250,30 +250,31 @@ export async function createProject(project: {
      VALUES (?, ?, ?, ?, ?)`,
     [project.id, project.user_id, project.name, project.description, project.instructions]
   );
-  return (await findProject(project.id))!;
+  return (await findProject(project.id, project.user_id))!;
 }
 
 export async function updateProject(
   id: string,
+  userId: string,
   fields: { name: string; description: string; instructions: string }
 ): Promise<DBProject> {
   await run(
     `UPDATE projects
      SET name = ?, description = ?, instructions = ?, updated_at = unixepoch()
-     WHERE id = ?`,
-    [fields.name, fields.description, fields.instructions, id]
+     WHERE id = ? AND user_id = ?`,
+    [fields.name, fields.description, fields.instructions, id, userId]
   );
-  return (await findProject(id))!;
+  return (await findProject(id, userId))!;
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  await run("DELETE FROM projects WHERE id = ?", [id]);
+export async function deleteProject(id: string, userId: string): Promise<void> {
+  await run("DELETE FROM projects WHERE id = ? AND user_id = ?", [id, userId]);
 }
 
-export async function getProjectConversationCount(projectId: string): Promise<number> {
+export async function getProjectConversationCount(projectId: string, userId: string): Promise<number> {
   const result = await getOne<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM conversations WHERE project_id = ?",
-    [projectId]
+    "SELECT COUNT(*) AS count FROM conversations WHERE project_id = ? AND user_id = ?",
+    [projectId, userId]
   );
   return Number(result?.count || 0);
 }
@@ -301,34 +302,34 @@ export type DBUserMemory = {
   expires_at: number | null;
 };
 
-export async function deleteUserMemory(id: string): Promise<void> {
-  await run("DELETE FROM user_memories WHERE id = ?", [id]);
+export async function deleteUserMemory(id: string, userId: string): Promise<void> {
+  await run("DELETE FROM user_memories WHERE id = ? AND user_id = ?", [id, userId]);
 }
 
-export async function updateConversationTitle(id: string, title: string) {
+export async function updateConversationTitle(id: string, userId: string, title: string) {
   await run(
-    "UPDATE conversations SET title = ?, updated_at = unixepoch() WHERE id = ?",
-    [title, id]
+    "UPDATE conversations SET title = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?",
+    [title, id, userId]
   );
 }
 
-export async function touchConversation(id: string) {
-  await run("UPDATE conversations SET updated_at = unixepoch() WHERE id = ?", [id]);
+export async function touchConversation(id: string, userId: string) {
+  await run("UPDATE conversations SET updated_at = unixepoch() WHERE id = ? AND user_id = ?", [id, userId]);
 }
 
-export async function toggleConversationStar(id: string, isStarred: number) {
+export async function toggleConversationStar(id: string, userId: string, isStarred: number) {
   await run(
-    "UPDATE conversations SET is_starred = ?, updated_at = unixepoch() WHERE id = ?",
-    [isStarred, id]
+    "UPDATE conversations SET is_starred = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?",
+    [isStarred, id, userId]
   );
 }
 
-export async function deleteConversation(id: string) {
+export async function deleteConversation(id: string, userId: string) {
   const db = await getDb();
   await db.batch(
     [
-      { sql: "DELETE FROM messages WHERE conversation_id = ?", args: [id] },
-      { sql: "DELETE FROM conversations WHERE id = ?", args: [id] },
+      { sql: "DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE id = ? AND user_id = ?)", args: [id, userId] },
+      { sql: "DELETE FROM conversations WHERE id = ? AND user_id = ?", args: [id, userId] },
     ],
     "write"
   );
@@ -352,11 +353,15 @@ export type DBMessage = {
 };
 
 export async function getConversationMessages(
-  conversationId: string
+  conversationId: string,
+  userId: string
 ): Promise<DBMessage[]> {
   return getAll<DBMessage>(
-    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC",
-    [conversationId]
+    `SELECT m.* FROM messages m 
+     JOIN conversations c ON m.conversation_id = c.id
+     WHERE m.conversation_id = ? AND c.user_id = ? 
+     ORDER BY m.created_at ASC, m.rowid ASC`,
+    [conversationId, userId]
   );
 }
 
@@ -382,10 +387,13 @@ export async function insertMessage(msg: {
   );
 }
 
-export async function deleteMessagesFrom(conversationId: string, messageId: string) {
+export async function deleteMessagesFrom(conversationId: string, userId: string, messageId: string) {
   const targetMsg = await getOne<{ created_at: number; row_id: number }>(
-    "SELECT created_at, rowid AS row_id FROM messages WHERE id = ? AND conversation_id = ?",
-    [messageId, conversationId]
+    `SELECT m.created_at, m.rowid AS row_id 
+     FROM messages m 
+     JOIN conversations c ON m.conversation_id = c.id
+     WHERE m.id = ? AND m.conversation_id = ? AND c.user_id = ?`,
+    [messageId, conversationId, userId]
   );
 
   if (targetMsg) {
@@ -436,10 +444,13 @@ export async function insertMessageAttachment(attachment: {
   );
 }
 
-export async function getConversationAttachments(conversationId: string): Promise<DBMessageAttachment[]> {
+export async function getConversationAttachments(conversationId: string, userId: string): Promise<DBMessageAttachment[]> {
   const rows = await getAll<DBMessageAttachment>(
-    "SELECT * FROM message_attachments WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC",
-    [conversationId]
+    `SELECT a.* FROM message_attachments a
+     JOIN conversations c ON a.conversation_id = c.id
+     WHERE a.conversation_id = ? AND c.user_id = ?
+     ORDER BY a.created_at ASC, a.rowid ASC`,
+    [conversationId, userId]
   );
   return rows.map((attachment) => ({
     ...attachment,
@@ -628,7 +639,7 @@ export async function createDocument(doc: {
   );
 }
 
-export async function getDocument(id: string): Promise<DBDocument | undefined> {
-  const doc = await getOne<DBDocument>("SELECT * FROM documents WHERE id = ?", [id]);
+export async function getDocument(id: string, userId: string): Promise<DBDocument | undefined> {
+  const doc = await getOne<DBDocument>("SELECT * FROM documents WHERE id = ? AND user_id = ?", [id, userId]);
   return doc ? { ...doc, content: decryptContent(doc.content) } : undefined;
 }
