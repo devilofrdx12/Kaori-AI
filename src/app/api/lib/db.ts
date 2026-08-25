@@ -209,7 +209,7 @@ export async function createConversation(conv: {
       conv.project_id || null,
       conv.title,
       conv.provider || "google",
-      conv.model || "gemini-2.5-flash",
+      conv.model || "gemini-1.5-pro",
     ]
   );
   return (await findConversation(conv.id, conv.user_id))!;
