@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
   } catch (err) {
     if (err instanceof Response) return err;
+    throw err;
   }
 
   const user = await getSessionUser();
@@ -212,7 +213,11 @@ export async function POST(req: NextRequest) {
           }),
           signal: AbortSignal.timeout(18000),
         });
-        if (!resp.ok) return null;
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => "");
+          console.error(`[web-search] Tavily error ${resp.status} for "${searchQuery}":`, errText.slice(0, 200));
+          return null;
+        }
         return { searchQuery, data: await resp.json() };
       }));
 

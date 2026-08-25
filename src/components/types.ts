@@ -55,8 +55,8 @@ export type ModelOption = {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   {
-    id: "llama-3.3-70b-versatile",
-    label: "Groq LLaMA 3.3 70B",
+    id: "openai/gpt-oss-120b",
+    label: "Groq GPT-OSS 120B",
     provider: "groq",
     description: "Lightning fast, open-weights model",
     badge: "Fastest",
@@ -64,8 +64,8 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: false,
   },
   {
-    id: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
+    id: "gemini-3.7-flash",
+    label: "Gemini 3.7 Flash",
     provider: "google",
     description: "Balanced speed & intelligence from Google",
     badge: "Vision",
@@ -91,11 +91,11 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: true,
   },
   {
-    id: "z-ai/glm-5.2",
-    label: "GLM 5.2",
+    id: "nvidia/llama-3.1-nemotron-70b-instruct",
+    label: "Nemotron 70B Instruct",
     provider: "nvidia",
-    description: "Flagship 753B model for long reasoning and coding",
-    badge: "1M Context",
+    description: "Powerful 70B reasoning model from Nvidia",
+    badge: "70B",
     supportsVision: false,
     supportsThinking: true,
   },
@@ -111,4 +111,4 @@ export const MODEL_OPTIONS: ModelOption[] = [
   },
 ];
 
-export const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+export const DEFAULT_MODEL = "openai/gpt-oss-120b";

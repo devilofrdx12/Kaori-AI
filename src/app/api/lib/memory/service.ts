@@ -39,28 +39,47 @@ function tokenize(value: string) {
   return new Set(value.toLowerCase().match(/[a-z0-9]{3,}/g) || []);
 }
 
-async function createEmbedding(text: string): Promise<number[] | null> {
-  if (process.env.MEMORY_EMBEDDINGS_ENABLED !== "true") return null;
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return null;
+async function createEmbedding(text: string): Promise<{ values: number[]; model: string } | null> {
+  const geminiKey = process.env.GOOGLE_GENERATIVE_AI_KEY?.trim();
+  if (geminiKey) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: text.slice(0, 8000) }] }
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const embedding = data?.embedding?.values;
+        if (Array.isArray(embedding) && embedding.length > 0) {
+          return { values: embedding, model: "text-embedding-004" };
+        }
+      }
+    } catch {}
+  }
+
+  const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!openAiKey) return null;
   try {
     const response = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openAiKey}` },
       body: JSON.stringify({ model: "text-embedding-3-small", input: text.slice(0, 8000) }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) return null;
     const data = await response.json();
     const embedding = data?.data?.[0]?.embedding;
-    return Array.isArray(embedding)
-      && embedding.length > 0
-      && embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))
-      ? embedding
-      : null;
-  } catch {
-    return null;
-  }
+    if (Array.isArray(embedding) && embedding.length > 0 && embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) {
+      return { values: embedding, model: "text-embedding-3-small" };
+    }
+  } catch {}
+  
+  return null;
 }
 
 function cosineSimilarity(left: number[] | null, right: number[] | null) {
@@ -176,7 +195,7 @@ export async function createStructuredMemory(input: {
   if (embedding) {
     await db.execute({
       sql: "UPDATE user_memories SET embedding = ?, embedding_model = ? WHERE id = ? AND user_id = ?",
-      args: [JSON.stringify(embedding), "text-embedding-3-small", id, input.userId],
+      args: [JSON.stringify(embedding.values), embedding.model, id, input.userId],
     });
   }
   await recordMemoryEvent(input.userId, id, "created", { sourceType: input.sourceType || "manual" });
@@ -238,7 +257,8 @@ export async function retrieveRelevantMemories(input: {
     args: [input.userId, input.projectId || null],
   })).map(decryptMemory);
   const queryTokens = tokenize(input.query);
-  const queryEmbedding = await createEmbedding(input.query);
+  const queryEmbeddingRes = await createEmbedding(input.query);
+  const queryEmbedding = queryEmbeddingRes ? queryEmbeddingRes.values : null;
   return rows.map((memory) => {
     const memoryTokens = tokenize(`${memory.content} ${memory.tags}`);
     let overlap = 0;

@@ -8,6 +8,7 @@ import {
 } from "../lib/db";
 import { validateConversationTitle } from "../lib/validation";
 import { requireProjectOwner } from "../lib/ownership";
+import { readJsonBodyWithLimit, RequestBodyError } from "../lib/request-body";
 
 export async function GET() {
   try {
@@ -41,39 +42,38 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     requireAjax(req);
-  } catch (err) {
-    if (err instanceof Response) return err;
-  }
-
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const title = validateConversationTitle(body.title);
-  const projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : null;
-  if (projectId) {
-    const ownership = await requireProjectOwner(projectId, user.id);
-    if (!ownership.ok) {
-      return NextResponse.json({ error: ownership.error }, { status: ownership.status });
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const body = await readJsonBodyWithLimit(req, 16 * 1024);
+    const title = validateConversationTitle(body.title);
+    const projectId = typeof body.projectId === "string" && body.projectId ? body.projectId : null;
+    if (projectId) {
+      const ownership = await requireProjectOwner(projectId, user.id);
+      if (!ownership.ok) {
+        return NextResponse.json({ error: ownership.error }, { status: ownership.status });
+      }
+    }
+
+    const conv = await createConversation({
+      id: uuid(), user_id: user.id, title, project_id: projectId,
+    });
+    return NextResponse.json({
+      id: conv.id,
+      title: conv.title,
+      projectId: conv.project_id,
+      createdAt: new Date(conv.created_at * 1000).toISOString(),
+      updatedAt: new Date(conv.updated_at * 1000).toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "Unable to create chat" }, { status: 500 });
   }
-
-  const conv = await createConversation({
-    id: uuid(),
-    user_id: user.id,
-    title,
-    project_id: projectId,
-  });
-
-  return NextResponse.json({
-    id: conv.id,
-    title: conv.title,
-    projectId: conv.project_id,
-    createdAt: new Date(conv.created_at * 1000).toISOString(),
-    updatedAt: new Date(conv.updated_at * 1000).toISOString(),
-  });
 }
 
 export async function DELETE(req: NextRequest) {

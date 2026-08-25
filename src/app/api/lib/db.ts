@@ -490,6 +490,19 @@ export async function deleteRefreshToken(id: string) {
   await run("DELETE FROM refresh_tokens WHERE id = ?", [id]);
 }
 
+/**
+ * Atomically consumes a refresh token. Returning false means another request
+ * already used (or revoked) it, so callers must not mint a replacement.
+ */
+export async function consumeRefreshToken(id: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "DELETE FROM refresh_tokens WHERE id = ?",
+    args: [id],
+  });
+  return Number(result.rowsAffected ?? 0) === 1;
+}
+
 export async function deleteUserRefreshTokens(userId: string) {
   await run("DELETE FROM refresh_tokens WHERE user_id = ?", [userId]);
 }

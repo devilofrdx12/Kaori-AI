@@ -6,7 +6,7 @@ import { install } from "@pixi/unsafe-eval";
 install(PIXI);
 import { setExpression } from "../animation/ExpressionController";
 import { playEmotion } from "../animation/AnimationController";
-import { startIdleBehavior } from "../animation/IdleBehavior";
+import { startIdleBehavior, stopIdleBehavior } from "../animation/IdleBehavior";
 
 type Emotion =
   | "idle"
@@ -43,6 +43,7 @@ export default function AnimeCharacter({
   const modelRef = useRef<any>(null);
   const coreRef = useRef<any>(null);
   const blinkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function startBlinking(core: any) {
     if (!core) return;
@@ -55,7 +56,7 @@ export default function AnimeCharacter({
       setSafe(core, "ParamEyeLOpen", 0, 1);
       setSafe(core, "ParamEyeROpen", 0, 1);
 
-      setTimeout(() => {
+      blinkTimeoutRef.current = setTimeout(() => {
         setSafe(core, "ParamEyeLOpen", 1, 1);
         setSafe(core, "ParamEyeROpen", 1, 1);
       }, 120);
@@ -72,6 +73,18 @@ export default function AnimeCharacter({
   useEffect(() => {
     let destroyed = false;
     let resizeHandler: (() => void) | null = null;
+    let localApp: PIXI.Application | null = null;
+    let appDestroyed = false;
+
+    const destroyApp = () => {
+      if (!localApp || appDestroyed) return;
+      appDestroyed = true;
+      localApp.destroy(true, {
+        children: true,
+        texture: true,
+        baseTexture: true,
+      });
+    };
 
     async function init() {
       try {
@@ -100,9 +113,10 @@ export default function AnimeCharacter({
           autoDensity: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
+        localApp = app;
 
         if (destroyed) {
-          app.destroy(true);
+          destroyApp();
           return;
         }
 
@@ -113,7 +127,8 @@ export default function AnimeCharacter({
         const model = await Live2DModel.from("/live2d/haru/Haru.model3.json");
 
         if (destroyed) {
-          app.destroy(true);
+          model.destroy?.({ children: true, texture: true, baseTexture: true });
+          destroyApp();
           return;
         }
 
@@ -183,15 +198,16 @@ export default function AnimeCharacter({
 
       if (blinkIntervalRef.current) {
         clearInterval(blinkIntervalRef.current);
+        blinkIntervalRef.current = null;
       }
 
-      if (appRef.current) {
-        appRef.current.destroy(true, {
-          children: true,
-          texture: true,
-          baseTexture: true,
-        });
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+        blinkTimeoutRef.current = null;
       }
+
+      stopIdleBehavior();
+      destroyApp();
 
       appRef.current = null;
       modelRef.current = null;

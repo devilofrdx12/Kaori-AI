@@ -334,19 +334,19 @@ export async function streamOpenAiCompatible({
           }
           
           if (finishReason) {
-             let stopReason = finishReason;
-             if (finishReason === "tool_calls") stopReason = "tool_use";
-             if (finishReason === "stop") stopReason = "end_turn";
-             
-             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-               type: "content_block_stop"
-             })}\n\n`));
-             
-             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-               type: "message_delta",
-               delta: { stop_reason: stopReason }
-             })}\n\n`));
-          }
+              const stopReason = finishReason === "tool_calls" ? "tool_use"
+                : finishReason === "stop" ? "end_turn"
+                : finishReason;
+              
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: "content_block_stop"
+              })}\n\n`));
+              
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: "message_delta",
+                delta: { stop_reason: stopReason }
+              })}\n\n`));
+           }
         } catch {}
       }
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useMemo } from "react";
+import { memo, useCallback, useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -358,16 +358,7 @@ export default function MessageArea({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-
-  const copyMessage = async (id: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      console.error("Copy failed:", err);
-    }
-  };
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
 
   const allMessages = useMemo(() => {
     const msgs = [...messages];
@@ -380,6 +371,84 @@ export default function MessageArea({
     }
     return msgs;
   }, [messages, streamingText, streamingThinking]);
+
+  const captureScroller = useCallback((element: HTMLElement | Window | null) => {
+    setScrollElement(element instanceof HTMLElement ? element : null);
+  }, []);
+
+  useEffect(() => {
+    if (!scrollElement) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frameId: number | null = null;
+    const motionState = new WeakMap<HTMLElement, { current: number; target: number }>();
+
+    const renderScrollState = () => {
+      frameId = null;
+      const viewport = scrollElement.getBoundingClientRect();
+      const edgeZone = Math.min(150, viewport.height * 0.22);
+      let needsAnotherFrame = false;
+
+      for (const item of scrollElement.querySelectorAll<HTMLElement>("[data-scroll-card]")) {
+        if (reducedMotion.matches) {
+          item.style.removeProperty("--scroll-edge");
+          item.style.removeProperty("--scroll-direction");
+          continue;
+        }
+
+        const rect = item.getBoundingClientRect();
+        const topDistance = rect.top - viewport.top;
+        const bottomDistance = viewport.bottom - rect.bottom;
+        const topEdge = Math.max(0, Math.min(1, (edgeZone - topDistance) / edgeZone));
+        // The latest response owns the reading position at the bottom. It only
+        // joins the depth animation after the user scrolls it toward the top.
+        const bottomEdge = item.dataset.recent === "true"
+          ? 0
+          : Math.max(0, Math.min(1, (edgeZone - bottomDistance) / edgeZone));
+        const target = Math.max(topEdge, bottomEdge);
+        const state = motionState.get(item) ?? { current: target, target };
+        state.target = target;
+        state.current += (state.target - state.current) * 0.18;
+        if (Math.abs(state.target - state.current) < 0.002) {
+          state.current = state.target;
+        } else {
+          needsAnotherFrame = true;
+        }
+        motionState.set(item, state);
+
+        item.style.setProperty("--scroll-edge", state.current.toFixed(3));
+        item.style.setProperty("--scroll-direction", topEdge > bottomEdge ? "-1" : "1");
+      }
+
+      if (needsAnotherFrame) frameId = window.requestAnimationFrame(renderScrollState);
+    };
+
+    const scheduleRender = () => {
+      if (frameId === null) frameId = window.requestAnimationFrame(renderScrollState);
+    };
+
+    scheduleRender();
+    scrollElement.addEventListener("scroll", scheduleRender, { passive: true });
+    window.addEventListener("resize", scheduleRender, { passive: true });
+    reducedMotion.addEventListener("change", scheduleRender);
+
+    return () => {
+      scrollElement.removeEventListener("scroll", scheduleRender);
+      window.removeEventListener("resize", scheduleRender);
+      reducedMotion.removeEventListener("change", scheduleRender);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [scrollElement, allMessages.length]);
+
+  const copyMessage = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
 
   if (allMessages.length === 0 && !typing && !toolInProgress) {
     return null; // Empty state is handled by ChatLayout
@@ -401,7 +470,11 @@ export default function MessageArea({
   };
 
   const renderItem = (index: number, msg: ChatMessage) => (
-    <div className="max-w-3xl mx-auto py-0.5">
+    <div
+      data-scroll-card
+      data-recent={index === allMessages.length - 1 ? "true" : undefined}
+      className="scroll-stack-card max-w-3xl mx-auto py-0.5"
+    >
       <MessageRow
         msg={msg}
         isEditing={editingMessageId === msg.id}
@@ -421,6 +494,7 @@ export default function MessageArea({
     <div className="flex-1 min-h-0 px-3 sm:px-5 py-4 sm:py-6 relative will-change-transform [clip-path:polygon(-100vw_0,200vw_0,200vw_200vh,-100vw_200vh)]">
       <Virtuoso
         className="h-full"
+        scrollerRef={captureScroller}
         data={allMessages}
         computeItemKey={(_, msg) => msg.id}
         alignToBottom

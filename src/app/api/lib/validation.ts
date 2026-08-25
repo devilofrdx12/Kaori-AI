@@ -1,15 +1,15 @@
 const ALLOWED_MODELS = new Set([
-  "llama-3.3-70b-versatile",
-  "gemini-2.5-flash",
+  "openai/gpt-oss-120b",
+  "gemini-3.7-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-  "z-ai/glm-5.2",
+  "nvidia/llama-3.1-nemotron-70b-instruct",
   "deepseek-ai/deepseek-v4-flash-0731",
 ]);
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 const VISION_MODELS = new Set([
-  "gemini-2.5-flash",
+  "gemini-3.7-flash",
 ]);
 
 export class InputValidationError extends Error {
@@ -167,7 +167,7 @@ export function validateConversationTitle(title: unknown): string {
 
 export function validateModel(model: unknown): string {
   if (typeof model !== "string" || !ALLOWED_MODELS.has(model)) {
-    return "gemini-2.5-flash";
+    return "gemini-3.7-flash";
   }
   return model;
 }

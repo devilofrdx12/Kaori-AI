@@ -13,6 +13,7 @@ import {
 import {
   findRefreshTokenByHash,
   deleteRefreshToken,
+  consumeRefreshToken,
   insertRefreshToken,
   findUserById,
 } from "../../lib/db";
@@ -59,8 +60,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Rotate: delete old, issue new
-    await deleteRefreshToken(stored.id);
+    // Atomically consume the old token. This prevents concurrent requests from
+    // replaying one refresh token and each receiving a valid replacement.
+    if (!(await consumeRefreshToken(stored.id))) {
+      await clearAuthCookies();
+      return NextResponse.json(
+        { error: "Invalid or expired refresh token" },
+        { status: 401 }
+      );
+    }
 
     const { raw: newRaw, hash: newHash } = issueRefreshToken();
     await insertRefreshToken({

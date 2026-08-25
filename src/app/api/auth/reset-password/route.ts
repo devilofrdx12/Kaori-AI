@@ -48,15 +48,11 @@ export async function POST(req: Request) {
     }
 
     const user = await findUserByEmail(email);
-    if (!user) {
-      return NextResponse.json({ error: INVALID_CODE_MESSAGE }, { status: 400 });
-    }
 
     const tokenHash = hashPasswordResetCode(email, otp);
-    
-    const tokenRecord = await findPasswordResetTokenByHash(tokenHash);
+    const tokenRecord = user ? await findPasswordResetTokenByHash(tokenHash) : null;
 
-    if (!tokenRecord || tokenRecord.user_id !== user.id) {
+    if (!user || !tokenRecord || tokenRecord.user_id !== user.id) {
       return NextResponse.json({ error: INVALID_CODE_MESSAGE }, { status: 400 });
     }
 

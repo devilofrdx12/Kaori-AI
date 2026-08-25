@@ -509,6 +509,37 @@ a {
   contain: content;
 }
 
+/* Scroll-scrubbed message depth, adapted from the reference stacking-card motion. */
+.scroll-stack-card {
+  --scroll-edge: 0;
+  --scroll-direction: 1;
+  opacity: calc(1 - var(--scroll-edge) * 0.22);
+  transform:
+    translate3d(0, calc(var(--scroll-direction) * var(--scroll-edge) * 8px), 0)
+    scale(calc(1 - var(--scroll-edge) * 0.022));
+  clip-path: inset(
+    calc((1 - var(--scroll-direction)) * var(--scroll-edge) * 2%)
+    0
+    calc((1 + var(--scroll-direction)) * var(--scroll-edge) * 2%)
+    0
+    round 1.5rem
+  );
+  transform-origin: center;
+  will-change: transform, opacity, clip-path;
+}
+
+/* Butter-smooth depth treatment for the sidebar's Recent Chats list. */
+.recent-chat-scroll-card {
+  --recent-edge: 0;
+  --recent-direction: 1;
+  opacity: calc(1 - var(--recent-edge) * 0.24);
+  transform:
+    translate3d(0, calc(var(--recent-direction) * var(--recent-edge) * 6px), 0)
+    scale(calc(1 - var(--recent-edge) * 0.025));
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
 @keyframes messageSlideIn {
   0% { opacity: 0; transform: translate3d(0, 20px, 0) scale3d(0.97, 0.97, 1); }
   60% { opacity: 1; transform: translate3d(0, -2px, 0) scale3d(1.005, 1.005, 1); }

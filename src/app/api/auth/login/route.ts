@@ -65,17 +65,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await findUserByEmail(email);
-    if (!user) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+    // Pre-computed bcrypt hash for timing-attack mitigation.
+    // Both paths (user-found vs user-not-found) always run bcrypt.compare
+    // so the response time is indistinguishable.
+    const DUMMY_HASH = "$2a$12$LJ3m4ys3Lz0sQ9YOqWF2/.ZB4Uy0oHSX5vXn8sGHf1lLz3pMqKxTi";
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
-      logger.info({ userId: user.id }, "Login failed: invalid password");
+    const user = await findUserByEmail(email);
+    const valid = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH);
+    if (!user || !valid) {
+      if (user) logger.info({ userId: user.id }, "Login failed: invalid password");
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }

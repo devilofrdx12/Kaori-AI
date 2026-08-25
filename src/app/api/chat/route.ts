@@ -32,6 +32,7 @@ import {
 } from "../lib/quartzwall";
 import { logger } from "../lib/logger";
 import { readJsonBodyWithLimit, RequestBodyError } from "../lib/request-body";
+import { resolveModelForFeatureMode } from "../lib/model-routing";
 import { v4 as uuid } from "uuid";
 import {
   handleExplicitMemoryCommand,
@@ -42,23 +43,6 @@ import {
 // Hosted reasoning models can have a long cold start before streaming begins.
 export const maxDuration = 300;
 
-const MODEL_OPTIONS_MAP: Record<string, string> = {
-  "llama-3.3-70b-versatile": "Groq LLaMA 3.3",
-  "gemini-2.7-pro": "Gemini 2.7 Pro",
-  "gemini-2.7-flash": "Gemini 2.7 Flash",
-  "gemini-2.6-pro": "Gemini 2.6 Pro",
-  "gemini-2.6-flash": "Gemini 2.6 Flash",
-  "gemini-2.5-flash": "Gemini 2.5 Flash",
-  "gemini-2.5-pro": "Gemini 2.5 Pro",
-  "nvidia/nemotron-3-ultra-550b-a55b": "Nemotron 3 Ultra",
-  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "Nemotron Nano Omni",
-  "z-ai/glm-5.2": "GLM 5.2",
-  "deepseek-ai/deepseek-v4-flash-0731": "DeepSeek V4 Flash",
-};
-
-const QUICK_RESEARCH_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
-const DEEP_RESEARCH_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
-const THINKING_MODEL = "z-ai/glm-5.2";
 const MAX_CHAT_REQUEST_BYTES = 12 * 1024 * 1024;
 
 async function persistAssistantMessageWithRetry({
@@ -175,11 +159,15 @@ function buildToolResultPreview(result: string): string {
 
   const imageMarker = "KAORI_SEARCH_IMAGES_JSON:";
   const markerIndex = result.lastIndexOf(imageMarker);
-  if (markerIndex < 0) return `${result.slice(0, maxLength)}...\n[Preview truncated]`;
+  if (markerIndex < 0) return `${result.slice(0, maxLength)}...\n[truncated]`;
 
   const imageMetadata = result.slice(markerIndex);
-  const textBudget = Math.max(1_000, maxLength - imageMetadata.length - 24);
-  return `${result.slice(0, textBudget)}...\n[Preview truncated]\n\n${imageMetadata}`;
+  // If the image JSON alone exceeds the budget, drop it to avoid corrupted JSON
+  if (imageMetadata.length > maxLength - 200) {
+    return `${result.slice(0, maxLength)}...\n[truncated]`;
+  }
+  const textBudget = Math.max(500, maxLength - imageMetadata.length - 30);
+  return `${result.slice(0, Math.min(markerIndex, textBudget))}...\n[truncated]\n\n${imageMetadata}`;
 }
 
 function splitSearchEvidence(snippet: string): string[] {
@@ -233,6 +221,7 @@ async function executeToolCall(
           topic: toolInput.topic,
           time_range: toolInput.time_range,
         }),
+        signal: AbortSignal.timeout(25_000),
       });
       const data = await resp.json();
       if (data.error) return `Search error: ${data.error}`;
@@ -285,6 +274,7 @@ async function executeToolCall(
         method: "POST",
         headers: internalHeaders,
         body: JSON.stringify({ url: toolInput.url }),
+        signal: AbortSignal.timeout(25_000),
       });
       const data = await resp.json();
       if (data.error) return `Fetch error: ${data.error}`;
@@ -362,7 +352,7 @@ async function executeToolCall(
       if (!apiKey) return "Error: Google API key not configured.";
       if (userId) await reserveChatSpend(userId);
 
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -442,6 +432,7 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
   } catch (err) {
     if (err instanceof Response) return err;
+    throw err;
   }
 
   const user = await getSessionUser();
@@ -670,13 +661,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Dynamic system prompt ──
-    const project = conv.project_id ? await findProject(conv.project_id) : null;
-    const memories = await retrieveRelevantMemories({
-      userId: user.id,
-      projectId: conv.project_id,
-      query: validatedMessage,
-      limit: 8,
-    });
+    const [project, memories] = await Promise.all([
+      conv.project_id ? findProject(conv.project_id) : Promise.resolve(null),
+      retrieveRelevantMemories({
+        userId: user.id,
+        projectId: conv.project_id,
+        query: validatedMessage,
+        limit: 8,
+      }),
+    ]);
     const contextSections: string[] = [];
     if (featureMode === "web") {
       contextSections.push("<feature_mode>WEB SEARCH: Run one consolidated web_search before answering. Keep research compact and current. Do not use web_fetch unless the search evidence is genuinely insufficient.</feature_mode>");
@@ -731,12 +724,9 @@ export async function POST(req: NextRequest) {
           while (shouldContinue) {
             shouldContinue = false;
 
-            let resolvedModel = validatedModel;
-            if (!hasImages) {
-              if (featureMode === "deep") resolvedModel = DEEP_RESEARCH_MODEL;
-              else if (featureMode === "thinking") resolvedModel = THINKING_MODEL;
-              else if (featureMode === "web" && !forceAnswer) resolvedModel = QUICK_RESEARCH_MODEL;
-            }
+            const resolvedModel = hasImages
+              ? validatedModel
+              : resolveModelForFeatureMode(validatedModel, featureMode);
             let response;
 
             const attemptStream = async (model: string) => {
@@ -752,7 +742,7 @@ export async function POST(req: NextRequest) {
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: activeTools,
-                  maxTokens: 8192,
+                  maxTokens: 4096,
                   signal: req.signal,
                 });
               } else if (model.startsWith("deepseek-ai/") || model.includes("deepseek")) {
@@ -762,7 +752,7 @@ export async function POST(req: NextRequest) {
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: activeTools,
-                  maxTokens: 8192,
+                  maxTokens: 4096,
                   signal: req.signal,
                 });
               } else if (model.startsWith("gemini-")) {
@@ -773,13 +763,13 @@ export async function POST(req: NextRequest) {
                   tools: activeTools,
                   maxTokens: 8192,
                 });
-              } else if (model.startsWith("llama-") || model.startsWith("mixtral-")) {
+              } else if (model.startsWith("llama-") || model.startsWith("mixtral-") || model.startsWith("meta-llama/") || model.startsWith("openai/") || model.startsWith("qwen/")) {
                 return await streamGroqChatCompletion({
                   model,
                   messages: currentMessages,
                   system: systemPrompt,
                   tools: activeTools,
-                  maxTokens: 8192,
+                  maxTokens: 4096,
                 });
               } else {
                 throw new Error(`Model ${model} is not supported`);
@@ -794,41 +784,18 @@ export async function POST(req: NextRequest) {
               const isOverloaded = /500|502|503|504|overload(?:ed)?|high demand|unavailable|at capacity|server busy/i.test(errMsg);
 
               if (isRateLimit || isOverloaded) {
-                const fallbackChain: string[] = [];
-                if (resolvedModel === "z-ai/glm-5.2") {
-                  fallbackChain.push("nvidia/nemotron-3-ultra-550b-a55b", "gemini-2.5-flash");
-                } else {
-                  if (!resolvedModel.startsWith("gemini-")) fallbackChain.push("gemini-2.5-flash");
-                  if (!resolvedModel.startsWith("nvidia/") && !resolvedModel.startsWith("deepseek-ai/")) fallbackChain.push("nvidia/nemotron-3-ultra-550b-a55b");
-                }
-                if (!resolvedModel.startsWith("llama-") && !resolvedModel.startsWith("mixtral-")) fallbackChain.push("llama-3.3-70b-versatile");
-
-                const reason = isRateLimit ? "quota reached" : "model overloaded";
-                let fallbackSucceeded = false;
-
-                for (const fallbackModel of fallbackChain) {
-                  try {
-                    const fallbackLabel = MODEL_OPTIONS_MAP[fallbackModel] || fallbackModel;
-                    logger.warn({ userId: user.id, fallbackModel, originalModel: resolvedModel, reason }, "API unavailable, triggering fallback");
-
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: "text", text: `\n*(Warning: Primary AI ${reason}. Automatically switching to backup AI: **${fallbackLabel}**...)*\n\n` })}\n\n`)
-                    );
-
-                    response = await attemptStream(fallbackModel);
-                    fallbackSucceeded = true;
-                    break;
-                  } catch {
-                    // Try next fallback in chain
-                  }
-                }
-
-                if (!fallbackSucceeded) {
-                  throw err;
-                }
-              } else {
-                throw err;
+                const reason = isRateLimit ? "rate-limited" : "temporarily unavailable";
+                logger.warn(
+                  { userId: user.id, model: resolvedModel, reason },
+                  "Selected AI model unavailable; preserving model affinity"
+                );
+                throw new Error(
+                  `The selected model (${resolvedModel}) is ${reason}. ` +
+                  "Your request was not switched to another model. Please retry shortly."
+                );
               }
+
+              throw err;
             }
 
             if (!response) {

@@ -260,8 +260,8 @@ export function validateToolCall(
 
   if (toolName === "open_application") {
     if (!userAskedToOpenApp(userMessage)) {
-      return result(false, 72, "Opening apps requires explicit user intent", [
-        signal("missing-user-intent", 72, "Opening apps requires explicit user intent"),
+      return result(false, 60, "Opening apps requires explicit user intent", [
+        signal("missing-user-intent", 60, "Opening apps requires explicit user intent"),
       ]);
     }
 
@@ -285,14 +285,14 @@ export function validateToolCall(
   }
 
   if (toolName === "play_spotify" && !userAskedToPlaySpotify(userMessage)) {
-    return result(false, 72, "Playing music requires explicit user intent", [
-      signal("missing-user-intent", 72, "Playing music requires explicit user intent"),
+    return result(false, 60, "Playing music requires explicit user intent", [
+      signal("missing-user-intent", 60, "Playing music requires explicit user intent"),
     ]);
   }
 
   if (toolName === "open_youtube" && !userAskedToOpenYouTube(userMessage)) {
-    return result(false, 72, "Opening YouTube requires explicit user intent", [
-      signal("missing-user-intent", 72, "Opening YouTube requires explicit user intent"),
+    return result(false, 60, "Opening YouTube requires explicit user intent", [
+      signal("missing-user-intent", 60, "Opening YouTube requires explicit user intent"),
     ]);
   }
 
@@ -306,8 +306,8 @@ export function validateToolCall(
     let docReason = argScan.reason;
 
     if (!userAskedForDocument(userMessage)) {
-      docRisk = Math.max(docRisk, 45);
-      docSignals.push(signal("missing-user-intent", 45, "Document creation may lack explicit user intent"));
+      docRisk = Math.max(docRisk, 30);
+      docSignals.push(signal("missing-user-intent", 30, "Document creation may lack explicit user intent"));
       if (docReason === "Clean") docReason = "Document creation without explicit user intent";
     }
 

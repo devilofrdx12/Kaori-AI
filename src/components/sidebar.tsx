@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 
 import {
   MessageSquarePlus,
@@ -44,6 +45,62 @@ export default function Sidebar({
   activeTab: string;
   onTabChange: (tab: string) => void;
 }) {
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const scroller = chatScrollRef.current;
+    if (!scroller) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const states = new WeakMap<HTMLElement, { current: number; target: number }>();
+    let frameId: number | null = null;
+
+    const render = () => {
+      frameId = null;
+      const viewport = scroller.getBoundingClientRect();
+      const edgeZone = Math.min(90, viewport.height * 0.16);
+      let settling = false;
+
+      for (const row of scroller.querySelectorAll<HTMLElement>("[data-recent-chat]")) {
+        if (reducedMotion.matches || row.dataset.active === "true") {
+          row.style.setProperty("--recent-edge", "0");
+          continue;
+        }
+
+        const rect = row.getBoundingClientRect();
+        const topEdge = Math.max(0, Math.min(1, (edgeZone - (rect.top - viewport.top)) / edgeZone));
+        const bottomEdge = Math.max(0, Math.min(1, (edgeZone - (viewport.bottom - rect.bottom)) / edgeZone));
+        const target = Math.max(topEdge, bottomEdge);
+        const state = states.get(row) ?? { current: target, target };
+        state.target = target;
+        state.current += (state.target - state.current) * 0.2;
+        if (Math.abs(state.target - state.current) < 0.002) state.current = state.target;
+        else settling = true;
+        states.set(row, state);
+
+        row.style.setProperty("--recent-edge", state.current.toFixed(3));
+        row.style.setProperty("--recent-direction", topEdge > bottomEdge ? "-1" : "1");
+      }
+
+      if (settling) frameId = window.requestAnimationFrame(render);
+    };
+
+    const schedule = () => {
+      if (frameId === null) frameId = window.requestAnimationFrame(render);
+    };
+
+    schedule();
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
+    reducedMotion.addEventListener("change", schedule);
+    return () => {
+      scroller.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      reducedMotion.removeEventListener("change", schedule);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [activeChatId, chats.length]);
+
   const closeMobile = () => {
     if (typeof window !== "undefined" && window.innerWidth < 1024) onToggle();
   };
@@ -115,7 +172,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 mt-5 sm:mt-6">
+        <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 mt-5 sm:mt-6">
           {/* Starred */}
           {chats.some(c => c.isStarred) && (
             <div className="mb-6">
@@ -170,7 +227,9 @@ export default function Sidebar({
                 return (
                   <div
                     key={chat.id}
-                    className={`group relative flex items-center w-full rounded-[1.25rem] transition-colors duration-300 ${active
+                    data-recent-chat
+                    data-active={active ? "true" : undefined}
+                    className={`recent-chat-scroll-card group relative flex items-center w-full rounded-[1.25rem] transition-colors duration-300 ${active
                         ? "bg-white/60 dark:bg-white/10 shadow-sm"
                         : "hover:bg-white/45 dark:hover:bg-white/10"
                       }`}

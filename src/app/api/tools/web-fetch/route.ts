@@ -194,6 +194,7 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
   } catch (err) {
     if (err instanceof Response) return err;
+    throw err;
   }
 
   const user = await getSessionUser();

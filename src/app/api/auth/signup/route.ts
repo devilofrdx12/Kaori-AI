@@ -56,15 +56,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Always hash first so the response time is the same whether the email
+    // is already registered or not (prevents timing-based enumeration).
+    const passwordHash = await bcrypt.hash(password, 12);
+
     const existing = await findUserByEmail(email);
     if (existing) {
       return NextResponse.json(
-        { error: "Email already registered" },
+        { error: "An account with this email already exists. Please log in instead." },
         { status: 409 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({
       id: uuid(),
       name,

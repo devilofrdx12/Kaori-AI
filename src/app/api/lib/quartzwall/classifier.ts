@@ -44,26 +44,26 @@ const CONTROL_PLANE_PATTERNS: PatternRule[] = [
   },
   {
     label: "secret-exfiltration",
-    pattern: /\b(api[_ -]?key|secret|password|token|credential|\.env|database schema|sql dump|private key)\b/i,
-    weight: 35,
-    reason: "References sensitive secrets or internal data",
+    pattern: /\b(give|show|tell|reveal|print|dump|display|what(?:'s| is) (?:your|the|my))\b[\s\S]{0,60}\b(api[_ -]?key|secret[_ -]?key|password[_ -]?hash|auth[_ -]?token|credential|\.env|database schema|sql dump|private key)\b/i,
+    weight: 30,
+    reason: "Attempts to extract sensitive secrets or internal data",
   },
   {
     label: "source-code-exfiltration",
-    pattern: /\b(cat|read|print|show|dump|display)\b[\s\S]{0,80}\b(src\/|source code|backend code|server file|route\.ts|\.env)\b/i,
-    weight: 40,
+    pattern: /\b(cat|read|print|show|dump|display)\b[\s\S]{0,80}\b(src\/|source code|backend code|server file|route\.ts|\.env\b)(?![\s\S]{0,20}\b(help|how|tutorial|learn|guide|example)\b)/i,
+    weight: 25,
     reason: "Attempts to read internal source or server files",
   },
   {
     label: "fake-role-marker",
     pattern: /(^|\n)\s*(system|developer|admin|root|security|policy)\s*:/i,
-    weight: 24,
+    weight: 12,
     reason: "Contains fake control-plane role markers",
   },
   {
     label: "tool-hijack",
     pattern: /\b(use|call|execute|run)\b[\s\S]{0,80}\btool\b[\s\S]{0,80}\b(without asking|silently|secretly|do not tell|hide it)\b/i,
-    weight: 34,
+    weight: 22,
     reason: "Attempts to secretly steer tool execution",
   },
 ];
@@ -160,28 +160,28 @@ function scoreHeuristics(text: string, context: QuartzwallScanContext, signals: 
   }
 
   if (HOMOGLYPH_PATTERN.test(text)) {
-    risk += 20;
-    addSignal(signals, "unicode-homoglyphs", 20, "Contains mixed-script homoglyph characters");
+    risk += 15;
+    addSignal(signals, "unicode-homoglyphs", 15, "Contains mixed-script homoglyph characters");
   }
 
   if (BASE64ISH_PATTERN.test(text)) {
-    risk += 16;
-    addSignal(signals, "encoded-blob", 16, "Contains long encoded-looking text");
+    risk += 8;
+    addSignal(signals, "encoded-blob", 8, "Contains long encoded-looking text");
   }
 
-  if (imperativeDensity > 0.18 && imperativeCount >= 3) {
-    risk += 22;
-    addSignal(signals, "imperative-density", 22, "High density of command-style verbs");
+  if (imperativeDensity > 0.30 && imperativeCount >= 5) {
+    risk += 18;
+    addSignal(signals, "imperative-density", 18, "High density of command-style verbs");
   }
 
   if ((text.match(/[>#`]{3,}/g) || []).length >= 2) {
-    risk += 10;
-    addSignal(signals, "instruction-markers", 10, "Contains repeated instruction-like formatting markers");
+    risk += 5;
+    addSignal(signals, "instruction-markers", 5, "Contains repeated instruction-like formatting markers");
   }
 
-  if (context === "tool_result" && /\bignore\b|\boverride\b|\bsystem prompt\b/i.test(text)) {
-    risk += 18;
-    addSignal(signals, "untrusted-control-language", 18, "Untrusted tool output contains control-plane language");
+  if (context === "tool_result" && /\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above|system)?\s*instructions?\b|\bsystem prompt\b/i.test(text)) {
+    risk += 10;
+    addSignal(signals, "untrusted-control-language", 10, "Untrusted tool output contains control-plane language");
   }
 
   return risk;
@@ -237,7 +237,7 @@ export function scanText(
 
   const risk = clampRisk(direct.risk + indirect.risk + heuristicRisk);
   const hardBlock = direct.hardBlock || indirect.hardBlock;
-  const verdict = hardBlock || risk >= 70 ? "BLOCKED" : risk >= 40 ? "SUSPICIOUS" : "SAFE";
+  const verdict = hardBlock || risk >= 80 ? "BLOCKED" : risk >= 40 ? "SUSPICIOUS" : "SAFE";
   const reason = buildReason(signals);
   const attackType = classifyAttack(signals);
 

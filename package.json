@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts",
+    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/model-routing.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts",
     "migrate": "npx tsx scripts/migrate-json-to-sqlite.ts",
     "backup": "npx tsx scripts/backup-db.ts"
   },

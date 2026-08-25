@@ -49,7 +49,7 @@ export async function streamNvidiaChatCompletion({
       150_000
     );
     requestSignal = startupController.signal;
-  } else if (model.startsWith("deepseek-ai/")) {
+  } else if (model.startsWith("deepseek-ai/") && !model.includes("flash")) {
     extraBody.reasoning_effort = model.endsWith("-pro") ? "max" : "high";
   } else if (model.includes("ultra") || model.includes("reasoning")) {
     extraBody.chat_template_kwargs = { enable_thinking: true };
@@ -75,5 +75,6 @@ export async function streamNvidiaChatCompletion({
     throw error;
   } finally {
     if (startupTimer) clearTimeout(startupTimer);
+    if (forwardAbort && signal) signal.removeEventListener("abort", forwardAbort);
   }
 }

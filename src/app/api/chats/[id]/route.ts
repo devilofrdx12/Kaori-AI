@@ -168,9 +168,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     if (body.title !== undefined) {
+      if (typeof body.title !== "string") {
+        return NextResponse.json({ error: "Title must be a string" }, { status: 400 });
+      }
       await updateConversationTitle(id, validateConversationTitle(body.title));
     }
     if (body.is_starred !== undefined) {
+      if (typeof body.is_starred !== "boolean") {
+        return NextResponse.json({ error: "is_starred must be a boolean" }, { status: 400 });
+      }
       await toggleConversationStar(id, body.is_starred ? 1 : 0);
     }
 

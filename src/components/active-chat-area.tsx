@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import MessageArea from "./message-area";
 import ChatInput from "./chat-input";
-import { ChatMessage, MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail, type UploadFile } from "./types";
+import { ChatMessage, type ChatFeatureMode, type ImageDetail, type UploadFile } from "./types";
 import { ChatThread } from "./chat-types";
 import { sendMessage } from "@/lib/chat-api";
 import ActionPassport, { type ActionProposal } from "./action-passport";
@@ -192,15 +192,6 @@ export default function ActiveChatArea({
       return;
     }
 
-    const hasImages = files?.some((file) => file.type.startsWith("image/")) ?? false;
-    const selectedModelSupportsVision = MODEL_OPTIONS.some(
-      (option) => option.id === model && option.supportsVision
-    );
-    const effectiveModel = hasImages && !selectedModelSupportsVision
-      ? "gemini-2.5-flash"
-      : model;
-    if (effectiveModel !== model) setModel(effectiveModel);
-
     const objectUrls: string[] = [];
     const userMessageId = crypto.randomUUID();
 
@@ -263,7 +254,7 @@ export default function ActiveChatArea({
         chatId: currentChatId,
         message: text,
         messageId: userMessageId,
-        model: effectiveModel,
+        model,
         files: fileData,
         studyMode,
         featureMode,
