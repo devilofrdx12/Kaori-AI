@@ -51,7 +51,7 @@ export async function streamNvidiaChatCompletion({
     requestSignal = startupController.signal;
   } else if (model.startsWith("deepseek-ai/") && !model.includes("flash")) {
     extraBody.reasoning_effort = model.endsWith("-pro") ? "max" : "high";
-  } else if (model.includes("ultra") || model.includes("reasoning")) {
+  } else if (model.includes("reasoning")) {
     extraBody.chat_template_kwargs = { enable_thinking: true };
     extraBody.reasoning_budget = 16384;
     maxTokens = 16384;

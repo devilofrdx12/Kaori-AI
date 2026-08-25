@@ -61,5 +61,9 @@
   "overrides": {
     "gh-pages": "^6.3.0",
     "postcss": "^8.5.23"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "unrs-resolver": true
   }
 }

@@ -5,6 +5,7 @@ const ALLOWED_MODELS = new Set([
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
   "nvidia/llama-3.1-nemotron-70b-instruct",
   "deepseek-ai/deepseek-v4-flash-0731",
+  "z-ai/glm-5.2",
 ]);
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
