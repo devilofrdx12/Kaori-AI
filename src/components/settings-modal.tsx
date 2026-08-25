@@ -260,7 +260,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     setProvider(supportedProvider);
     localStorage.setItem("kaori_provider", supportedProvider);
     const defaultModels: Record<string, string> = {
-      google: "gemini-3.7-flash",
+      google: "gemini-2.5-flash",
       groq: "openai/gpt-oss-120b",
       nvidia: "nvidia/nemotron-3-ultra-550b-a55b",
     };
