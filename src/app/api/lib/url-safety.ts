@@ -43,14 +43,14 @@ function isPrivateIp(ip: string): boolean {
 
 function isHostnameAllowed(hostname: string): boolean {
   const allowlistEnv = process.env.ALLOWED_FETCH_HOSTS;
-  if (!allowlistEnv) return true;
+  if (!allowlistEnv) return false;
 
   const allowlist = allowlistEnv
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
     
-  if (allowlist.length === 0) return true;
+  if (allowlist.length === 0) return false;
 
   return allowlist.some((allowed) => {
     if (allowed.startsWith(".")) {

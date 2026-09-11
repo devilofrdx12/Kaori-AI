@@ -1,0 +1,247 @@
+name: CD - Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+
+# Only one deploy at a time
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Gate: Only deploy if CI passed
+  # ──────────────────────────────────────────────
+  gate:
+    name: Deployment Gate
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    outputs:
+      should_deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - name: Check CI status
+        id: check
+        run: |
+          echo "CI workflow completed with status: ${{ github.event.workflow_run.conclusion }}"
+          echo "deploy=true" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────
+  # Deploy to Vercel Production
+  # ──────────────────────────────────────────────
+  deploy:
+    name: Deploy to Vercel
+    needs: gate
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.url }}
+      deploy_status: ${{ steps.deploy.outcome }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Production
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # ──────────────────────────────────────────────
+  # Post-Deploy Health Check
+  # ──────────────────────────────────────────────
+  health-check:
+    name: Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+    outputs:
+      health_status: ${{ steps.health.outcome }}
+    steps:
+      - name: Wait for deployment to stabilize
+        run: sleep 30
+
+      - name: Check deployment health
+        id: health
+        run: |
+          DEPLOY_URL="${{ needs.deploy.outputs.deployment_url }}"
+          echo "Checking health at: $DEPLOY_URL"
+          
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$DEPLOY_URL" || echo "000")
+            echo "HTTP Status: $HTTP_STATUS"
+            
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+              echo "Health check passed (HTTP $HTTP_STATUS)"
+              exit 0
+            fi
+            
+            if [ "$i" -lt "$MAX_RETRIES" ]; then
+              echo "Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          echo "Health check failed after $MAX_RETRIES attempts"
+          exit 1
+
+  # ──────────────────────────────────────────────
+  # Notifications
+  # ──────────────────────────────────────────────
+  notify-deploy-success:
+    name: Deploy Success Email
+    needs: [deploy, health-check]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send deployment success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Kaori AI - Deployed to Production Successfully"
+          to: devilofrdx12@gmail.com
+          from: "Kaori AI CD <${{ secrets.MAIL_USERNAME }}>"
+          content_type: text/html
+          body: |
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+              <div style="background: linear-gradient(135deg, #1f6feb 0%, #58a6ff 100%); padding: 24px 32px;">
+                <h1 style="margin: 0; font-size: 22px; color: white;">Production Deployment Successful</h1>
+              </div>
+              <div style="padding: 24px 32px;">
+                <table style="width: 100%; border-collapse: collapse; color: #e6edf3;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Application</td>
+                    <td style="padding: 8px 0; font-weight: 600;">Kaori AI</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Environment</td>
+                    <td style="padding: 8px 0;"><span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">PRODUCTION</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Deployment URL</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ needs.deploy.outputs.deployment_url }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit SHA</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ github.event.workflow_run.head_sha }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Health Check</td>
+                    <td style="padding: 8px 0; color: #3fb950;">Passed</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 20px; padding: 16px; background: #161b22; border-radius: 8px; border: 1px solid #30363d;">
+                  <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #58a6ff;">Deployment Summary</h3>
+                  <div style="font-size: 14px; line-height: 2;">
+                    [PASS] CI Pipeline - All checks passed<br>
+                    [PASS] Vercel Build - Compiled successfully<br>
+                    [PASS] Production Deploy - Live<br>
+                    [PASS] Health Check - Responding (HTTP 2xx)
+                  </div>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                  <a href="${{ needs.deploy.outputs.deployment_url }}" style="display: inline-block; padding: 10px 24px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin-right: 8px;">Visit Production →</a>
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display: inline-block; padding: 10px 24px; background: #30363d; color: #e6edf3; text-decoration: none; border-radius: 6px; font-weight: 600;">View Logs →</a>
+                </div>
+              </div>
+              <div style="padding: 16px 32px; background: #161b22; color: #8b949e; font-size: 12px; text-align: center; border-top: 1px solid #30363d;">
+                Kaori AI CD Pipeline • Deployment #${{ github.run_number }}
+              </div>
+            </div>
+
+  notify-deploy-failure:
+    name: Deploy Failure Email
+    needs: [deploy, health-check]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send deployment failure email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Kaori AI - PRODUCTION DEPLOY FAILED"
+          to: devilofrdx12@gmail.com
+          from: "Kaori AI CD <${{ secrets.MAIL_USERNAME }}>"
+          priority: high
+          content_type: text/html
+          body: |
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+              <div style="background: linear-gradient(135deg, #da3633 0%, #f85149 100%); padding: 24px 32px;">
+                <h1 style="margin: 0; font-size: 22px; color: white;">Production Deployment FAILED</h1>
+              </div>
+              <div style="padding: 24px 32px;">
+                <table style="width: 100%; border-collapse: collapse; color: #e6edf3;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Application</td>
+                    <td style="padding: 8px 0; font-weight: 600;">Kaori AI</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Environment</td>
+                    <td style="padding: 8px 0;"><span style="background: #da3633; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">PRODUCTION</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit SHA</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ github.event.workflow_run.head_sha }}</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 20px; padding: 16px; background: #1c0c0c; border-radius: 8px; border: 1px solid #f8514933;">
+                  <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #f85149;">Immediate Attention Required</h3>
+                  <p style="font-size: 14px; line-height: 1.6; margin: 0;">
+                    The production deployment failed. This could be due to:<br><br>
+                    • Vercel build error<br>
+                    • Deployment timeout<br>
+                    • Health check failure (site not responding)<br>
+                    • Invalid environment variables<br><br>
+                    Your previous production deployment is still live and unaffected.
+                  </p>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display: inline-block; padding: 10px 24px; background: #da3633; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">View Failed Deploy →</a>
+                </div>
+              </div>
+              <div style="padding: 16px 32px; background: #161b22; color: #8b949e; font-size: 12px; text-align: center; border-top: 1px solid #30363d;">
+                Kaori AI CD Pipeline • Deployment #${{ github.run_number }}
+              </div>
+            </div>

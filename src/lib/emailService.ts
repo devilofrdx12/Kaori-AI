@@ -1,5 +1,14 @@
 import nodemailer from 'nodemailer';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -31,10 +40,10 @@ export async function sendPasswordResetEmail(email: string, otp: string, resetUr
         <h2>Password Reset Request</h2>
         <p>You requested a password reset for your Kaori AI account.</p>
         <p>Use this one-time code to reset your password:</p>
-        <div style="font-size: 32px; letter-spacing: 8px; font-weight: 700; padding: 16px 20px; margin: 20px 0; background: #f3f4f6; border-radius: 8px; text-align: center; color: #111827;">${otp}</div>
-        <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px; margin: 20px 0;">Reset Password</a>
+        <div style="font-size: 32px; letter-spacing: 8px; font-weight: 700; padding: 16px 20px; margin: 20px 0; background: #f3f4f6; border-radius: 8px; text-align: center; color: #111827;">${escapeHtml(otp)}</div>
+        <a href="${escapeHtml(resetUrl)}" style="display: inline-block; padding: 10px 20px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px; margin: 20px 0;">Reset Password</a>
         <p>Or copy and paste this page into your browser:</p>
-        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>
         <p style="color: #d9534f; font-weight: bold;">This code will expire in 10 minutes.</p>
         <p>If you did not request this, please ignore this email.</p>
       </div>

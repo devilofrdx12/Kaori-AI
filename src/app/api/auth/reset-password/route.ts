@@ -1,15 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { findUserByEmail, findPasswordResetTokenByHash, deletePasswordResetToken, updateUserPassword, deleteUserRefreshTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail, validatePassword } from "../../../api/lib/validation";
-import { getClientIp, hashPasswordResetCode } from "../../../api/lib/auth-utils";
+import { getClientIp, hashPasswordResetCode, requireAjax } from "../../../api/lib/auth-utils";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../../api/lib/request-body";
+import { logger } from "../../../api/lib/logger";
 import bcrypt from "bcryptjs";
 
 const INVALID_CODE_MESSAGE = "Invalid or expired reset code";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { email: rawEmail, otp: rawOtp, password: rawPassword } = await req.json().catch(() => ({}));
+    requireAjax(req);
+
+    const body = await readJsonBodyWithLimit(req, 16 * 1024);
+    const rawEmail = typeof body.email === "string" ? body.email : "";
+    const rawOtp = body.otp;
+    const rawPassword = typeof body.password === "string" ? body.password : "";
 
     let email: string;
     let password: string;
@@ -62,8 +69,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: INVALID_CODE_MESSAGE }, { status: 400 });
     }
 
-    const saltRounds = 10;
-    const newPasswordHash = await bcrypt.hash(password, saltRounds);
+    const newPasswordHash = await bcrypt.hash(password, 12);
 
     await updateUserPassword(tokenRecord.user_id, newPasswordHash);
 
@@ -75,7 +81,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: "Password has been successfully reset" });
   } catch (error) {
-    console.error("Reset password error:", error);
+    if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    logger.error({ err: error }, "Reset password error");
     return NextResponse.json({ error: "Unable to reset the password right now. Please try again." }, { status: 500 });
   }
 }

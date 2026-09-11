@@ -1,7 +1,7 @@
 export type ModelFeatureMode = "auto" | "web" | "deep" | "thinking";
 
 const DEEP_RESEARCH_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
-const THINKING_MODEL = "nvidia/llama-3.1-nemotron-70b-instruct";
+const THINKING_MODEL = "z-ai/glm-5.2";
 
 /**
  * Normal chat and web search preserve the user's selected model. Deep and

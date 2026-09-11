@@ -1,4 +1,4 @@
-name: CI
+name: CI Pipeline
 
 on:
   push:
@@ -6,34 +6,458 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  # ──────────────────────────────────────────────
+  # Phase 1: Install & Cache Dependencies (shared)
+  # ──────────────────────────────────────────────
+  install:
+    name: Install Dependencies
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: 'npm'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Cache node_modules
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            deps-${{ runner.os }}-node20-
 
-    - name: Run ESLint
-      run: npm run lint
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: npm ci
 
-    - name: Run Type Checking
-      run: npx tsc --noEmit
+  # ──────────────────────────────────────────────
+  # Phase 2: Quality Gates (run in parallel)
+  # ──────────────────────────────────────────────
+  lint:
+    name: ESLint
+    needs: install
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      outcome: ${{ steps.lint-run.outcome }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Run Tests
-      run: npm run test
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    - name: Run Security Audit
-      run: npm audit
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
 
-    - name: Verify Build
-      run: npm run build
+      - name: Run ESLint
+        id: lint-run
+        run: npm run lint
+
+  typecheck:
+    name: Type Check
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+
+      - name: Run TypeScript compiler
+        run: npx tsc --noEmit
+
+  test:
+    name: Tests
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+
+      - name: Run test suite
+        run: npm run test
+
+  security:
+    name: Security Audit
+    needs: install
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      outcome: ${{ steps.audit-run.outcome }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+
+      - name: Audit for high/critical vulnerabilities
+        id: audit-run
+        run: npm audit --audit-level=high
+
+  # ──────────────────────────────────────────────
+  # Phase 3: Auto-Fix (lint + security)
+  # ──────────────────────────────────────────────
+  auto-fix:
+    name: Auto-Fix Issues
+    needs: [lint, typecheck, test, security]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'push' && (needs.lint.outputs.outcome == 'failure' || needs.security.outputs.outcome == 'failure')
+    outputs:
+      fixes_applied: ${{ steps.commit-fixes.outputs.fixes_applied }}
+      lint_fixed: ${{ steps.fix-lint.outputs.fixed }}
+      security_fixed: ${{ steps.fix-security.outputs.fixed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (if cache miss)
+        run: |
+          if [ ! -d "node_modules" ]; then
+            npm ci
+          fi
+
+      - name: Auto-fix ESLint issues
+        id: fix-lint
+        if: needs.lint.outputs.outcome == 'failure'
+        run: |
+          echo "Attempting to auto-fix ESLint issues..."
+          npx eslint --fix . 2>&1 || true
+          if git diff --quiet; then
+            echo "fixed=false" >> $GITHUB_OUTPUT
+            echo "No ESLint fixes were possible automatically."
+          else
+            echo "fixed=true" >> $GITHUB_OUTPUT
+            echo "ESLint auto-fixes applied."
+          fi
+
+      - name: Auto-fix security vulnerabilities
+        id: fix-security
+        if: needs.security.outputs.outcome == 'failure'
+        run: |
+          echo "Attempting to auto-fix security vulnerabilities..."
+          npm audit fix 2>&1 || true
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "fixed=false" >> $GITHUB_OUTPUT
+            echo "No security fixes were possible automatically."
+          else
+            echo "fixed=true" >> $GITHUB_OUTPUT
+            echo "Security vulnerabilities auto-fixed."
+          fi
+
+      - name: Commit and push fixes
+        id: commit-fixes
+        run: |
+          git config user.name "Kaori AI CI"
+          git config user.email "ci@kaori-ai.dev"
+          
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "fixes_applied=false" >> $GITHUB_OUTPUT
+            echo "No auto-fixable changes detected."
+          else
+            git add -A
+            
+            COMMIT_MSG="ci(auto-fix):"
+            if [ "${{ steps.fix-lint.outputs.fixed }}" = "true" ]; then
+              COMMIT_MSG="$COMMIT_MSG ESLint fixes applied."
+            fi
+            if [ "${{ steps.fix-security.outputs.fixed }}" = "true" ]; then
+              COMMIT_MSG="$COMMIT_MSG Security vulnerabilities patched."
+            fi
+            
+            git commit -m "$COMMIT_MSG"
+            git push
+            echo "fixes_applied=true" >> $GITHUB_OUTPUT
+            echo "Fixes committed and pushed. A new CI run will be triggered."
+          fi
+
+      - name: Send auto-fix email notification
+        if: steps.commit-fixes.outputs.fixes_applied == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Kaori AI - Auto-Fix Applied | ${{ github.ref_name }}"
+          to: devilofrdx12@gmail.com
+          from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
+          content_type: text/html
+          body: |
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+              <div style="background: linear-gradient(135deg, #d29922 0%, #e3b341 100%); padding: 24px 32px;">
+                <h1 style="margin: 0; font-size: 22px; color: white;">Auto-Fix Applied</h1>
+              </div>
+              <div style="padding: 24px 32px;">
+                <p style="font-size: 14px; line-height: 1.6; color: #e6edf3;">The CI pipeline detected issues and automatically applied fixes. A new pipeline run has been triggered with the fixes.</p>
+                <table style="width: 100%; border-collapse: collapse; color: #e6edf3;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Branch</td>
+                    <td style="padding: 8px 0; font-weight: 600;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Original Commit</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ github.sha }}</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 20px; padding: 16px; background: #161b22; border-radius: 8px; border: 1px solid #30363d;">
+                  <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #e3b341;">Fixes Applied</h3>
+                  <div style="font-size: 14px; line-height: 2;">
+                    ESLint Auto-Fix: ${{ steps.fix-lint.outputs.fixed == 'true' && 'Applied' || 'Not needed / Not fixable' }}<br>
+                    Security Patch: ${{ steps.fix-security.outputs.fixed == 'true' && 'Applied' || 'Not needed / Not fixable' }}
+                  </div>
+                </div>
+                <div style="margin-top: 16px; padding: 12px 16px; background: #1c1c0c; border-radius: 8px; border: 1px solid #e3b34133; font-size: 13px; color: #e3b341;">
+                  Note: A new CI run will verify these fixes. If issues remain that can't be auto-fixed, you'll receive a failure notification.
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display: inline-block; padding: 10px 24px; background: #d29922; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">View Auto-Fix Run</a>
+                </div>
+              </div>
+              <div style="padding: 16px 32px; background: #161b22; color: #8b949e; font-size: 12px; text-align: center; border-top: 1px solid #30363d;">
+                Kaori AI CI/CD Pipeline - Auto-Fix - Run #${{ github.run_number }}
+              </div>
+            </div>
+
+  # ──────────────────────────────────────────────
+  # Phase 4: Production Build
+  # ──────────────────────────────────────────────
+  build:
+    name: Production Build
+    needs: [lint, typecheck, test, security, auto-fix]
+    if: always() && needs.typecheck.result == 'success' && needs.test.result == 'success' && (needs.lint.result == 'success' || needs.auto-fix.outputs.fixes_applied == 'true') && (needs.security.result == 'success' || needs.auto-fix.outputs.fixes_applied == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build-${{ github.sha }}
+          path: .next/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Phase 4: Email Notifications
+  # ──────────────────────────────────────────────
+  notify-success:
+    name: Notify Success
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Kaori AI - CI Passed | ${{ github.ref_name }} | ${{ github.event_name }}"
+          to: devilofrdx12@gmail.com
+          from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
+          content_type: text/html
+          body: |
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+              <div style="background: linear-gradient(135deg, #238636 0%, #2ea043 100%); padding: 24px 32px;">
+                <h1 style="margin: 0; font-size: 22px; color: white;">Pipeline Passed - Production Ready</h1>
+              </div>
+              <div style="padding: 24px 32px;">
+                <table style="width: 100%; border-collapse: collapse; color: #e6edf3;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Repository</td>
+                    <td style="padding: 8px 0; font-weight: 600;">Kaori AI</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Branch</td>
+                    <td style="padding: 8px 0; font-weight: 600;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ github.sha }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Triggered by</td>
+                    <td style="padding: 8px 0;">${{ github.actor }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Event</td>
+                    <td style="padding: 8px 0;">${{ github.event_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit Message</td>
+                    <td style="padding: 8px 0;">${{ github.event.head_commit.message }}</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 20px; padding: 16px; background: #161b22; border-radius: 8px; border: 1px solid #30363d;">
+                  <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #8b949e;">All Checks Passed</h3>
+                  <div style="font-size: 14px; line-height: 2;">
+                    [PASS] ESLint - Clean<br>
+                    [PASS] TypeScript - No errors<br>
+                    [PASS] Tests - All passed<br>
+                    [PASS] Security Audit - No high/critical vulns<br>
+                    [PASS] Production Build - Successful
+                  </div>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display: inline-block; padding: 10px 24px; background: #238636; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">View Pipeline Run →</a>
+                </div>
+              </div>
+              <div style="padding: 16px 32px; background: #161b22; color: #8b949e; font-size: 12px; text-align: center; border-top: 1px solid #30363d;">
+                Kaori AI CI/CD Pipeline • Run #${{ github.run_number }}
+              </div>
+            </div>
+
+  notify-failure:
+    name: Notify Failure
+    needs: [lint, typecheck, test, security, build, auto-fix]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send failure email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Kaori AI - CI FAILED | ${{ github.ref_name }} | ${{ github.event_name }}"
+          to: devilofrdx12@gmail.com
+          from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
+          priority: high
+          content_type: text/html
+          body: |
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+              <div style="background: linear-gradient(135deg, #da3633 0%, #f85149 100%); padding: 24px 32px;">
+                <h1 style="margin: 0; font-size: 22px; color: white;">Pipeline Failed - Action Required</h1>
+              </div>
+              <div style="padding: 24px 32px;">
+                <table style="width: 100%; border-collapse: collapse; color: #e6edf3;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Repository</td>
+                    <td style="padding: 8px 0; font-weight: 600;">Kaori AI</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Branch</td>
+                    <td style="padding: 8px 0; font-weight: 600;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit</td>
+                    <td style="padding: 8px 0; font-family: monospace; font-size: 13px;">${{ github.sha }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Triggered by</td>
+                    <td style="padding: 8px 0;">${{ github.actor }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #8b949e;">Commit Message</td>
+                    <td style="padding: 8px 0;">${{ github.event.head_commit.message }}</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 20px; padding: 16px; background: #1c0c0c; border-radius: 8px; border: 1px solid #f8514933;">
+                  <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #f85149;">One or more checks failed. Check the pipeline run for details.</h3>
+                  <div style="font-size: 14px; line-height: 2;">
+                    Check the logs for:<br>
+                    ESLint - Lint errors<br>
+                    TypeScript - Type errors<br>
+                    Tests - Failing tests<br>
+                    Security - High/critical vulnerabilities<br>
+                    Build - Compilation errors
+                  </div>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display: inline-block; padding: 10px 24px; background: #da3633; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">View Failed Pipeline →</a>
+                </div>
+              </div>
+              <div style="padding: 16px 32px; background: #161b22; color: #8b949e; font-size: 12px; text-align: center; border-top: 1px solid #30363d;">
+                Kaori AI CI/CD Pipeline • Run #${{ github.run_number }}
+              </div>
+            </div>

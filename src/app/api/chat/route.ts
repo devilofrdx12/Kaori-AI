@@ -180,8 +180,11 @@ function splitSearchEvidence(snippet: string): string[] {
 
 function buildAppActionProposal(tool: ToolUseBlock): AppActionProposal {
   const appName = typeof tool.input.appName === "string" ? tool.input.appName.trim() : "Application";
-  const uriScheme = typeof tool.input.uriScheme === "string" ? tool.input.uriScheme.trim() : "";
-  const fallbackUrl = typeof tool.input.fallbackUrl === "string" ? tool.input.fallbackUrl.trim() : "";
+  const rawScheme = typeof tool.input.uriScheme === "string" ? tool.input.uriScheme.trim() : "";
+  const rawFallback = typeof tool.input.fallbackUrl === "string" ? tool.input.fallbackUrl.trim() : "";
+
+  const uriScheme = rawScheme.includes(":") ? rawScheme : rawScheme + "://";
+  const fallbackUrl = /^https?:\/\//i.test(rawFallback) ? rawFallback : "https://" + rawFallback;
 
   return {
     id: tool.id,
@@ -335,12 +338,17 @@ async function executeToolCall(
 
     if (toolName === "create_document") {
       if (!userId) return "Error: User ID not found.";
+      const ALLOWED_DOCUMENT_FORMATS = new Set(["pdf", "docx", "md", "html", "css", "js", "ts", "tsx", "jsx", "json"]);
+      const format = String(toolInput.format || "").toLowerCase();
+      if (!ALLOWED_DOCUMENT_FORMATS.has(format)) {
+        return `Error: Unsupported document format '${format}'. Allowed: ${[...ALLOWED_DOCUMENT_FORMATS].join(", ")}`;
+      }
       const docId = uuid();
       await createDocument({
         id: docId,
         user_id: userId,
         filename: String(toolInput.filename),
-        format: String(toolInput.format),
+        format,
         content: String(toolInput.content),
       });
       return `Document created successfully! Download it here: [${toolInput.filename}](${baseUrl}/api/download/${docId})`;
@@ -1030,6 +1038,7 @@ export async function POST(req: NextRequest) {
               fullAssistantContent = "";
               toolUseBlocks = [];
               if (featureMode === "web" || toolRounds >= 2) forceAnswer = true;
+              if (toolRounds >= 5) forceAnswer = true;
               shouldContinue = true;
             }
           }

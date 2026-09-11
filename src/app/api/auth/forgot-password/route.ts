@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { findUserByEmail, insertPasswordResetToken, deleteUserPasswordResetTokens } from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail } from "../../../api/lib/validation";
-import { getClientIp, hashPasswordResetCode } from "../../../api/lib/auth-utils";
+import { getClientIp, hashPasswordResetCode, requireAjax } from "../../../api/lib/auth-utils";
 import { buildTrustedAppUrl } from "../../../api/lib/app-origin";
 import { sendPasswordResetEmail } from "../../../../lib/emailService";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../../api/lib/request-body";
+import { logger } from "../../../api/lib/logger";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 
@@ -18,10 +20,12 @@ function buildResetUrl(req: Request, email: string) {
   return resetUrl.toString();
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const rawEmail = body.email;
+    requireAjax(req);
+
+    const body = await readJsonBodyWithLimit(req, 16 * 1024);
+    const rawEmail = typeof body.email === "string" ? body.email : "";
 
     let email: string;
     try {
@@ -81,7 +85,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: PASSWORD_RESET_MESSAGE });
   } catch (error) {
-    console.error("Forgot password error:", error);
+    if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    logger.error({ err: error }, "Forgot password error");
     return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
   }
 }

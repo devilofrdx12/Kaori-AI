@@ -355,7 +355,7 @@ export async function streamOpenAiCompatible({
   return new Response(withIdleTimeout(providerStream).pipeThrough(transformStream), {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-store, no-cache, max-age=0",
       "Connection": "keep-alive",
     }
   });

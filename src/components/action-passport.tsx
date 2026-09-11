@@ -43,8 +43,12 @@ function isAllowedFallbackHost(hostname: string, allowedHosts: string[]) {
 
 function getVerifiedAction(action: ActionProposal) {
   try {
-    const uri = new URL(action.uriScheme);
-    const fallback = new URL(action.fallbackUrl);
+    const rawScheme = action.uriScheme.includes(":") ? action.uriScheme : action.uriScheme + "://";
+    const uri = new URL(rawScheme);
+    
+    const rawFallback = /^https?:\/\//i.test(action.fallbackUrl) ? action.fallbackUrl : "https://" + action.fallbackUrl;
+    const fallback = new URL(rawFallback);
+    
     const protocol = uri.protocol.toLowerCase();
     const allowedHosts = APP_FALLBACK_HOSTS[protocol] || [];
 
@@ -81,7 +85,12 @@ export default function ActionPassport({
     }
 
     setStatus("opening");
-    window.location.assign(verifiedAction.uri);
+    
+    // Safely launch without risk of tearing down the app if protocol is unhandled
+    const a = document.createElement("a");
+    a.href = verifiedAction.uri;
+    a.target = "_top";
+    a.click();
   };
 
   const openFallback = () => {

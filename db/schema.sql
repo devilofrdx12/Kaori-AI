@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
   title TEXT NOT NULL DEFAULT 'New Chat',
-  provider TEXT NOT NULL DEFAULT 'anthropic',
-  model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+  provider TEXT NOT NULL DEFAULT 'google',
+  model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
   is_starred INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())

@@ -266,8 +266,10 @@ export function validateToolCall(
     }
 
     const rawScheme = String(toolInput.uriScheme || "");
+    const sanitizedScheme = rawScheme.includes(":") ? rawScheme : rawScheme + "://";
+
     try {
-      const uri = new URL(rawScheme);
+      const uri = new URL(sanitizedScheme);
       const protocol = uri.protocol.toLowerCase();
       if (BLOCKED_APP_SCHEMES.has(protocol) || !ALLOWED_APP_SCHEMES.has(protocol)) {
         return result(false, 88, "URI scheme is not allowed", [
@@ -275,7 +277,9 @@ export function validateToolCall(
         ]);
       }
 
-      const fallbackPolicy = validateAppFallback(toolInput.fallbackUrl, protocol);
+      const rawFallback = String(toolInput.fallbackUrl || "");
+      const sanitizedFallback = /^https?:\/\//i.test(rawFallback) ? rawFallback : "https://" + rawFallback;
+      const fallbackPolicy = validateAppFallback(sanitizedFallback, protocol);
       if (fallbackPolicy) return fallbackPolicy;
     } catch {
       return result(false, 80, "Invalid application URI", [

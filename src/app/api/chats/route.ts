@@ -9,6 +9,7 @@ import {
 import { validateConversationTitle } from "../lib/validation";
 import { requireProjectOwner } from "../lib/ownership";
 import { readJsonBodyWithLimit, RequestBodyError } from "../lib/request-body";
+import { logger } from "../lib/logger";
 
 export async function GET() {
   try {
@@ -34,7 +35,7 @@ export async function GET() {
 
     return NextResponse.json(convs);
   } catch (err) {
-    console.error("[GET /api/chats] Error:", err);
+    logger.error({ err }, "[GET /api/chats] Error");
     return NextResponse.json({ error: "Unable to load chats right now." }, { status: 500 });
   }
 }
@@ -81,6 +82,7 @@ export async function DELETE(req: NextRequest) {
     requireAjax(req);
   } catch (err) {
     if (err instanceof Response) return err;
+    throw err;
   }
 
   const user = await getSessionUser();
