@@ -21,7 +21,7 @@ import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
 import { checkChatRateLimit } from "../lib/rate-limit";
-import { reserveChatSpend, refundChatSpend } from "../lib/spend-guard";
+import { reserveChatSpend, refundChatSpend, recordSpend, estimateChatCostUsd } from "../lib/spend-guard";
 import { getTrustedAppOrigin } from "../lib/app-origin";
 import { modelSupportsVision, validateMessage, validateModel, validateUploadFiles } from "../lib/validation";
 import {
@@ -141,20 +141,25 @@ function buildQuartzwallBlockReply(scan: ReturnType<typeof scanText>) {
 }
 
 function buildVisionGuidance(message: string) {
-  if (/\b(?:read|text|ocr|document|receipt|screenshot)\b/i.test(message)) {
+  const trimmed = message.trim();
+  const isSearchIntent = !trimmed || /\b(?:search|find|identify|who|where|what is|look up|price|buy|reverse|image search|recognize|source)\b/i.test(trimmed);
+  if (isSearchIntent) {
+    return "MANDATORY VISUAL SEARCH: You MUST call web_search before answering. Step 1: Describe what you see in detail (text, logos, brand, model numbers, landmarks, products, colors, shapes). Step 2: Call web_search with precise descriptive terms from the image. Step 3: Answer using ONLY the search results. Do NOT skip the search step. Do NOT answer from memory.";
+  }
+  if (/\b(?:read|text|ocr|document|receipt|screenshot)\b/i.test(trimmed)) {
     return "Vision task: transcribe visible text first, preserve layout where relevant, then answer. Clearly mark unreadable or uncertain text.";
   }
-  if (/\b(?:chart|graph|plot|axis|legend|table)\b/i.test(message)) {
+  if (/\b(?:chart|graph|plot|axis|legend|table)\b/i.test(trimmed)) {
     return "Vision task: identify axes, units, legends, labels, and visible values before interpreting the chart or table. Do not invent unreadable values.";
   }
-  if (/\b(?:compare|difference|both images|these images)\b/i.test(message)) {
-    return "Vision task: analyze images in order, list direct observations for each, then compare them. Separate observation from inference.";
+  if (/\b(?:compare|difference|both images|these images)\b/i.test(trimmed)) {
+    return "Vision task: analyze images in order, list direct observations for each, then compare them. Separate observation from inference. Use web_search to verify any identifications.";
   }
-  return "Vision task: describe direct observations before inference and state uncertainty when details are not legible.";
+  return "Vision task: describe direct observations before inference, state uncertainty when details are not legible. You MUST use web_search if there is ANY identifiable object, product, place, or person in the image. Do not guess from training data.";
 }
 
 function buildToolResultPreview(result: string): string {
-  const maxLength = 8_000;
+  const maxLength = 14_000;
   if (result.length <= maxLength) return result;
 
   const imageMarker = "KAORI_SEARCH_IMAGES_JSON:";
@@ -231,33 +236,33 @@ async function executeToolCall(
 
       if (!data.results?.length) return "No search results found.";
 
-      const evidenceRecords: Record<string, unknown>[] = [];
+      const sourceBlocks: string[] = [];
       let evidenceCharacters = 0;
-      const maxEvidenceCharacters = 7_000;
-      const maxEvidenceRecords = 12;
+      const maxEvidenceCharacters = 12_000;
+      const maxSources = 10;
+      let sourceIndex = 0;
       for (const r of data.results as { title: string; url: string; snippet: string; score?: number; publishedDate?: string; sourceQuery?: string; sourceTier?: string; hostname?: string }[]) {
         for (const chunk of splitSearchEvidence(r.snippet)) {
-          const evidence = chunk.slice(0, 700);
-          if (!evidence || evidenceRecords.length >= maxEvidenceRecords) break;
+          const evidence = chunk.slice(0, 1200);
+          if (!evidence || sourceIndex >= maxSources) break;
           if (evidenceCharacters + evidence.length > maxEvidenceCharacters) break;
-          evidenceRecords.push({
-            title: r.title,
-            url: r.url,
-            publisher: r.hostname,
-            sourceType: r.sourceTier,
-            publishedDate: r.publishedDate,
-            sourceQuery: r.sourceQuery,
-            relevance: typeof r.score === "number" ? Math.round(r.score * 100) / 100 : undefined,
-            evidence,
-          });
+          sourceIndex += 1;
+          const lines = [
+            `── SOURCE ${sourceIndex} ──`,
+            `Title: ${r.title}`,
+            `URL: ${r.url}`,
+          ];
+          if (r.hostname) lines.push(`Publisher: ${r.hostname}`);
+          if (r.sourceTier && r.sourceTier !== "standard") lines.push(`Tier: ${r.sourceTier}`);
+          if (r.publishedDate) lines.push(`Published: ${r.publishedDate}`);
+          lines.push(`Evidence: ${evidence}`);
+          lines.push(`── END SOURCE ${sourceIndex} ──`);
+          sourceBlocks.push(lines.join("\n"));
           evidenceCharacters += evidence.length;
         }
-        if (evidenceRecords.length >= maxEvidenceRecords || evidenceCharacters >= maxEvidenceCharacters) break;
+        if (sourceIndex >= maxSources || evidenceCharacters >= maxEvidenceCharacters) break;
       }
-      const textResults = evidenceRecords
-        .map((record: Record<string, unknown>, index: number) =>
-          `EVIDENCE_RECORD S${index + 1}\n${JSON.stringify(record)}\nEND_EVIDENCE_RECORD S${index + 1}`)
-        .join("\n\n");
+      const textResults = sourceBlocks.join("\n\n");
 
       const searchImages = Array.isArray(data.images)
         ? data.images.slice(0, 6).filter((image: unknown) => {
@@ -267,9 +272,11 @@ async function executeToolCall(
         })
         : [];
 
+      const preamble = `Search mode: ${data.topic || "general"}${data.timeRange ? `; freshness: ${data.timeRange}` : ""}; searched at: ${data.searchedAt || new Date().toISOString()}\nIMPORTANT: Answer using ONLY the SOURCE blocks below. Every claim must cite its source URL. Do NOT fabricate URLs or facts not found in these sources. If the sources don't answer the question, say so.`;
+
       return searchImages.length > 0
-        ? `Search mode: ${data.topic || "general"}${data.timeRange ? `; freshness: ${data.timeRange}` : ""}; searched at: ${data.searchedAt || new Date().toISOString()}\nEvidence records are isolated. Never transfer a person, quote, number, event, or attribution from one record into another.\n\n${textResults}\n\nKAORI_SEARCH_IMAGES_JSON:${JSON.stringify(searchImages)}`
-        : `Search mode: ${data.topic || "general"}${data.timeRange ? `; freshness: ${data.timeRange}` : ""}; searched at: ${data.searchedAt || new Date().toISOString()}\nEvidence records are isolated. Never transfer a person, quote, number, event, or attribution from one record into another.\n\n${textResults}`;
+        ? `${preamble}\n\n${textResults}\n\nKAORI_SEARCH_IMAGES_JSON:${JSON.stringify(searchImages)}`
+        : `${preamble}\n\n${textResults}`;
     }
 
     if (toolName === "web_fetch") {
@@ -343,15 +350,19 @@ async function executeToolCall(
       if (!ALLOWED_DOCUMENT_FORMATS.has(format)) {
         return `Error: Unsupported document format '${format}'. Allowed: ${[...ALLOWED_DOCUMENT_FORMATS].join(", ")}`;
       }
+      const filename = typeof toolInput.filename === "string" ? toolInput.filename.trim() : "";
+      const content = typeof toolInput.content === "string" ? toolInput.content : "";
+      if (!filename) return "Error: A filename is required to create a document.";
+      if (!content) return "Error: Document content cannot be empty.";
       const docId = uuid();
       await createDocument({
         id: docId,
         user_id: userId,
-        filename: String(toolInput.filename),
+        filename,
         format,
-        content: String(toolInput.content),
+        content,
       });
-      return `Document created successfully! Download it here: [${toolInput.filename}](${baseUrl}/api/download/${docId})`;
+      return `Document created successfully! Download it here: [${filename}](/api/download/${docId})`;
     }
 
     if (toolName === "analyze_pdf_visuals") {
@@ -496,7 +507,7 @@ export async function POST(req: NextRequest) {
     if (hasImages && !modelSupportsVision(validatedModel)) {
       return new Response(
         JSON.stringify({
-          error: "This model cannot analyze images. Switch to Gemini 2.5 Flash.",
+          error: "This model cannot analyze images. Switch to Gemini 2.5 Flash, Nemotron Nano Omni, or DeepSeek V4 Flash.",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
@@ -705,12 +716,16 @@ export async function POST(req: NextRequest) {
     }
     const systemPrompt = [buildSystemPrompt(studyMode === true), ...contextSections].join("\n\n");
 
+
+
     // ── Create streaming response ──
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         let spendReserved = false;
         let fullAssistantContent = "";
+        let totalOutputChars = 0;
+        let activeModel = "";
         try {
           if (memories.length > 0) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -735,6 +750,7 @@ export async function POST(req: NextRequest) {
             const resolvedModel = hasImages
               ? validatedModel
               : resolveModelForFeatureMode(validatedModel, featureMode);
+            activeModel = resolvedModel;
             let response;
 
             const attemptStream = async (model: string) => {
@@ -1035,6 +1051,7 @@ export async function POST(req: NextRequest) {
                 content: encryptContent(JSON.stringify(toolResults)),
               });
 
+              totalOutputChars += fullAssistantContent.length;
               fullAssistantContent = "";
               toolUseBlocks = [];
               if (featureMode === "web" || toolRounds >= 2) forceAnswer = true;
@@ -1057,6 +1074,23 @@ export async function POST(req: NextRequest) {
               logger.error(
                 { error: persistenceError, userId: user.id, chatId },
                 "Completed response could not be persisted"
+              );
+            }
+          }
+
+          // ── Spend tracking: refund the flat reserve and record actual cost ──
+          if (spendReserved) {
+            totalOutputChars += fullAssistantContent.length;
+            try {
+              // Refund the flat $0.10 reserve first.
+              await refundChatSpend(user.id);
+              // Record estimated actual cost based on model and output length.
+              const estimatedCost = estimateChatCostUsd(activeModel, totalOutputChars);
+              await recordSpend(user.id, estimatedCost);
+            } catch (spendErr) {
+              logger.warn(
+                { error: spendErr, userId: user.id },
+                "Failed to finalize spend tracking; reserve remains as conservative estimate"
               );
             }
           }

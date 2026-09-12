@@ -212,9 +212,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const { url } = await req.json().catch(() => ({}));
-    const parsedUrl = await assertPublicHttpUrl(url);
+    const validated = await assertPublicHttpUrl(url);
+    const parsedUrl = validated.url;
 
-    const resp = await fetchPublicHttpUrl(parsedUrl, {
+    const resp = await fetchPublicHttpUrl(validated, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

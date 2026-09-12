@@ -12,6 +12,7 @@ function isPrivateIpv4(ip: string): boolean {
     a === 0 ||
     a === 10 ||
     a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||  // RFC 6598 CGNAT
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
@@ -30,7 +31,8 @@ function isPrivateIpv6(ip: string): boolean {
     normalized.startsWith("::ffff:127.") ||
     normalized.startsWith("::ffff:10.") ||
     normalized.startsWith("::ffff:192.168.") ||
-    /^::ffff:172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
+    /^::ffff:172\.(1[6-9]|2\d|3[0-1])\./.test(normalized) ||
+    /^::ffff:100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\./.test(normalized)  // CGNAT mapped
   );
 }
 
@@ -60,7 +62,14 @@ function isHostnameAllowed(hostname: string): boolean {
   });
 }
 
-export async function assertPublicHttpUrl(rawUrl: unknown): Promise<URL> {
+/** Result of URL validation — includes the resolved IP to pin fetches against DNS rebinding. */
+export type ValidatedUrl = {
+  url: URL;
+  /** The first resolved IP address, or the literal IP from the URL. `null` for IP-literal URLs that were validated directly. */
+  resolvedAddress: string | null;
+};
+
+export async function assertPublicHttpUrl(rawUrl: unknown): Promise<ValidatedUrl> {
   if (typeof rawUrl !== "string" || rawUrl.length > 2048) {
     throw new Error("Invalid URL");
   }
@@ -97,13 +106,15 @@ export async function assertPublicHttpUrl(rawUrl: unknown): Promise<URL> {
     throw new Error("Fetching internal networks is prohibited");
   }
 
+  // IP-literal URL: validate directly, no DNS resolution needed.
   if (net.isIP(normalizedHostname)) {
     if (isPrivateIp(normalizedHostname)) {
       throw new Error("Fetching internal networks is prohibited");
     }
-    return parsed;
+    return { url: parsed, resolvedAddress: normalizedHostname };
   }
 
+  // Hostname URL: resolve DNS once and pin the result.
   let addresses;
   try {
     addresses = await lookup(normalizedHostname, { all: true, verbatim: true });
@@ -115,15 +126,40 @@ export async function assertPublicHttpUrl(rawUrl: unknown): Promise<URL> {
     throw new Error("Fetching internal networks is prohibited");
   }
 
-  return parsed;
+  // Return the first resolved address for fetch pinning.
+  return { url: parsed, resolvedAddress: addresses[0].address };
 }
 
-export async function fetchPublicHttpUrl(url: URL, init: RequestInit = {}) {
-  let current = url;
+/**
+ * Fetch a validated URL, pinning to the resolved IP to prevent DNS rebinding.
+ * The Host header is set to the original hostname so TLS SNI and virtual
+ * hosting continue to work correctly.
+ */
+export async function fetchPublicHttpUrl(
+  validated: ValidatedUrl,
+  init: RequestInit = {}
+) {
+  let current = validated;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-    const response = await fetch(current.toString(), {
+    let fetchUrl: string;
+    const headers = new Headers(init.headers);
+
+    if (current.resolvedAddress && current.url.hostname !== current.resolvedAddress) {
+      // Pin: replace hostname with resolved IP, set Host header to original.
+      const pinned = new URL(current.url.toString());
+      const isIpv6 = net.isIPv6(current.resolvedAddress);
+      pinned.hostname = isIpv6 ? `[${current.resolvedAddress}]` : current.resolvedAddress;
+      fetchUrl = pinned.toString();
+      // Preserve original hostname for Host header (includes port if non-default).
+      headers.set("Host", current.url.host);
+    } else {
+      fetchUrl = current.url.toString();
+    }
+
+    const response = await fetch(fetchUrl, {
       ...init,
+      headers,
       redirect: "manual",
     });
 
@@ -134,7 +170,8 @@ export async function fetchPublicHttpUrl(url: URL, init: RequestInit = {}) {
     const location = response.headers.get("location");
     if (!location) return response;
 
-    current = await assertPublicHttpUrl(new URL(location, current).toString());
+    // Re-validate (and re-resolve DNS for) every redirect target.
+    current = await assertPublicHttpUrl(new URL(location, current.url).toString());
   }
 
   throw new Error("Too many redirects");

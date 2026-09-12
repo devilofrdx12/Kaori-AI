@@ -382,6 +382,7 @@ export default function ActiveChatArea({
         files: retryFiles,
         editMessageId: messageId,
         studyMode,
+        featureMode: "auto" as const,
         signal: controller.signal,
         onText: (chunk) => {
           fullText += chunk;

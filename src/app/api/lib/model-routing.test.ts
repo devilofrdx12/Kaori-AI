@@ -17,5 +17,5 @@ test("explicit specialist modes use their advertised models", () => {
     resolveModelForFeatureMode(GROQ_MODEL, "deep"),
     "nvidia/nemotron-3-ultra-550b-a55b"
   );
-  assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "thinking"), "nvidia/llama-3.1-nemotron-70b-instruct");
+  assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "thinking"), "z-ai/glm-5.2");
 });

@@ -139,8 +139,7 @@ jobs:
           subject: "Kaori AI - Deployed to Production Successfully"
           to: devilofrdx12@gmail.com
           from: "Kaori AI CD <${{ secrets.MAIL_USERNAME }}>"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
               <div style="background: linear-gradient(135deg, #1f6feb 0%, #58a6ff 100%); padding: 24px 32px;">
                 <h1 style="margin: 0; font-size: 22px; color: white;">Production Deployment Successful</h1>
@@ -205,8 +204,7 @@ jobs:
           to: devilofrdx12@gmail.com
           from: "Kaori AI CD <${{ secrets.MAIL_USERNAME }}>"
           priority: high
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
               <div style="background: linear-gradient(135deg, #da3633 0%, #f85149 100%); padding: 24px 32px;">
                 <h1 style="margin: 0; font-size: 22px; color: white;">Production Deployment FAILED</h1>

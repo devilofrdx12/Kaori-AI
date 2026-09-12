@@ -86,8 +86,8 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: "Nemotron Nano Omni",
     provider: "nvidia",
     description: "Fast 30B reasoning model by Nvidia",
-    badge: "Reasoning",
-    supportsVision: false,
+    badge: "Omni Vision",
+    supportsVision: true,
     supportsThinking: true,
   },
   {
@@ -105,8 +105,8 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: "DeepSeek V4 Flash",
     provider: "nvidia",
     description: "DeepSeek V4 Flash on Nvidia NIM",
-    badge: "Fast",
-    supportsVision: false,
+    badge: "Vision",
+    supportsVision: true,
     supportsThinking: true,
   },
 ];

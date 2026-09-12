@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   productionBrowserSourceMaps: false,
-  serverExternalPackages: ["pino", "pino-pretty"],
+  serverExternalPackages: ["pino", "pino-pretty", "pdfmake", "pdfkit"],
   async redirects() {
     return [
       {

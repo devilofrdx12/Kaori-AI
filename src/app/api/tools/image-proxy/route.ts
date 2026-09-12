@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const remoteUrl = await assertPublicHttpUrl(req.nextUrl.searchParams.get("url"));
-    const response = await fetchPublicHttpUrl(remoteUrl, {
+    const validated = await assertPublicHttpUrl(req.nextUrl.searchParams.get("url"));
+    const response = await fetchPublicHttpUrl(validated, {
       headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif" },
       signal: AbortSignal.timeout(12_000),
     });

@@ -1,11 +1,11 @@
 "use client";
 
-import { memo, useCallback, useEffect, useState, useMemo } from "react";
+import { memo, useCallback, useEffect, useState, useMemo, type AnchorHTMLAttributes } from "react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw } from "lucide-react";
+import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
 import { ChatMessage } from "./types";
 import CodeBlock from "./code-block";
 import TypingIndicator from "./typing-indicator";
@@ -115,6 +115,61 @@ const memoizedComponents: Components = {
       >
         {children}
       </code>
+    );
+  },
+  a: ({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
+    const isDownload = href && /^\/api\/download\//.test(href);
+    if (isDownload) {
+      const handleDownload = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        const btn = e.currentTarget as HTMLElement;
+        btn.style.opacity = "0.5";
+        btn.style.pointerEvents = "none";
+        try {
+          const resp = await fetch(href!, { credentials: "same-origin" });
+          if (!resp.ok) throw new Error(`Download failed (${resp.status})`);
+          const blob = await resp.blob();
+          // Extract filename from Content-Disposition header or link text
+          const cd = resp.headers.get("Content-Disposition");
+          const filenameMatch = cd?.match(/filename="?([^";\n]+)"?/);
+          const filename = filenameMatch?.[1] || (typeof children === "string" ? children : "download");
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          // Clean up after a short delay
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+        } catch (err) {
+          console.error("[download]", err);
+          alert("Download failed. Please try again.");
+        } finally {
+          btn.style.opacity = "";
+          btn.style.pointerEvents = "";
+        }
+      };
+      return (
+        <button
+          type="button"
+          onClick={handleDownload as any}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 my-1 rounded-xl bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-sm font-medium hover:bg-[hsl(var(--primary)/0.2)] transition-colors cursor-pointer border-none"
+        >
+          <Download size={14} />
+          {children}
+        </button>
+      );
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[hsl(var(--primary))] underline underline-offset-2 hover:opacity-80 transition-colors break-words"
+        {...rest}
+      >
+        {children}
+      </a>
     );
   },
 };
@@ -327,6 +382,8 @@ const MessageRow = memo((
     prevProps.msg.stopped === nextProps.msg.stopped &&
     prevProps.msg.error === nextProps.msg.error &&
     prevProps.msg.retryable === nextProps.msg.retryable &&
+    prevProps.msg.thinking === nextProps.msg.thinking &&
+    prevProps.msg.files?.length === nextProps.msg.files?.length &&
     prevProps.msg.toolResults?.length === nextProps.msg.toolResults?.length
   );
 });

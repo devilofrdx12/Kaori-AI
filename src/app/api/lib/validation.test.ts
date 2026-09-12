@@ -50,6 +50,8 @@ test("memory tags tolerate legacy or malformed storage", () => {
 
 test("vision capability is enforced from a server-owned model list", () => {
   assert.equal(modelSupportsVision("gemini-2.5-flash"), true);
+  assert.equal(modelSupportsVision("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"), true);
+  assert.equal(modelSupportsVision("deepseek-ai/deepseek-v4-flash-0731"), true);
   assert.equal(modelSupportsVision("llama-3.2-90b-vision-preview"), false);
   assert.equal(modelSupportsVision("openai/gpt-oss-120b"), false);
   assert.equal(modelSupportsVision("nvidia/nemotron-3-ultra-550b-a55b"), false);

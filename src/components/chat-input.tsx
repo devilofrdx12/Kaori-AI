@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check, Upload, Search, BrainCircuit, Sparkles } from "lucide-react";
 import ModelSelector from "./model-selector";
-import type { ChatFeatureMode, ImageDetail } from "./types";
+import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
@@ -156,10 +156,21 @@ export default function ChatInput({
     }
   };
 
+  const ensureVisionModel = (incomingFiles: File[]) => {
+    const hasImage = incomingFiles.some((f) => f.type.startsWith("image/"));
+    if (hasImage) {
+      const currentModel = MODEL_OPTIONS.find((m) => m.id === model);
+      if (!currentModel?.supportsVision) {
+        onModelChange("gemini-2.5-flash");
+      }
+    }
+  };
+
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
     if (!selected.length) return;
     const validFiles = selected.filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
+    ensureVisionModel(validFiles);
     setFiles((prev) => [...prev, ...validFiles].slice(0, 3));
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -186,6 +197,7 @@ export default function ChatInput({
       }
     }
     if (pastedFiles.length > 0) {
+      ensureVisionModel(pastedFiles);
       setFiles((prev) => [...prev, ...pastedFiles].slice(0, 3));
     }
   };
@@ -205,6 +217,7 @@ export default function ChatInput({
     setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
     if (droppedFiles.length > 0) {
+      ensureVisionModel(droppedFiles);
       setFiles((prev) => [...prev, ...droppedFiles].slice(0, 3));
     }
   };

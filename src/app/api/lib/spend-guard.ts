@@ -114,9 +114,62 @@ export async function recordSpend(
   userId: string,
   actualCostUsd: number
 ): Promise<void> {
+  if (!Number.isFinite(actualCostUsd) || actualCostUsd <= 0) return;
+
   const db = await getDb();
   await db.execute({
     sql: "UPDATE users SET daily_spend_usd = daily_spend_usd + ? WHERE id = ?",
     args: [actualCostUsd, userId],
   });
+}
+
+/**
+ * Approximate cost-per-1K-output-tokens by model family.
+ * These are conservative estimates (output tokens are more expensive than input).
+ * Input cost is not tracked here — the reserve covers the input side roughly.
+ *
+ * Rates are intentionally rounded up to avoid under-counting.
+ */
+const MODEL_COST_PER_1K_OUTPUT: Record<string, number> = {
+  // Gemini
+  "gemini-2.5-flash": 0.0004,
+  "gemini-2.5-pro": 0.01,
+  "gemini-": 0.001,            // fallback for other gemini models
+
+  // Groq-hosted (free/cheap inference, but we still count it)
+  "llama-": 0.0003,
+  "mixtral-": 0.0003,
+  "meta-llama/": 0.0003,
+  "openai/": 0.0005,
+  "qwen/": 0.0003,
+
+  // Nvidia NIM / DeepSeek
+  "nvidia/": 0.001,
+  "z-ai/": 0.001,
+  "deepseek-ai/": 0.0014,
+  "deepseek": 0.0014,          // catch-all for deepseek variants
+};
+
+/**
+ * Estimate the cost of a chat completion based on model and output length.
+ * Uses character count / 4 as a rough token estimate.
+ */
+export function estimateChatCostUsd(
+  model: string,
+  outputChars: number
+): number {
+  // Find the most specific matching rate (longest prefix match).
+  let rate = 0.001; // conservative fallback: $1/M output tokens
+  let bestMatchLength = 0;
+
+  for (const [prefix, cost] of Object.entries(MODEL_COST_PER_1K_OUTPUT)) {
+    if (model.startsWith(prefix) && prefix.length > bestMatchLength) {
+      rate = cost;
+      bestMatchLength = prefix.length;
+    }
+  }
+
+  // ~4 chars per token is a reasonable average across models.
+  const estimatedTokens = Math.max(1, outputChars / 4);
+  return (estimatedTokens / 1000) * rate;
 }

@@ -1,4 +1,5 @@
 import { KaoriMessage, KaoriTool } from "./core-types";
+import { logger } from "./logger";
 
 async function verifyStreamStart(response: Response): Promise<ReadableStream<Uint8Array>> {
   const reader = response.body?.getReader();
@@ -266,7 +267,7 @@ export async function streamOpenAiCompatible({
       // Log raw body server-side for debugging, but never expose to users.
       // Raw error bodies can contain internal API URLs, deployment IDs,
       // server stack traces, and token usage details.
-      console.error(`[openai-adapter] API error ${resp.status}:`, errBody.slice(0, 500));
+      logger.error({ status: resp.status, body: errBody.slice(0, 500) }, "[openai-adapter] API error");
       userMsg = `API error (${resp.status}). Please try again or switch models.`;
     }
     

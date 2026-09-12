@@ -117,18 +117,46 @@ export function requireAjax(req: Request): void {
   }
 }
 
+/**
+ * Extract the real client IP from proxy headers using a rightmost-N trust model.
+ *
+ * TRUSTED_PROXY_COUNT (default 1) controls how many rightmost X-Forwarded-For
+ * entries are considered trustworthy. With a single trusted reverse proxy
+ * (Vercel Edge, Cloudflare, etc.), the client IP is the rightmost entry the
+ * proxy appended — not the leftmost, which the client can forge freely.
+ *
+ * For N trusted proxies, the real client IP is at position `length - N`.
+ */
 export function getClientIp(req: Request): string {
-  const candidate =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip")?.trim() ||
-    "";
+  const trustedProxyCount = Math.max(
+    1,
+    parseInt(process.env.TRUSTED_PROXY_COUNT || "1", 10) || 1
+  );
 
-  // Keep rate-limit keys bounded and log-safe even behind a malformed proxy.
-  if (!candidate || candidate.length > 64 || !/^[a-f0-9:.]+$/i.test(candidate)) {
-    return "unknown";
+  const xffHeader = req.headers.get("x-forwarded-for");
+  if (xffHeader) {
+    const parts = xffHeader.split(",").map((s) => s.trim());
+    // The client IP is at index `length - trustedProxyCount`.
+    // With 1 trusted proxy, that's the last entry the proxy appended.
+    const clientIndex = Math.max(0, parts.length - trustedProxyCount);
+    const candidate = parts[clientIndex];
+
+    if (
+      candidate &&
+      candidate.length <= 64 &&
+      /^[a-f0-9:.]+$/i.test(candidate)
+    ) {
+      return candidate.toLowerCase();
+    }
   }
 
-  return candidate.toLowerCase();
+  // Fallback to x-real-ip (typically set by nginx or Vercel).
+  const realIp = req.headers.get("x-real-ip")?.trim() || "";
+  if (realIp && realIp.length <= 64 && /^[a-f0-9:.]+$/i.test(realIp)) {
+    return realIp.toLowerCase();
+  }
+
+  return "unknown";
 }
 
 export function getOAuthStateCookieName(provider: string): string {

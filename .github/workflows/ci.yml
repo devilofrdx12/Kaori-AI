@@ -244,8 +244,7 @@ jobs:
           subject: "Kaori AI - Auto-Fix Applied | ${{ github.ref_name }}"
           to: devilofrdx12@gmail.com
           from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
               <div style="background: linear-gradient(135deg, #d29922 0%, #e3b341 100%); padding: 24px 32px;">
                 <h1 style="margin: 0; font-size: 22px; color: white;">Auto-Fix Applied</h1>
@@ -343,8 +342,7 @@ jobs:
           subject: "Kaori AI - CI Passed | ${{ github.ref_name }} | ${{ github.event_name }}"
           to: devilofrdx12@gmail.com
           from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
               <div style="background: linear-gradient(135deg, #238636 0%, #2ea043 100%); padding: 24px 32px;">
                 <h1 style="margin: 0; font-size: 22px; color: white;">Pipeline Passed - Production Ready</h1>
@@ -413,8 +411,7 @@ jobs:
           to: devilofrdx12@gmail.com
           from: "Kaori AI CI <${{ secrets.MAIL_USERNAME }}>"
           priority: high
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #0d1117; color: #e6edf3; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
               <div style="background: linear-gradient(135deg, #da3633 0%, #f85149 100%); padding: 24px 32px;">
                 <h1 style="margin: 0; font-size: 22px; color: white;">Pipeline Failed - Action Required</h1>

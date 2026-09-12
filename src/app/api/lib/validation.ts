@@ -11,6 +11,8 @@ const ALLOWED_MODELS = new Set([
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 const VISION_MODELS = new Set([
   "gemini-2.5-flash",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+  "deepseek-ai/deepseek-v4-flash-0731",
 ]);
 
 export class InputValidationError extends Error {

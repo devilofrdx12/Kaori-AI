@@ -127,7 +127,7 @@ export default function CodeBlock({
             ref={iframeRef}
             title="Preview"
             srcDoc={codeString}
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             referrerPolicy="no-referrer"
             className="w-full h-full min-h-[400px] border-none bg-white"
           />
