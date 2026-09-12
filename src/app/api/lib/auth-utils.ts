@@ -13,8 +13,18 @@ function requireServerSecret(name: "JWT_SECRET" | "JWT_REFRESH_SECRET"): string 
   return value;
 }
 
-const JWT_SECRET = requireServerSecret("JWT_SECRET");
-const JWT_REFRESH_SECRET = requireServerSecret("JWT_REFRESH_SECRET");
+let _jwtSecret: string | undefined;
+let _jwtRefreshSecret: string | undefined;
+
+function getJwtSecret(): string {
+  if (!_jwtSecret) _jwtSecret = requireServerSecret("JWT_SECRET");
+  return _jwtSecret;
+}
+
+function getJwtRefreshSecret(): string {
+  if (!_jwtRefreshSecret) _jwtRefreshSecret = requireServerSecret("JWT_REFRESH_SECRET");
+  return _jwtRefreshSecret;
+}
 
 const ACCESS_COOKIE = "kaori_access";
 const REFRESH_COOKIE = "kaori_refresh";
@@ -28,12 +38,12 @@ export type AuthPayload = {
 };
 
 export function issueAccessToken(userId: string, email: string): string {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: ACCESS_TTL });
+  return jwt.sign({ userId, email }, getJwtSecret(), { expiresIn: ACCESS_TTL });
 }
 
 export function verifyAccessToken(token: string): AuthPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthPayload;
+    return jwt.verify(token, getJwtSecret()) as AuthPayload;
   } catch {
     return null;
   }
@@ -46,12 +56,12 @@ export function issueRefreshToken(): { raw: string; hash: string } {
 }
 
 export function hashRefreshToken(raw: string): string {
-  return crypto.createHmac("sha256", JWT_REFRESH_SECRET).update(raw).digest("hex");
+  return crypto.createHmac("sha256", getJwtRefreshSecret()).update(raw).digest("hex");
 }
 
 export function hashPasswordResetCode(email: string, otp: string): string {
   return crypto
-    .createHmac("sha256", JWT_REFRESH_SECRET)
+    .createHmac("sha256", getJwtRefreshSecret())
     .update(`${email.toLowerCase()}:${otp}`)
     .digest("hex");
 }
@@ -165,7 +175,7 @@ export function getOAuthStateCookieName(provider: string): string {
 
 function signOAuthState(provider: string, userId: string, state: string): string {
   return crypto
-    .createHmac("sha256", JWT_REFRESH_SECRET)
+    .createHmac("sha256", getJwtRefreshSecret())
     .update(`${provider}:${userId}:${state}`)
     .digest("base64url");
 }
