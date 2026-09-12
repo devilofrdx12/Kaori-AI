@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -77,6 +78,7 @@ export default function RootLayout({
       <body className="bg-background text-on-surface font-body overflow-hidden transition-colors duration-300">
         <div className="fixed inset-0 pointer-events-none opacity-40"></div>
         {children}
+        <Analytics />
       </body>
     </html>
   );
