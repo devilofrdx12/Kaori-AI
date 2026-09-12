@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["CI Pipeline"]
     types: [completed]
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
