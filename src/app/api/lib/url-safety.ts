@@ -142,22 +142,21 @@ export async function fetchPublicHttpUrl(
   let current = validated;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-    let fetchUrl: string;
+    let fetchTarget: URL;
     const headers = new Headers(init.headers);
 
     if (current.resolvedAddress && current.url.hostname !== current.resolvedAddress) {
       // Pin: replace hostname with resolved IP, set Host header to original.
-      const pinned = new URL(current.url.toString());
+      fetchTarget = new URL(current.url.toString());
       const isIpv6 = net.isIPv6(current.resolvedAddress);
-      pinned.hostname = isIpv6 ? `[${current.resolvedAddress}]` : current.resolvedAddress;
-      fetchUrl = pinned.toString();
+      fetchTarget.hostname = isIpv6 ? `[${current.resolvedAddress}]` : current.resolvedAddress;
       // Preserve original hostname for Host header (includes port if non-default).
       headers.set("Host", current.url.host);
     } else {
-      fetchUrl = current.url.toString();
+      fetchTarget = new URL(current.url.toString());
     }
 
-    const response = await fetch(fetchUrl, {
+    const response = await fetch(fetchTarget, {
       ...init,
       headers,
       redirect: "manual",
