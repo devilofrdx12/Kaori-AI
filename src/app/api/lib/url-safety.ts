@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import net from "node:net";
-import { Agent } from "undici";
+import type { Agent } from "undici";
 
 const MAX_REDIRECTS = 3;
 
@@ -149,7 +149,9 @@ export async function fetchPublicHttpUrl(
       const family = net.isIPv6(current.resolvedAddress) ? 6 : 4;
       const pinnedAddress = current.resolvedAddress;
       
-      dispatcher = new Agent({
+      const { Agent: UndiciAgent } = await import("undici");
+      
+      dispatcher = new UndiciAgent({
         connect: {
           lookup: (hostname, options, callback) => {
             if (hostname === current.url.hostname) {
