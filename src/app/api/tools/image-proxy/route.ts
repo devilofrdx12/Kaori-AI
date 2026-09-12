@@ -14,6 +14,11 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
+const ALLOWED_IMAGE_HOSTS = new Set([
+  "avatars.githubusercontent.com",
+  "lh3.googleusercontent.com",
+  "cdn.discordapp.com",
+]);
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
@@ -21,6 +26,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const validated = await assertPublicHttpUrl(req.nextUrl.searchParams.get("url"));
+    
+    // Explicit local allowlist check to break "arbitrary user URL" pattern
+    if (!ALLOWED_IMAGE_HOSTS.has(validated.url.hostname)) {
+      return NextResponse.json({ error: "Host not allowed" }, { status: 403 });
+    }
+
     const response = await fetchPublicHttpUrl(validated, {
       headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif" },
       signal: AbortSignal.timeout(12_000),

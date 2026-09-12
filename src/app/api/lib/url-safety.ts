@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import { Agent } from "undici";
 
 const MAX_REDIRECTS = 3;
 
@@ -142,25 +143,35 @@ export async function fetchPublicHttpUrl(
   let current = validated;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-    let fetchTarget: URL;
-    const headers = new Headers(init.headers);
+    let dispatcher: Agent | undefined;
 
     if (current.resolvedAddress && current.url.hostname !== current.resolvedAddress) {
-      // Pin: replace hostname with resolved IP, set Host header to original.
-      fetchTarget = new URL(current.url.toString());
-      const isIpv6 = net.isIPv6(current.resolvedAddress);
-      fetchTarget.hostname = isIpv6 ? `[${current.resolvedAddress}]` : current.resolvedAddress;
-      // Preserve original hostname for Host header (includes port if non-default).
-      headers.set("Host", current.url.host);
-    } else {
-      fetchTarget = new URL(current.url.toString());
+      const family = net.isIPv6(current.resolvedAddress) ? 6 : 4;
+      const pinnedAddress = current.resolvedAddress;
+      
+      dispatcher = new Agent({
+        connect: {
+          lookup: (hostname, options, callback) => {
+            if (hostname === current.url.hostname) {
+              callback(null, [{ address: pinnedAddress, family }]);
+            } else {
+              import("node:dns").then(dns => dns.lookup(hostname, options, callback));
+            }
+          }
+        }
+      });
     }
 
-    const response = await fetch(fetchTarget, {
+    // Cast options to any to allow the undici-specific `dispatcher` property
+    const fetchOptions: any = {
       ...init,
-      headers,
       redirect: "manual",
-    });
+    };
+    if (dispatcher) {
+      fetchOptions.dispatcher = dispatcher;
+    }
+
+    const response = await fetch(new URL(current.url.toString()), fetchOptions);
 
     if (![301, 302, 303, 307, 308].includes(response.status)) {
       return response;
