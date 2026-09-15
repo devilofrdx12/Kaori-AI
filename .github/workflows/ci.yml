@@ -32,7 +32,7 @@ jobs:
 
       - name: Cache node_modules
         id: cache-deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -63,7 +63,7 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -86,7 +86,7 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -108,7 +108,7 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -133,7 +133,7 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -167,7 +167,7 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
@@ -298,13 +298,13 @@ jobs:
           node-version: 20
 
       - name: Restore node_modules cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: deps-${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
 
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*') }}
