@@ -234,7 +234,7 @@ jobs:
 
       - name: Send auto-fix email notification
         if: steps.commit-fixes.outputs.fixes_applied == 'true'
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v21
         with:
           server_address: smtp.gmail.com
           server_port: 465
@@ -332,7 +332,7 @@ jobs:
     if: success()
     steps:
       - name: Send success email
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v21
         with:
           server_address: smtp.gmail.com
           server_port: 465
@@ -400,7 +400,7 @@ jobs:
     if: failure()
     steps:
       - name: Send failure email
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v21
         with:
           server_address: smtp.gmail.com
           server_port: 465
