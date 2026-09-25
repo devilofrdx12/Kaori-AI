@@ -4,19 +4,48 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "fix(deps):"
     labels:
       - "dependencies"
       - "security"
-  
+    # Prevent breaking major version bumps for packages that need manual migration
+    ignore:
+      # pixi.js v6 is pinned — pixi-live2d-display requires it
+      - dependency-name: "pixi.js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@pixi/unsafe-eval"
+        update-types: ["version-update:semver-major"]
+      # ESLint v10 requires config migration
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # Nodemailer v10 has breaking API changes
+      - dependency-name: "nodemailer"
+        update-types: ["version-update:semver-major"]
+      # pdf-parse v2 has breaking API changes
+      - dependency-name: "pdf-parse"
+        update-types: ["version-update:semver-major"]
+    # Group minor/patch updates to reduce PR noise
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "fix(deps):"
     labels:
       - "dependencies"
       - "ci"
+    # Only allow minor/patch for GitHub Actions to avoid breaking workflow syntax
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
