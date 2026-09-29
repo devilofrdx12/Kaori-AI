@@ -63,7 +63,7 @@
     "eslint-config-next": "^16.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "overrides": {
     "gh-pages": "^6.3.0",
