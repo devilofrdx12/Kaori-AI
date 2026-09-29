@@ -9,6 +9,7 @@ import {
   setAuthCookies,
   requireAjax,
   getClientIp,
+  REFRESH_TTL,
 } from "../../lib/auth-utils";
 import { checkAuthRateLimit } from "../../lib/rate-limit";
 import {
@@ -19,7 +20,6 @@ import {
 import { logger } from "../../lib/logger";
 import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
 
 export async function POST(req: NextRequest) {
   try {

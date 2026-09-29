@@ -213,7 +213,9 @@ export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json().catch(() => ({}));
     const validated = await assertPublicHttpUrl(url);
-    const parsedUrl = validated.url;
+    // Construct a read-only base URL for resolving relative links/images in HTML.
+    // This is NOT used for fetching — fetchPublicHttpUrl uses the frozen href.
+    const baseUrl = new URL(validated.href);
 
     const resp = await fetchPublicHttpUrl(validated, {
       headers: {
@@ -263,19 +265,19 @@ export async function POST(req: NextRequest) {
     }
 
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
-    const title = titleMatch ? stripTags(titleMatch[1]) || parsedUrl.hostname : parsedUrl.hostname;
+    const title = titleMatch ? stripTags(titleMatch[1]) || validated.hostname : validated.hostname;
     const description =
       getMetaContent(html, "name", "description") ||
       getMetaContent(html, "property", "og:description");
 
     return NextResponse.json({
-      url: parsedUrl.toString(),
+      url: validated.href,
       title,
       description,
       siteName: getMetaContent(html, "property", "og:site_name"),
       headings: extractHeadings(safeHtml),
-      links: extractLinks(safeHtml, parsedUrl),
-      images: extractImages(html, parsedUrl),
+      links: extractLinks(safeHtml, baseUrl),
+      images: extractImages(html, baseUrl),
       colorHints: extractColorHints(html),
       content: textContent,
       contentType,

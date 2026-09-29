@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     const validated = await assertPublicHttpUrl(req.nextUrl.searchParams.get("url"));
     
     // Explicit local allowlist check to break "arbitrary user URL" pattern
-    if (!ALLOWED_IMAGE_HOSTS.has(validated.url.hostname)) {
+    if (!ALLOWED_IMAGE_HOSTS.has(validated.hostname)) {
       return NextResponse.json({ error: "Host not allowed" }, { status: 403 });
     }
 

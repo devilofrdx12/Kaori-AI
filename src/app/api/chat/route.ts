@@ -90,6 +90,8 @@ type AppActionProposal = {
   appName: string;
   uriScheme: string;
   fallbackUrl: string;
+  /** Optional context like song name or video title */
+  detail?: string;
 };
 
 type StreamEvent = {
@@ -183,10 +185,10 @@ function splitSearchEvidence(snippet: string): string[] {
   return (chunks.length > 0 ? chunks : [snippet.trim()]).slice(0, 3);
 }
 
-function buildAppActionProposal(tool: ToolUseBlock): AppActionProposal {
-  const appName = typeof tool.input.appName === "string" ? tool.input.appName.trim() : "Application";
-  const rawScheme = typeof tool.input.uriScheme === "string" ? tool.input.uriScheme.trim() : "";
-  const rawFallback = typeof tool.input.fallbackUrl === "string" ? tool.input.fallbackUrl.trim() : "";
+function buildAppActionProposal(tool: ToolUseBlock, overrides?: Partial<AppActionProposal>): AppActionProposal {
+  const appName = overrides?.appName ?? (typeof tool.input.appName === "string" ? tool.input.appName.trim() : "Application");
+  const rawScheme = overrides?.uriScheme ?? (typeof tool.input.uriScheme === "string" ? tool.input.uriScheme.trim() : "");
+  const rawFallback = overrides?.fallbackUrl ?? (typeof tool.input.fallbackUrl === "string" ? tool.input.fallbackUrl.trim() : "");
 
   const uriScheme = rawScheme.includes(":") ? rawScheme : rawScheme + "://";
   const fallbackUrl = /^https?:\/\//i.test(rawFallback) ? rawFallback : "https://" + rawFallback;
@@ -196,8 +198,12 @@ function buildAppActionProposal(tool: ToolUseBlock): AppActionProposal {
     appName: appName.slice(0, 80) || "Application",
     uriScheme: uriScheme.slice(0, 2048),
     fallbackUrl: fallbackUrl.slice(0, 2048),
+    detail: overrides?.detail?.slice(0, 200),
   };
 }
+
+/** Set of tools that should go through the Action Passport approval flow. */
+const APP_LAUNCH_TOOLS = new Set(["open_application", "play_spotify", "open_youtube"]);
 
 async function executeToolCall(
   toolName: string,
@@ -371,7 +377,7 @@ async function executeToolCall(
       if (!apiKey) return "Error: Google API key not configured.";
       if (userId) await reserveChatSpend(userId);
 
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -507,7 +513,7 @@ export async function POST(req: NextRequest) {
     if (hasImages && !modelSupportsVision(validatedModel)) {
       return new Response(
         JSON.stringify({
-          error: "This model cannot analyze images. Switch to Gemini 2.5 Flash, Nemotron Nano Omni, or DeepSeek V4 Flash.",
+          error: "This model cannot analyze images. Switch to Gemini 3.5 Flash, Nemotron Nano Omni, or DeepSeek V4 Flash.",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
@@ -987,14 +993,48 @@ export async function POST(req: NextRequest) {
                     )
                   );
 
-                  if (tool.name === "open_application") {
-                    const action = buildAppActionProposal(tool);
+                  if (APP_LAUNCH_TOOLS.has(tool.name)) {
+                    let action: AppActionProposal;
+
+                    if (tool.name === "play_spotify" || tool.name === "open_youtube") {
+                      // Execute the search tool to find the actual URI, then build a proposal
+                      const searchResult = await executeToolCall(tool.name, tool.input, user.id, lastPdfBase64, {
+                        baseUrl: trustedAppOrigin,
+                        cookieHeader: req.headers.get("cookie") || undefined,
+                      });
+
+                      if (tool.name === "play_spotify") {
+                        const spotifyMatch = searchResult.match(/(spotify:[a-zA-Z0-9:]+)/);
+                        action = buildAppActionProposal(tool, {
+                          appName: "Spotify",
+                          uriScheme: spotifyMatch ? spotifyMatch[1] : "spotify://",
+                          fallbackUrl: "https://open.spotify.com",
+                          detail: typeof tool.input.songName === "string" ? `♫ ${tool.input.songName}` : undefined,
+                        });
+                      } else {
+                        // open_youtube
+                        const ytUrlMatch = searchResult.match(/https:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/);
+                        const videoId = ytUrlMatch ? ytUrlMatch[1] : null;
+                        action = buildAppActionProposal(tool, {
+                          appName: "YouTube",
+                          uriScheme: videoId ? `youtube://watch?v=${videoId}` : "youtube://",
+                          fallbackUrl: videoId
+                            ? `https://www.youtube.com/watch?v=${videoId}`
+                            : searchResult.match(/https:\/\/[^\s]+/)?.[0] || "https://www.youtube.com",
+                          detail: typeof tool.input.videoName === "string" ? `▶ ${tool.input.videoName}` : undefined,
+                        });
+                      }
+                    } else {
+                      // open_application — uses the AI-provided fields directly
+                      action = buildAppActionProposal(tool);
+                    }
+
                     controller.enqueue(
                       encoder.encode(
                         `data: ${JSON.stringify({ type: "action_proposal", action })}\n\n`
                       )
                     );
-                    result = `A verified **${action.appName}** launch is ready, but it will only happen after the user explicitly approves it in the Action Passport card.`;
+                    result = `A verified **${action.appName}** launch is ready${action.detail ? ` (${action.detail})` : ""}, but it will only happen after the user explicitly approves it in the Action Passport card.`;
                   } else {
                     result = await executeToolCall(tool.name, tool.input, user.id, lastPdfBase64, {
                       baseUrl: trustedAppOrigin,

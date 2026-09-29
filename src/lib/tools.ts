@@ -49,21 +49,68 @@ export const TOOL_DEFINITIONS: KaoriTool[] = [
   },
   {
     name: "open_application",
-    description: "Opens an application on the user's device. To force a desktop app to open, you MUST use its custom URI protocol (e.g. 'spotify://'). Also provide a fallback https URL.",
+    description: `Opens an application on the user's device using its native deep link URI scheme. The user will see an Action Passport card to approve the launch before it opens.
+
+KNOWN APP DEEP LINKS (use these exact schemes):
+- Spotify: spotify:// | fallback: https://open.spotify.com
+- YouTube: youtube:// | fallback: https://www.youtube.com
+- WhatsApp: whatsapp:// | fallback: https://web.whatsapp.com
+- Telegram: tg:// | fallback: https://t.me
+- Slack: slack:// | fallback: https://slack.com
+- Discord: discord:// | fallback: https://discord.com
+- Zoom: zoommtg:// | fallback: https://zoom.us
+- Microsoft Teams: ms-teams:// | fallback: https://teams.microsoft.com
+- Skype: skype:// | fallback: https://join.skype.com
+- Notion: notion:// | fallback: https://notion.so
+- Obsidian: obsidian:// | fallback: https://obsidian.md
+- VS Code: vscode:// | fallback: https://vscode.dev
+- Cursor: cursor:// | fallback: https://cursor.com
+- Figma: figma:// | fallback: https://figma.com
+- GitHub: github:// | fallback: https://github.com
+- Todoist: todoist:// | fallback: https://todoist.com
+- Linear: linear:// | fallback: https://linear.app
+- ClickUp: clickup:// | fallback: https://clickup.com
+- Trello: trello:// | fallback: https://trello.com
+- Asana: asana:// | fallback: https://asana.com
+- Google Drive: googledrive:// | fallback: https://drive.google.com
+- Dropbox: dropbox:// | fallback: https://dropbox.com
+- Apple Music: music:// | fallback: https://music.apple.com
+- SoundCloud: soundcloud:// | fallback: https://soundcloud.com
+- Email: mailto: | fallback: https://mail.google.com
+- Instagram: instagram:// | fallback: https://instagram.com
+- X (Twitter): twitter:// | fallback: https://x.com
+- Reddit: reddit:// | fallback: https://reddit.com
+- LinkedIn: linkedin:// | fallback: https://linkedin.com
+- Facebook: fb:// | fallback: https://facebook.com
+- TikTok: tiktok:// | fallback: https://tiktok.com
+- Snapchat: snapchat:// | fallback: https://snapchat.com
+- Maps: maps:// | fallback: https://maps.google.com
+- Waze: waze:// | fallback: https://waze.com
+- Amazon: amazon:// | fallback: https://amazon.com
+- PayPal: paypal:// | fallback: https://paypal.com
+
+💬 PRE-FILLED MESSAGES:
+If the user asks to send a message, append the URL-encoded message to the scheme:
+- WhatsApp: \`whatsapp://send?text=Hello%20there\` | fallback: \`https://wa.me/?text=Hello%20there\`
+- Telegram: \`tg://msg?text=Hello%20there\` | fallback: \`https://t.me/share/url?url=Hello%20there\`
+- Email: \`mailto:?body=Hello%20there\`
+(The app will open and prompt the user to pick a contact to send the message to, unless a phone number/contact is already in the URL).
+
+For apps NOT in this list, use the generic protocol format appname:// and provide the official HTTPS website as the fallback.`,
     input_schema: {
       type: "object" as const,
       properties: {
         appName: {
           type: "string",
-          description: "The name of the application (e.g., 'Spotify', 'Notion')",
+          description: "The display name of the application (e.g., 'Spotify', 'Notion', 'WhatsApp')",
         },
         uriScheme: {
           type: "string",
-          description: "The custom URI protocol for the desktop app (e.g., 'spotify://', 'notion://', 'vscode://')",
+          description: "The deep link URI (e.g., 'spotify://', 'whatsapp://send?text=Hello', 'youtube://watch?v=dQw4w9WgXcQ')",
         },
         fallbackUrl: {
           type: "string",
-          description: "The https:// fallback URL if the app isn't installed (e.g., 'https://open.spotify.com')",
+          description: "The https:// fallback URL if the native app isn't installed (e.g., 'https://open.spotify.com', 'https://web.whatsapp.com')",
         },
       },
       required: ["appName", "uriScheme", "fallbackUrl"],

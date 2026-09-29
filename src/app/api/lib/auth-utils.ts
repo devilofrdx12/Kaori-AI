@@ -29,8 +29,8 @@ function getJwtRefreshSecret(): string {
 const ACCESS_COOKIE = "kaori_access";
 const REFRESH_COOKIE = "kaori_refresh";
 
-const ACCESS_TTL = 15 * 60; // 15 minutes
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
+export const ACCESS_TTL = 15 * 60; // 15 minutes
+export const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
 
 export type AuthPayload = {
   userId: string;

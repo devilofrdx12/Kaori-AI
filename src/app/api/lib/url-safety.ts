@@ -63,11 +63,18 @@ function isHostnameAllowed(hostname: string): boolean {
   });
 }
 
-/** Result of URL validation — includes the resolved IP to pin fetches against DNS rebinding. */
+/**
+ * Result of URL validation — includes the resolved IP to pin fetches against
+ * DNS rebinding.  All fields are frozen strings so the validated result cannot
+ * be mutated between validation and fetch (TOCTOU).
+ */
 export type ValidatedUrl = {
-  url: URL;
-  /** The first resolved IP address, or the literal IP from the URL. `null` for IP-literal URLs that were validated directly. */
-  resolvedAddress: string | null;
+  /** The full, validated href (immutable snapshot). */
+  readonly href: string;
+  /** Original hostname from the URL (lowercase, bracket-stripped). */
+  readonly hostname: string;
+  /** The first resolved IP address, or the literal IP from the URL. */
+  readonly resolvedAddress: string;
 };
 
 export async function assertPublicHttpUrl(rawUrl: unknown): Promise<ValidatedUrl> {
@@ -112,7 +119,11 @@ export async function assertPublicHttpUrl(rawUrl: unknown): Promise<ValidatedUrl
     if (isPrivateIp(normalizedHostname)) {
       throw new Error("Fetching internal networks is prohibited");
     }
-    return { url: parsed, resolvedAddress: normalizedHostname };
+    return Object.freeze({
+      href: parsed.href,
+      hostname: normalizedHostname,
+      resolvedAddress: normalizedHostname,
+    });
   }
 
   // Hostname URL: resolve DNS once and pin the result.
@@ -127,8 +138,12 @@ export async function assertPublicHttpUrl(rawUrl: unknown): Promise<ValidatedUrl
     throw new Error("Fetching internal networks is prohibited");
   }
 
-  // Return the first resolved address for fetch pinning.
-  return { url: parsed, resolvedAddress: addresses[0].address };
+  // Return an immutable snapshot — prevents mutation between validation and fetch.
+  return Object.freeze({
+    href: parsed.href,
+    hostname: normalizedHostname,
+    resolvedAddress: addresses[0].address,
+  });
 }
 
 /**
@@ -145,19 +160,24 @@ export async function fetchPublicHttpUrl(
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     let dispatcher: Agent | undefined;
 
-    if (current.resolvedAddress && current.url.hostname !== current.resolvedAddress) {
+    // Always pin to the resolved IP via undici dispatcher when the hostname
+    // differs from the resolved address (i.e. DNS-based hosts). This closes
+    // the TOCTOU gap between DNS resolution and the actual TCP connection.
+    if (current.hostname !== current.resolvedAddress) {
       const family = net.isIPv6(current.resolvedAddress) ? 6 : 4;
       const pinnedAddress = current.resolvedAddress;
-      
+      const pinnedHostname = current.hostname;
+
       const { Agent: UndiciAgent } = await import("undici");
-      
+
       dispatcher = new UndiciAgent({
         connect: {
-          lookup: (hostname, options, callback) => {
-            if (hostname === current.url.hostname) {
+          lookup: (hostname, _options, callback) => {
+            if (hostname === pinnedHostname) {
               callback(null, [{ address: pinnedAddress, family }]);
             } else {
-              import("node:dns").then(dns => dns.lookup(hostname, options, callback));
+              // Should never happen — we construct the URL from the validated hostname.
+              callback(new Error("Unexpected hostname in pinned fetch"), []);
             }
           }
         }
@@ -173,7 +193,8 @@ export async function fetchPublicHttpUrl(
       fetchOptions.dispatcher = dispatcher;
     }
 
-    const response = await fetch(new URL(current.url.toString()), fetchOptions);
+    // Use the frozen href directly — no re-parsing of user-derived input.
+    const response = await fetch(current.href, fetchOptions);
 
     if (![301, 302, 303, 307, 308].includes(response.status)) {
       return response;
@@ -183,7 +204,7 @@ export async function fetchPublicHttpUrl(
     if (!location) return response;
 
     // Re-validate (and re-resolve DNS for) every redirect target.
-    current = await assertPublicHttpUrl(new URL(location, current.url).toString());
+    current = await assertPublicHttpUrl(new URL(location, current.href).toString());
   }
 
   throw new Error("Too many redirects");

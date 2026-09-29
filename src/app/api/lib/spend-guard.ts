@@ -132,7 +132,7 @@ export async function recordSpend(
  */
 const MODEL_COST_PER_1K_OUTPUT: Record<string, number> = {
   // Gemini
-  "gemini-2.5-flash": 0.0004,
+  "gemini-3.5-flash": 0.0004,
   "gemini-2.5-pro": 0.01,
   "gemini-": 0.001,            // fallback for other gemini models
 
@@ -140,6 +140,7 @@ const MODEL_COST_PER_1K_OUTPUT: Record<string, number> = {
   "llama-": 0.0003,
   "mixtral-": 0.0003,
   "meta-llama/": 0.0003,
+  "openai/gpt-oss-120b": 0.0005,
   "openai/": 0.0005,
   "qwen/": 0.0003,
 

@@ -8,70 +8,6 @@ import { ChatThread } from "./chat-types";
 import { sendMessage } from "@/lib/chat-api";
 import ActionPassport, { type ActionProposal } from "./action-passport";
 
-const BLOCKED_CUSTOM_URI_PROTOCOLS = new Set([
-  "about:", "blob:", "chrome:", "chrome-extension:", "data:", "devtools:",
-  "edge:", "file:", "filesystem:", "http:", "https:", "javascript:", "vbscript:",
-]);
-
-// Exact hostnames that are permitted when the open_youtube tool fires.
-const YOUTUBE_ALLOWED_HOSTS = new Set([
-  "www.youtube.com",
-  "youtu.be",
-  "youtube.com",
-  "m.youtube.com",
-]);
-
-/**
- * Extracts the first https: URL from tool result text whose hostname is in
- * YOUTUBE_ALLOWED_HOSTS. Returns null when nothing trustworthy is found.
- */
-function extractYouTubeUrl(result: string): string | null {
-  // Split on whitespace so we inspect discrete tokens, not substrings.
-  for (const token of result.split(/\s+/)) {
-    try {
-      const url = new URL(token);
-      if (url.protocol === "https:" && YOUTUBE_ALLOWED_HOSTS.has(url.hostname)) {
-        return url.toString();
-      }
-    } catch {
-      // token wasn't a valid URL – keep scanning
-    }
-  }
-  return null;
-}
-
-function getSafeCustomUri(value: unknown) {
-  if (typeof value !== "string" || value.length > 2048) return null;
-  try {
-    const parsed = new URL(value);
-    const protocol = parsed.protocol.toLowerCase();
-    if (!/^[a-z][a-z0-9+.-]*:$/.test(protocol)) return null;
-    if (BLOCKED_CUSTOM_URI_PROTOCOLS.has(protocol)) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function navigateToCustomUri(value: unknown) {
-  const uri = getSafeCustomUri(value);
-  if (!uri) return false;
-  window.location.href = uri;
-  return true;
-}
-
-function openSafeHttpsUrl(value: unknown) {
-  if (typeof value !== "string" || value.length > 2048) return false;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:") return false;
-    const opened = window.open(url.toString(), "_blank", "noopener,noreferrer");
-    if (opened) opened.opener = null;
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -281,14 +217,6 @@ export default function ActiveChatArea({
         onToolResult: (tool, result, input) => {
           setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
-          if (tool === "play_spotify" && result.includes("spotify:")) {
-            const match = result.match(/(spotify:[a-zA-Z0-9:]+)/);
-            if (match) navigateToCustomUri(match[1]);
-          }
-          if (tool === "open_youtube") {
-            const ytUrl = extractYouTubeUrl(result);
-            if (ytUrl) openSafeHttpsUrl(ytUrl);
-          }
         },
         onDone: () => {
           const assistantMsg: ChatMessage = {

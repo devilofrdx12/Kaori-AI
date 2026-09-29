@@ -9,6 +9,7 @@ import {
   setAuthCookies,
   getClientIp,
   clearAuthCookies,
+  REFRESH_TTL,
 } from "../../lib/auth-utils";
 import {
   findRefreshTokenByHash,
@@ -18,8 +19,6 @@ import {
   findUserById,
 } from "../../lib/db";
 import { logger } from "../../lib/logger";
-
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
 /**
  * POST /api/auth/refresh

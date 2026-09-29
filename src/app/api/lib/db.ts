@@ -89,18 +89,23 @@ export async function getDb(): Promise<Client> {
   return _db;
 }
 
-export function mapRows<T>(result: any): T[] {
-  if (!result.rows || result.rows.length === 0) return [];
+export interface QueryResultLike {
+  rows?: unknown[];
+  columns?: string[];
+}
+
+export function mapRows<T>(result: QueryResultLike | null | undefined): T[] {
+  if (!result?.rows || result.rows.length === 0) return [];
   if (!Array.isArray(result.rows[0])) {
     return result.rows as T[];
   }
   const columns = result.columns || [];
-  return result.rows.map((row: any[]) => {
-    const obj: any = {};
+  return (result.rows as unknown[][]).map((row: unknown[]) => {
+    const obj: Record<string, unknown> = {};
     columns.forEach((col: string, i: number) => {
       obj[col] = row[i];
     });
-    return obj;
+    return obj as T;
   });
 }
 
@@ -209,7 +214,7 @@ export async function createConversation(conv: {
       conv.project_id || null,
       conv.title,
       conv.provider || "google",
-      conv.model || "gemini-2.5-flash",
+      conv.model || "gemini-3.5-flash",
     ]
   );
   return (await findConversation(conv.id, conv.user_id))!;

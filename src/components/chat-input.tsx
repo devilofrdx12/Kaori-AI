@@ -161,7 +161,7 @@ export default function ChatInput({
     if (hasImage) {
       const currentModel = MODEL_OPTIONS.find((m) => m.id === model);
       if (!currentModel?.supportsVision) {
-        onModelChange("gemini-2.5-flash");
+        onModelChange("gemini-3.5-flash");
       }
     }
   };

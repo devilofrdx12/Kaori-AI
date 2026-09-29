@@ -16,27 +16,72 @@ const KNOWN_TOOLS = new Set([
 ]);
 
 const ALLOWED_APP_SCHEMES = new Set([
-  "spotify:",
-  "notion:",
-  "vscode:",
-  "obsidian:",
-  "slack:",
-  "discord:",
-  "mailto:",
-  "zoommtg:",
-  "ms-teams:",
+  // Music & Media
+  "spotify:", "youtube:", "music:", "soundcloud:",
+  // Communication
+  "mailto:", "whatsapp:", "tg:", "slack:", "discord:",
+  "ms-teams:", "zoommtg:", "skype:",
+  // Productivity
+  "notion:", "obsidian:", "todoist:", "linear:", "clickup:",
+  "trello:", "asana:",
+  // Dev Tools
+  "vscode:", "cursor:", "github:", "figma:",
+  // Cloud & Storage
+  "googledrive:", "dropbox:",
+  // Maps
+  "maps:", "waze:",
+  // Social
+  "instagram:", "twitter:", "reddit:", "linkedin:", "fb:",
+  "snapchat:", "tiktok:",
+  // E-commerce & Finance
+  "amazon:", "paypal:",
 ]);
 
 const APP_FALLBACK_HOSTS: Record<string, string[]> = {
+  // Music & Media
   "spotify:": ["open.spotify.com", "spotify.com"],
-  "notion:": ["notion.so"],
-  "vscode:": ["vscode.dev", "marketplace.visualstudio.com"],
-  "obsidian:": ["obsidian.md"],
-  "slack:": ["slack.com"],
-  "discord:": ["discord.com", "discord.gg"],
+  "youtube:": ["www.youtube.com", "youtube.com", "youtu.be", "m.youtube.com"],
+  "music:": ["music.apple.com"],
+  "soundcloud:": ["soundcloud.com"],
+  // Communication
   "mailto:": ["mail.google.com", "outlook.office.com", "outlook.live.com"],
-  "zoommtg:": ["zoom.us"],
+  "whatsapp:": ["web.whatsapp.com", "whatsapp.com", "wa.me", "api.whatsapp.com"],
+  "tg:": ["t.me", "web.telegram.org", "telegram.org"],
+  "slack:": ["slack.com", "app.slack.com"],
+  "discord:": ["discord.com", "discord.gg"],
   "ms-teams:": ["teams.microsoft.com", "teams.live.com"],
+  "zoommtg:": ["zoom.us"],
+  "skype:": ["join.skype.com", "web.skype.com"],
+  // Productivity
+  "notion:": ["notion.so", "www.notion.so"],
+  "obsidian:": ["obsidian.md"],
+  "todoist:": ["todoist.com", "app.todoist.com"],
+  "linear:": ["linear.app"],
+  "clickup:": ["app.clickup.com", "clickup.com"],
+  "trello:": ["trello.com"],
+  "asana:": ["app.asana.com", "asana.com"],
+  // Dev Tools
+  "vscode:": ["vscode.dev", "marketplace.visualstudio.com"],
+  "cursor:": ["cursor.com", "www.cursor.com"],
+  "github:": ["github.com"],
+  "figma:": ["figma.com", "www.figma.com"],
+  // Cloud & Storage
+  "googledrive:": ["drive.google.com"],
+  "dropbox:": ["dropbox.com", "www.dropbox.com"],
+  // Maps
+  "maps:": ["maps.google.com", "www.google.com"],
+  "waze:": ["waze.com", "www.waze.com"],
+  // Social
+  "instagram:": ["instagram.com", "www.instagram.com"],
+  "twitter:": ["x.com", "twitter.com"],
+  "reddit:": ["reddit.com", "www.reddit.com", "old.reddit.com"],
+  "linkedin:": ["linkedin.com", "www.linkedin.com"],
+  "fb:": ["facebook.com", "www.facebook.com", "m.facebook.com"],
+  "snapchat:": ["snapchat.com", "www.snapchat.com"],
+  "tiktok:": ["tiktok.com", "www.tiktok.com"],
+  // E-commerce & Finance
+  "amazon:": ["amazon.com", "www.amazon.com", "amazon.in", "www.amazon.in"],
+  "paypal:": ["paypal.com", "www.paypal.com"],
 };
 
 const DOCUMENT_FORMATS = new Set([
@@ -126,21 +171,21 @@ function containsExposedSecret(content: string) {
 }
 
 function userAskedToOpenApp(userMessage: string) {
-  return /\b(open|launch|start)\b[\s\S]{0,100}\b(app|application|spotify|notion|vscode|visual studio code|obsidian|slack|discord|zoom|teams|email|mail)\b/i.test(
+  return /\b(open|launch|start|use)\b[\s\S]{0,100}\b(app|application|spotify|youtube|music|soundcloud|whatsapp|tg|telegram|slack|discord|teams|zoom|skype|email|mail|notion|obsidian|todoist|linear|clickup|trello|asana|vscode|visual studio|cursor|github|figma|drive|dropbox|maps|waze|instagram|twitter|x|reddit|linkedin|fb|facebook|snapchat|tiktok|amazon|paypal)\b/i.test(
     userMessage
-  );
+  ) || /\bopen_application\b/i.test(userMessage);
 }
 
 function userAskedToPlaySpotify(userMessage: string) {
   return /\b(play|listen to|put on)\b[\s\S]{0,100}\b(song|music|track|album|playlist|spotify)\b/i.test(
     userMessage
-  );
+  ) || /\bplay_spotify\b/i.test(userMessage);
 }
 
 function userAskedToOpenYouTube(userMessage: string) {
   return /\b(open|launch|play|watch|search)\b[\s\S]{0,100}\b(youtube|video)\b/i.test(
     userMessage
-  );
+  ) || /\bopen_youtube\b/i.test(userMessage);
 }
 
 function domainIsBlocked(hostname: string) {

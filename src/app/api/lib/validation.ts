@@ -1,6 +1,6 @@
 const ALLOWED_MODELS = new Set([
   "openai/gpt-oss-120b",
-  "gemini-2.5-flash",
+  "gemini-3.5-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
   "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -10,7 +10,7 @@ const ALLOWED_MODELS = new Set([
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 const VISION_MODELS = new Set([
-  "gemini-2.5-flash",
+  "gemini-3.5-flash",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
   "deepseek-ai/deepseek-v4-flash-0731",
 ]);
@@ -114,7 +114,7 @@ export function validateEmail(email: string): string {
   }
 
   const [localPart, domain] = trimmed.split("@");
-  const emailRegex = /^[a-z0-9.!#$%&*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+  const emailRegex = /^[a-z0-9.!#$%&*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
   if (
     !emailRegex.test(trimmed) ||
     !localPart ||
@@ -170,7 +170,7 @@ export function validateConversationTitle(title: unknown): string {
 
 export function validateModel(model: unknown): string {
   if (typeof model !== "string" || !ALLOWED_MODELS.has(model)) {
-    return "gemini-2.5-flash";
+    return "gemini-3.5-flash";
   }
   return model;
 }

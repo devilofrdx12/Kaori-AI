@@ -4,7 +4,10 @@ import { memo, useCallback, useEffect, useState, useMemo, type AnchorHTMLAttribu
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
 import { ChatMessage } from "./types";
 import CodeBlock from "./code-block";
@@ -94,8 +97,8 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
   );
 }
 
-const memoizedRemarkPlugins = [remarkGfm];
-const memoizedRehypePlugins = [[rehypeHighlight, { ignoreMissing: true }]] as any;
+const memoizedRemarkPlugins = [remarkGfm, remarkMath];
+const memoizedRehypePlugins = [[rehypeHighlight, { ignoreMissing: true }], rehypeKatex] as any;
 
 const memoizedComponents: Components = {
   pre: ({ children }: any) => <>{children}</>,
@@ -118,7 +121,7 @@ const memoizedComponents: Components = {
     );
   },
   a: ({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
-    const isDownload = href && /^\/api\/download\//.test(href);
+    const isDownload = href && href.includes('/api/download/');
     if (isDownload) {
       const handleDownload = async (e: React.MouseEvent) => {
         e.preventDefault();
