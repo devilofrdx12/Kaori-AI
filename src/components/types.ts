@@ -64,6 +64,15 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: false,
   },
   {
+    id: "gemini-flash-lite-latest",
+    label: "Gemini Flash Lite (Latest)",
+    provider: "google",
+    description: "Google's fastest, high-uptime multimodal vision model",
+    badge: "Fast & Stable",
+    supportsVision: true,
+    supportsThinking: false,
+  },
+  {
     id: "gemini-3.5-flash",
     label: "Gemini 3.5 Flash",
     provider: "google",

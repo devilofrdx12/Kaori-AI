@@ -83,6 +83,7 @@ type ToolUseBlock = {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  extra_content?: Record<string, unknown>;
 };
 
 type AppActionProposal = {
@@ -96,16 +97,19 @@ type AppActionProposal = {
 
 type StreamEvent = {
   type?: string;
+  extra_content?: Record<string, unknown>;
   content_block?: {
     id?: string;
     name?: string;
     type?: string;
+    extra_content?: Record<string, unknown>;
   };
   delta?: {
     partial_json?: string;
     stop_reason?: string;
     text?: string;
     type?: string;
+    extra_content?: Record<string, unknown>;
   };
 };
 
@@ -352,11 +356,25 @@ async function executeToolCall(
     if (toolName === "create_document") {
       if (!userId) return "Error: User ID not found.";
       const ALLOWED_DOCUMENT_FORMATS = new Set(["pdf", "docx", "md", "html", "css", "js", "ts", "tsx", "jsx", "json"]);
-      const format = String(toolInput.format || "").toLowerCase();
+      let format = String(toolInput.format || "").trim().toLowerCase();
+      let filename = typeof toolInput.filename === "string" ? toolInput.filename.trim() : "";
+      if (!filename && typeof toolInput.title === "string") {
+        filename = (toolInput.title as string).trim();
+      }
+      if (!format && filename.includes(".")) {
+        const ext = filename.split(".").pop()?.toLowerCase();
+        if (ext && ALLOWED_DOCUMENT_FORMATS.has(ext)) format = ext;
+      }
+      if (!format) format = "pdf";
+      if (!filename) filename = "document." + format;
+      if (!filename.toLowerCase().endsWith("." + format)) {
+        filename = `${filename}.${format}`;
+      }
+      filename = filename.replace(/[^a-zA-Z0-9 .()_-]/g, "_");
       if (!ALLOWED_DOCUMENT_FORMATS.has(format)) {
         return `Error: Unsupported document format '${format}'. Allowed: ${[...ALLOWED_DOCUMENT_FORMATS].join(", ")}`;
       }
-      const filename = typeof toolInput.filename === "string" ? toolInput.filename.trim() : "";
+      // filename is already normalized above
       const content = typeof toolInput.content === "string" ? toolInput.content : "";
       if (!filename) return "Error: A filename is required to create a document.";
       if (!content) return "Error: Document content cannot be empty.";
@@ -377,7 +395,7 @@ async function executeToolCall(
       if (!apiKey) return "Error: Google API key not configured.";
       if (userId) await reserveChatSpend(userId);
 
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -860,6 +878,7 @@ export async function POST(req: NextRequest) {
                         id: event.content_block.id || uuid(),
                         name: event.content_block.name || "unknown",
                         input: {},
+                        extra_content: event.content_block.extra_content,
                       };
                       toolUseInputJson = "";
 
@@ -905,6 +924,23 @@ export async function POST(req: NextRequest) {
                     );
                   }
 
+                  if ((event.type === "content_block_extra" || event.extra_content) && currentToolUse) {
+                    const extra = event.extra_content || (event as any).extra_content;
+                    if (extra) {
+                      currentToolUse.extra_content = {
+                        ...(currentToolUse.extra_content || {}),
+                        ...extra,
+                      };
+                    }
+                  }
+
+                  if (event.delta?.extra_content && currentToolUse) {
+                    currentToolUse.extra_content = {
+                      ...(currentToolUse.extra_content || {}),
+                      ...event.delta.extra_content,
+                    };
+                  }
+
                   if (event.type === "content_block_stop" && currentToolUse) {
                     try {
                       currentToolUse.input = JSON.parse(
@@ -927,8 +963,21 @@ export async function POST(req: NextRequest) {
               }
             }
 
+            if (currentToolUse) {
+              try {
+                currentToolUse.input = JSON.parse(
+                  toolUseInputJson || "{}"
+                );
+              } catch {
+                currentToolUse.input = {};
+              }
+              toolUseBlocks.push(currentToolUse);
+              currentToolUse = null;
+              toolUseInputJson = "";
+            }
+
             // If model wants to use tools, execute them and continue
-            if (stopReason === "tool_use" && toolUseBlocks.length > 0) {
+            if (toolUseBlocks.length > 0) {
               toolRounds += 1;
               const assistantContent: KaoriContentBlock[] = [];
               if (fullAssistantContent) {
@@ -943,6 +992,7 @@ export async function POST(req: NextRequest) {
                   id: tool.id,
                   name: tool.name,
                   input: tool.input,
+                  ...(tool.extra_content ? { extra_content: tool.extra_content } : {}),
                 });
               }
               currentMessages.push({
@@ -959,6 +1009,26 @@ export async function POST(req: NextRequest) {
               // Execute tools and add results
               const toolResults: KaoriContentBlock[] = [];
               for (const tool of toolUseBlocks) {
+                if (tool.name === "create_document" && tool.input) {
+                  let format = String(tool.input.format || "").trim().toLowerCase();
+                  let filename = typeof tool.input.filename === "string" ? tool.input.filename.trim() : "";
+                  if (!filename && typeof tool.input.title === "string") {
+                    filename = (tool.input.title as string).trim();
+                  }
+                  if (!format && filename.includes(".")) {
+                    const ext = filename.split(".").pop()?.toLowerCase();
+                    if (ext) format = ext;
+                  }
+                  if (!format) format = "pdf";
+                  if (!filename) filename = "document." + format;
+                  if (!filename.toLowerCase().endsWith("." + format)) {
+                    filename = `${filename}.${format}`;
+                  }
+                  filename = filename.replace(/[^a-zA-Z0-9 .()_-]/g, "_");
+                  tool.input.format = format;
+                  tool.input.filename = filename;
+                }
+
                 logger.info(
                   { userId: user.id, tool: tool.name },
                   "Tool call"

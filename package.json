@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/validation-extended.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/model-routing.test.ts src/app/api/lib/spend-guard.test.ts src/app/api/lib/system-prompt.test.ts src/app/api/lib/memory-dto-extended.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts src/app/api/lib/quartzwall/capability-firewall-extended.test.ts src/app/api/lib/quartzwall/classifier.test.ts",
+    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/validation-extended.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/model-routing.test.ts src/app/api/lib/spend-guard.test.ts src/app/api/lib/system-prompt.test.ts src/app/api/lib/memory-dto-extended.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts src/app/api/lib/quartzwall/capability-firewall-extended.test.ts src/app/api/lib/quartzwall/classifier.test.ts src/app/api/lib/openai-adapter.test.ts",
     "migrate": "npx tsx scripts/migrate-json-to-sqlite.ts",
     "backup": "npx tsx scripts/backup-db.ts"
   },

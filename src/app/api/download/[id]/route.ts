@@ -33,6 +33,51 @@ const TEXT_DOCUMENT_FORMATS: Record<string, string> = {
 
 import { marked } from 'marked';
 
+/**
+ * Clean text for standard PDF Type-1 fonts (Helvetica/Courier).
+ * Standard PDF fonts only support ASCII/Latin-1 (WinAnsiEncoding).
+ * Multi-byte UTF-8 characters like emojis, Greek letters, and math symbols
+ * cause byte-misinterpretation (mojibake) and overlapping text rendering.
+ */
+function cleanPdfText(text: string): string {
+  if (!text) return "";
+  return text
+    // Mathematical & technical symbols -> readable ASCII
+    .replace(/[→⇒➔➜]/g, " -> ")
+    .replace(/[←⇐]/g, " <- ")
+    .replace(/[↔⇔]/g, " <-> ")
+    .replace(/≥/g, ">=")
+    .replace(/≤/g, "<=")
+    .replace(/≠/g, "!=")
+    .replace(/≈/g, "~=")
+    .replace(/∑/g, "sum")
+    .replace(/∏/g, "prod")
+    .replace(/√/g, "sqrt")
+    .replace(/∞/g, "inf")
+    .replace(/±/g, "+/-")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/[·•]/g, "*")
+    .replace(/°/g, " deg")
+    // Typographic quotes & punctuation
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/—/g, " -- ")
+    .replace(/–/g, " - ")
+    .replace(/…/g, "...")
+    .replace(/™/gi, "(TM)")
+    .replace(/©/gi, "(C)")
+    .replace(/®/gi, "(R)")
+    .replace(/[✓✔]/g, "[x]")
+    .replace(/[✗✘]/g, "[ ]")
+    // Strip emojis & extended pictographs (surrogates and symbols)
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    // Strip invisible formatting characters
+    .replace(/[\u200B-\u200D\uFE0E\uFE0F]/g, "")
+    // Normalize leftover multiple spaces into single space
+    .replace(/[ \t]{2,}/g, " ");
+}
+
 function parseInlineTokens(tokens?: any[]): any {
   if (!tokens) return '';
   const result = tokens.map((token: any) => {
@@ -42,18 +87,18 @@ function parseInlineTokens(tokens?: any[]): any {
       case 'em':
         return { text: parseInlineTokens(token.tokens), italics: true };
       case 'codespan':
-        return { text: token.text, font: 'Courier', background: '#f4f4f4' };
+        return { text: cleanPdfText(token.text), font: 'Courier', background: '#f4f4f4' };
       case 'link':
         return { text: parseInlineTokens(token.tokens), color: 'blue', decoration: 'underline', link: token.href };
       case 'text':
       case 'escape':
-        return token.text;
+        return cleanPdfText(token.text);
       case 'br':
         return '\n';
       case 'del':
         return { text: parseInlineTokens(token.tokens), decoration: 'lineThrough' };
       default:
-        return token.text || '';
+        return cleanPdfText(token.text || '');
     }
   });
   return result.length === 1 ? result[0] : result;
@@ -66,26 +111,36 @@ function parseTokens(tokens: any[]): any[] {
       case 'heading':
         result.push({
           text: parseInlineTokens(token.tokens),
-          fontSize: Math.max(24 - (token.depth * 2), 12),
+          fontSize: Math.max(22 - (token.depth * 2), 12),
           bold: true,
-          margin: [0, 15 - token.depth, 0, 5],
+          margin: [0, token.depth === 1 ? 16 : 12, 0, 6],
         });
         break;
       case 'paragraph':
         result.push({
           text: parseInlineTokens(token.tokens),
-          margin: [0, 5, 0, 10],
+          margin: [0, 4, 0, 8],
+          lineHeight: 1.25,
         });
         break;
       case 'list':
-        const listItems = token.items.map((item: any) => ({
-           margin: [0, 2, 0, 2],
-           text: parseTokens(item.tokens)
-        }));
+        const listItems = token.items.map((item: any) => {
+          const parsed = parseTokens(item.tokens);
+          if (parsed.length === 1 && parsed[0].text !== undefined) {
+            return {
+              text: parsed[0].text,
+              margin: [0, 2, 0, 2],
+            };
+          }
+          return {
+            stack: parsed,
+            margin: [0, 2, 0, 2],
+          };
+        });
         if (token.ordered) {
-          result.push({ ol: listItems, margin: [0, 5, 0, 10] });
+          result.push({ ol: listItems, margin: [0, 4, 0, 8] });
         } else {
-          result.push({ ul: listItems, margin: [0, 5, 0, 10] });
+          result.push({ ul: listItems, margin: [0, 4, 0, 8] });
         }
         break;
       case 'table':
@@ -122,23 +177,28 @@ function parseTokens(tokens: any[]): any[] {
         break;
       case 'code':
         result.push({
-          text: token.text,
+          text: cleanPdfText(token.text),
           font: 'Courier',
-          margin: [0, 5, 0, 10],
+          fontSize: 8.5,
+          lineHeight: 1.2,
+          margin: [0, 4, 0, 8],
           background: '#f4f4f4'
         });
         break;
       case 'hr':
         result.push({
-          canvas: [{ type: 'line', x1: 0, y1: 5, x2: 515, y2: 5, lineWidth: 1, lineColor: '#cccccc' }],
-          margin: [0, 10, 0, 10]
+          canvas: [{ type: 'line', x1: 0, y1: 5, x2: 515, y2: 5, lineWidth: 0.75, lineColor: '#e0e0e0' }],
+          margin: [0, 8, 0, 8]
         });
         break;
       case 'space':
         break;
+      case 'text':
       default:
-        if (token.text) {
-           result.push({ text: token.text, margin: [0, 5, 0, 10] });
+        if (token.tokens && token.tokens.length > 0) {
+          result.push({ text: parseInlineTokens(token.tokens), margin: [0, 2, 0, 4] });
+        } else if (token.text) {
+          result.push({ text: cleanPdfText(token.text), margin: [0, 2, 0, 4] });
         }
         break;
     }
@@ -147,7 +207,8 @@ function parseTokens(tokens: any[]): any[] {
 }
 
 function markdownToPdfmake(markdownText: string) {
-  const tokens = marked.lexer(markdownText);
+  const sanitized = cleanPdfText(markdownText);
+  const tokens = marked.lexer(sanitized);
   return parseTokens(tokens);
 }
 
@@ -180,7 +241,8 @@ async function generatePdfBuffer(content: string): Promise<Uint8Array> {
 
   const pdfDoc = pdfmake.createPdf({
     content: parsedContent,
-    defaultStyle: { font: "Roboto" },
+    defaultStyle: { font: "Roboto", fontSize: 10, lineHeight: 1.25 },
+    pageMargins: [40, 40, 40, 40],
   });
   const buffer = await pdfDoc.getBuffer();
   return new Uint8Array(buffer);

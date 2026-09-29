@@ -101,7 +101,7 @@ function withIdleTimeout(
 }
 
 // Convert Kaori messages to OpenAI format
-function convertMessages(messages: KaoriMessage[]) {
+export function convertMessages(messages: KaoriMessage[]) {
   const openAiMessages: any[] = [];
   
   for (const msg of messages) {
@@ -125,14 +125,18 @@ function convertMessages(messages: KaoriMessage[]) {
             }
           });
         } else if (block.type === "tool_use") {
-          toolCalls.push({
+          const tc: any = {
             id: block.id,
             type: "function",
             function: {
               name: block.name,
               arguments: JSON.stringify(block.input)
             }
-          });
+          };
+          if (block.extra_content) {
+            tc.extra_content = block.extra_content;
+          }
+          toolCalls.push(tc);
         } else if (block.type === "tool_result") {
           openAiMessages.push({
             role: "tool",
@@ -153,7 +157,10 @@ function convertMessages(messages: KaoriMessage[]) {
           }
         }
 
-        if (toolCalls.length > 0) m.tool_calls = toolCalls;
+        if (toolCalls.length > 0) {
+          m.tool_calls = toolCalls;
+          m.content = m.content || null;
+        }
         openAiMessages.push(m);
       }
     }
@@ -278,6 +285,7 @@ export async function streamOpenAiCompatible({
 
   // Return a TransformStream that converts OpenAI SSE to Anthropic SSE
   let buffer = "";
+  let hasToolCalls = false;
   const decoder = new TextDecoder();
   const transformStream = new TransformStream({
     transform(chunk, controller) {
@@ -317,12 +325,24 @@ export async function streamOpenAiCompatible({
              })}\n\n`));
           }
           
-          if (delta?.tool_calls) {
+          if (delta?.tool_calls && delta.tool_calls.length > 0) {
+             hasToolCalls = true;
              for (const tc of delta.tool_calls) {
                if (tc.function?.name) {
                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
                    type: "content_block_start",
-                   content_block: { type: "tool_use", id: tc.id || "call_" + Date.now(), name: tc.function.name }
+                   content_block: {
+                     type: "tool_use",
+                     id: tc.id || "call_" + Date.now(),
+                     name: tc.function.name,
+                     ...(tc.extra_content ? { extra_content: tc.extra_content } : {})
+                   }
+                 })}\n\n`));
+               }
+               if (tc.extra_content && !tc.function?.name) {
+                 controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                   type: "content_block_extra",
+                   extra_content: tc.extra_content
                  })}\n\n`));
                }
                if (tc.function?.arguments) {
@@ -335,8 +355,10 @@ export async function streamOpenAiCompatible({
           }
           
           if (finishReason) {
-              const stopReason = finishReason === "tool_calls" ? "tool_use"
-                : finishReason === "stop" ? "end_turn"
+              const stopReason = (finishReason === "tool_calls" || (finishReason === "stop" && hasToolCalls))
+                ? "tool_use"
+                : finishReason === "stop"
+                ? "end_turn"
                 : finishReason;
               
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({

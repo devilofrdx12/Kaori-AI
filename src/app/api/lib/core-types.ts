@@ -6,7 +6,7 @@ export type KaoriMessage = {
 export type KaoriContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; source: { type: "base64"; media_type: string; data: string; detail?: "fast" | "balanced" | "high" } }
-  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown>; extra_content?: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string };
 
 export type KaoriTool = {

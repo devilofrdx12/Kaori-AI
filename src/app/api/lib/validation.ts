@@ -1,5 +1,8 @@
 const ALLOWED_MODELS = new Set([
   "openai/gpt-oss-120b",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+  "gemini-3.7-flash",
   "gemini-3.5-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
@@ -10,6 +13,9 @@ const ALLOWED_MODELS = new Set([
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 const VISION_MODELS = new Set([
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+  "gemini-3.7-flash",
   "gemini-3.5-flash",
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
   "deepseek-ai/deepseek-v4-flash-0731",
