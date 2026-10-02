@@ -1,0 +1,479 @@
+"use client";
+
+import { memo, useState, useMemo, type AnchorHTMLAttributes } from "react";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import rehypeKatex from "rehype-katex";
+import katex from "katex";
+import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
+import { ChatMessage } from "./types";
+import CodeBlock from "./code-block";
+import type { Components } from "react-markdown";
+
+/* ── Collapsible thinking block (Claude-style) ── */
+function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  const [open, setOpen] = useState(isStreaming ? true : false);
+  const [prevIsStreaming, setPrevIsStreaming] = useState(isStreaming);
+  const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+  // Auto-expand when streaming starts (React 18+ pattern for updating state based on props)
+  if (isStreaming !== prevIsStreaming) {
+    setPrevIsStreaming(isStreaming);
+    if (isStreaming) {
+      setOpen(true);
+    }
+  }
+
+  return (
+    <div className="mb-3 animate-fade-in">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`
+          flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl
+          text-xs select-none cursor-pointer
+          transition-all duration-300 ease-out
+          ${isStreaming
+            ? "bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]"
+            : "bg-[hsl(var(--muted)/0.5)] border border-[hsl(var(--border)/0.5)] hover:bg-[hsl(var(--muted)/0.8)]"
+          }
+        `}
+      >
+        {/* Animated brain icon */}
+        <div className={`relative shrink-0 ${isStreaming ? "animate-pulse" : ""}`}>
+          <Brain
+            size={14}
+            className="text-[hsl(var(--primary))]"
+          />
+          {isStreaming && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[hsl(var(--primary))] animate-ping" />
+          )}
+        </div>
+
+        {/* Label */}
+        <span className="font-medium text-[hsl(var(--muted-foreground))]">
+          {isStreaming ? "Thinking…" : `Thought for ${wordCount} words`}
+        </span>
+
+        {/* Spacer */}
+        <span className="flex-1" />
+
+        {/* Chevron */}
+        <ChevronDown
+          size={13}
+          className={`shrink-0 text-[hsl(var(--muted-foreground)/0.6)] transition-transform duration-300 ${open ? "rotate-180" : ""
+            }`}
+        />
+      </button>
+
+      {/* Expandable content */}
+      <div
+        className={`
+          overflow-hidden transition-all duration-300 ease-out
+          ${open ? "max-h-[400px] opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"}
+        `}
+      >
+        <div className="pl-4 border-l-2 border-[hsl(var(--primary)/0.25)]">
+          <div className={`
+            max-h-80 overflow-y-auto scrollbar-hide rounded-lg p-3
+            bg-[hsl(var(--muted)/0.3)]
+            ${isStreaming ? "thinking-content-stream" : ""}
+          `}>
+            <p className="text-[13px] leading-relaxed text-[hsl(var(--muted-foreground))] whitespace-pre-wrap font-mono">
+              {content}
+              {isStreaming && (
+                <span className="inline-block w-[2px] h-[14px] bg-[hsl(var(--primary))] ml-0.5 align-text-bottom animate-pulse" />
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function extractText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(extractText).join("");
+  if (value && typeof value === "object" && "props" in value) {
+    const props = (value as { props?: { children?: unknown } }).props;
+    if (props?.children) return extractText(props.children);
+  }
+  return "";
+}
+
+function preprocessLaTeX(content: string): string {
+  if (!content) return content;
+
+  let text = content;
+
+  // 1. Escape currency dollar signs (e.g. $50, $100.00, $5M) so remark-math doesn't treat them as math delimiters
+  text = text.replace(/(^|\s)\$(\d+(?:[.,]\d+)?(?:k|m|b|t)?)(?=\s|[.,;:!?]|$)/gi, "$1\\$$2");
+
+  // 2. Un-backtick math that was wrapped in inline code:
+  // e.g. `$P_\ell = |I_\ell|^2 R_0$` -> $P_\ell = |I_\ell|^2 R_0$
+  // or `$$ ... $$` -> $$ ... $$
+  text = text.replace(/`(\${1,2}[^`]+?\${1,2})`/g, "$1");
+
+  // Also un-backtick LaTeX brackets: `\[ ... \]` or `\( ... \)`
+  text = text.replace(/`(\\\[[\s\S]+?\\\])`/g, "$1");
+  text = text.replace(/`(\\\([\s\S]+?\\\))`/g, "$1");
+
+  // Also handle inline code containing obvious LaTeX formulas without dollar signs:
+  // e.g. `\sqrt{a^2 + b^2}` -> $\sqrt{a^2 + b^2}$
+  text = text.replace(
+    /`(\\(?:frac|sqrt|sum|int|prod|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|tau|phi|omega|ell|partial|nabla|infty|times|cdot|pm|approx|neq|leq|geq|in|subset|forall|exists|mathbf|mathrm|text|left|right)\b[^`\n]*?)`/g,
+    "$$$1$$"
+  );
+
+  // 3. Replace \[ ... \] with $$ ... $$ for display math
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
+
+  // 4. Replace \( ... \) with $ ... $ for inline math
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
+
+  // 5. Convert ```math code blocks to $$ block math
+  text = text.replace(/```(?:math)\s*\n([\s\S]*?)\n```/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
+
+  // 6. Wrap unadorned LaTeX environments (align, equation, matrix, etc.) in $$ if not already
+  text = text.replace(
+    /(?:^|\n)(\\begin\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\}[\s\S]*?\\end\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\})(?:\n|$)/g,
+    "\n\n$$\n$1\n$$\n\n"
+  );
+
+  // 7. Normalize <br> variants so rehype-raw can parse them
+  text = text.replace(/<br\s*\/?>/gi, "<br />");
+
+  return text;
+}
+
+const memoizedRemarkPlugins = [remarkGfm, remarkMath];
+const memoizedRehypePlugins = [
+  rehypeRaw,
+  [rehypeHighlight, { ignoreMissing: true }],
+  [rehypeKatex, { throwOnError: false }],
+] as any;
+
+const memoizedComponents: Components = {
+  pre: ({ children }: any) => <>{children}</>,
+  code: ({ className, children, ...rest }: any) => {
+    const isBlock = /language-(\w+)/.test(className || "");
+    if (isBlock) {
+      const match = /language-(\w+)/.exec(className || "");
+      const lang = match ? match[1].toLowerCase() : "";
+      if (lang === "math") {
+        const raw = extractText(children).trim();
+        try {
+          const html = katex.renderToString(raw, { displayMode: true, throwOnError: false });
+          return (
+            <div
+              className="my-3 overflow-x-auto text-center"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          );
+        } catch {
+          // fall through to CodeBlock
+        }
+      }
+      return (
+        <CodeBlock className={className}>
+          {children}
+        </CodeBlock>
+      );
+    }
+
+    const raw = typeof children === "string" ? children.trim() : "";
+    // Safety net: if inline code still contains math delimiters or starts with LaTeX command, render with KaTeX
+    if (
+      raw &&
+      ((raw.startsWith("$") && raw.endsWith("$") && raw.length > 2) ||
+        /^\\(frac|sqrt|sum|int|partial|nabla|infty)\b/.test(raw))
+    ) {
+      const math = raw.replace(/^\$+|\$+$/g, "").trim();
+      try {
+        const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
+        return (
+          <span
+            className="inline-math inline-block align-middle"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+      } catch {
+        // Fallback to normal code tag
+      }
+    }
+
+    return (
+      <code
+        className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
+        {...rest}
+      >
+        {children}
+      </code>
+    );
+  },
+  a: ({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
+    const isDownload = href && href.includes('/api/download/');
+    if (isDownload) {
+      const handleDownload = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        const btn = e.currentTarget as HTMLElement;
+        btn.style.opacity = "0.5";
+        btn.style.pointerEvents = "none";
+        try {
+          const resp = await fetch(href!, { credentials: "same-origin" });
+          if (!resp.ok) throw new Error(`Download failed (${resp.status})`);
+          const blob = await resp.blob();
+          // Extract filename from Content-Disposition header or link text
+          const cd = resp.headers.get("Content-Disposition");
+          const filenameMatch = cd?.match(/filename="?([^";\n]+)"?/);
+          const filename = filenameMatch?.[1] || (typeof children === "string" ? children : "download");
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          // Clean up after a short delay
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+        } catch (err) {
+          console.error("[download]", err);
+          alert("Download failed. Please try again.");
+        } finally {
+          btn.style.opacity = "";
+          btn.style.pointerEvents = "";
+        }
+      };
+      return (
+        <button
+          type="button"
+          onClick={handleDownload as any}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 my-1 rounded-xl bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-sm font-medium hover:bg-[hsl(var(--primary)/0.2)] transition-colors cursor-pointer border-none"
+        >
+          <Download size={14} />
+          {children}
+        </button>
+      );
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[hsl(var(--primary))] underline underline-offset-2 hover:opacity-80 transition-colors break-words"
+        {...rest}
+      >
+        {children}
+      </a>
+    );
+  },
+};
+
+export const MessageRow = memo((
+  {
+    msg,
+    isEditing,
+    editText,
+    setEditText,
+    setEditingMessageId,
+    onEditSubmit,
+    isCopied,
+    copyMessage,
+    streamingThinking,
+    onRegenerate,
+  }: {
+    msg: ChatMessage;
+    isEditing: boolean;
+    editText: string;
+    setEditText: (v: string) => void;
+    setEditingMessageId: (id: string | null) => void;
+    onEditSubmit?: (messageId: string, newText: string) => void;
+    isCopied: boolean;
+    copyMessage: (id: string, text: string) => void;
+    streamingThinking?: string;
+    onRegenerate?: (messageId: string) => void;
+  }) => {
+  const processedContent = useMemo(() => preprocessLaTeX(msg.content), [msg.content]);
+
+  return (
+    <div className="message-enter group relative">
+      {msg.role === "user" ? (
+        /* ── USER MESSAGE ── */
+        <div className="flex justify-end mb-4">
+          <div className="max-w-[min(88%,44rem)] flex items-end gap-2">
+            {isEditing ? (
+              <div className="w-full flex flex-col gap-2 glass-panel p-4 rounded-2xl">
+                <textarea
+                  title="Edit message"
+                  placeholder="Edit message"
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="w-full min-h-[100px] bg-transparent text-on-surface text-sm resize-none outline-none font-body"
+                />
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => setEditingMessageId(null)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-xl hover:bg-white/55 dark:hover:bg-white/10 text-secondary hover-lift active-press"
+                  >Cancel</button>
+                  <button
+                    onClick={() => {
+                      if (onEditSubmit && editText.trim() !== msg.content) {
+                        onEditSubmit(msg.id, editText);
+                      }
+                      setEditingMessageId(null);
+                    }}
+                    disabled={!editText.trim() || editText === msg.content}
+                    className="px-3 py-1.5 text-xs font-medium rounded-xl bg-primary text-white disabled:opacity-50 disabled:hover-lift-none disabled:active-press-none hover-lift active-press"
+                  >Save & Submit</button>
+                </div>
+              </div>
+            ) : (
+              <div className="group/user flex flex-col items-end gap-1">
+                <div className="flex flex-col gap-2 w-full max-w-full items-end">
+                  {msg.files && msg.files.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-end mb-1">
+                      {msg.files.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-white/60 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm max-w-full overflow-hidden">
+                          {f.type.startsWith("image/") ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={f.url} alt={f.name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-md" />
+                          ) : (
+                            <div className="flex items-center gap-2 px-1">
+                              <span className="text-2xl">📄</span>
+                              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300 max-w-[120px] truncate">{f.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {msg.content && (
+                    <div className="px-4 sm:px-5 py-3 rounded-[1.5rem] rounded-br-md neumorphic-raised bg-background text-on-surface text-[15px] leading-relaxed whitespace-pre-wrap break-words font-body">
+                      {msg.content}
+                    </div>
+                  )}
+                </div>
+                {/* Actions Row */}
+                <div className="flex items-center gap-1 mt-1 opacity-60 sm:opacity-0 group-hover/user:opacity-100 transition-opacity mr-2">
+                  <button
+                    onClick={() => copyMessage(msg.id, msg.content)}
+                    title="Copy"
+                    className="p-1.5 rounded-full text-secondary hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
+                  >
+                    {isCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingMessageId(msg.id);
+                      setEditText(msg.content);
+                    }}
+                    title="Edit"
+                    className="p-1.5 rounded-full text-secondary hover:bg-white/55 dark:hover:bg-white/10 hover:text-on-surface hover-lift active-press"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="w-7 h-7 rounded-full bg-white/40 dark:bg-black/40 flex items-center justify-center shrink-0 glass-border">
+              <User size={14} className="text-secondary" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── ASSISTANT MESSAGE ── */
+        <div className="flex flex-col mb-4">
+          {(msg.content || streamingThinking || msg.thinking || (msg.toolResults && msg.toolResults.length > 0)) && (
+            <div className="flex flex-col">
+              <div className="flex-1 min-w-0">
+                {(msg.content || streamingThinking || msg.thinking) && (
+                  <div className="py-1 transition-colors duration-300">
+
+                    {/* Show thinking block if this is the streaming message with thinking, or a saved message with thinking */}
+                    {(streamingThinking || msg.thinking) && (
+                      <ThinkingBlock
+                        content={streamingThinking || msg.thinking || ""}
+                        isStreaming={!!streamingThinking}
+                      />
+                    )}
+                    <div className="prose dark:prose-invert max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={memoizedRemarkPlugins}
+                        rehypePlugins={memoizedRehypePlugins}
+                        components={memoizedComponents}
+                      >
+                        {processedContent}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Copy button */}
+          {msg.id !== "__streaming__" && msg.content && (
+            <div>
+              <button
+                onClick={() => copyMessage(msg.id, msg.content)}
+                className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-on-surface opacity-60 sm:opacity-0 sm:group-hover:opacity-100 hover-lift active-press"
+              >
+                {isCopied ? (
+                  <>
+                    <Check size={12} className="text-green-400" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Recoverable response state */}
+          {(msg.stopped || msg.retryable) && (
+            <div className="mt-6 mb-2 flex flex-col items-start opacity-70 animate-fade-in">
+              <div className="w-full flex items-center gap-4">
+                <div className="flex-1 h-[1px] bg-gradient-to-r from-[hsl(var(--border))] to-transparent"></div>
+                <span className="text-[11px] font-medium text-secondary tracking-wide">
+                  {msg.error ? "The request failed" : "You stopped this response"}
+                </span>
+                <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-[hsl(var(--border))]"></div>
+              </div>
+              <div className="mt-1 flex items-center">
+                <button
+                  onClick={() => onRegenerate?.(msg.id)}
+                  className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-black/5 dark:hover:bg-white/10 text-secondary hover:text-on-surface transition-all active:scale-95 -ml-1"
+                  title="Retry response"
+                >
+                  <RotateCcw size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.msg.content === nextProps.msg.content &&
+    prevProps.isEditing === nextProps.isEditing &&
+    (prevProps.isEditing ? prevProps.editText === nextProps.editText : true) &&
+    prevProps.isCopied === nextProps.isCopied &&
+    prevProps.streamingThinking === nextProps.streamingThinking &&
+    prevProps.msg.stopped === nextProps.msg.stopped &&
+    prevProps.msg.error === nextProps.msg.error &&
+    prevProps.msg.retryable === nextProps.msg.retryable &&
+    prevProps.msg.thinking === nextProps.msg.thinking &&
+    prevProps.msg.files?.length === nextProps.msg.files?.length &&
+    prevProps.msg.toolResults?.length === nextProps.msg.toolResults?.length
+  );
+});
+MessageRow.displayName = "MessageRow";
