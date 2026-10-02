@@ -56,5 +56,7 @@ next-env.d.ts
 # misc
 Thumbs.db
 
-.vercel
-.env*
+# scratch / one-off test scripts
+/scratch/
+test-*.js
+test-*.mjs

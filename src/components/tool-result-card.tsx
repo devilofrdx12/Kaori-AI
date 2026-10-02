@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Globe, ExternalLink, FileText } from "lucide-react";
+import { Globe, ExternalLink, FileText, ChevronDown, Check } from "lucide-react";
 
 type ToolResultProps = {
   toolName: string;
@@ -54,25 +54,142 @@ function SearchResultImage({ image }: { image: SearchImage }) {
   );
 }
 
+/** Extracts source URLs from the web search result text */
+function extractSourceUrls(text: string): { title: string; url: string }[] {
+  const sources: { title: string; url: string }[] = [];
+  // Match patterns like [Title](url) or SOURCE: url or urls on their own lines
+  const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  let match;
+  while ((match = urlRegex.exec(text)) !== null) {
+    sources.push({ title: match[1], url: match[2] });
+  }
+  // Also try bare URLs with titles from "Source: title - url" patterns
+  if (sources.length === 0) {
+    const bareUrlRegex = /(https?:\/\/[^\s]+)/g;
+    while ((match = bareUrlRegex.exec(text)) !== null) {
+      try {
+        const hostname = new URL(match[1]).hostname.replace(/^www\./, "");
+        sources.push({ title: hostname, url: match[1] });
+      } catch { /* skip invalid urls */ }
+    }
+  }
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  return sources.filter(s => {
+    if (seen.has(s.url)) return false;
+    seen.add(s.url);
+    return true;
+  }).slice(0, 5);
+}
+
+function WebSearchResultCard({ result }: { result: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const parsedResult = parseSearchResult(result);
+  const sources = extractSourceUrls(parsedResult.text);
+
+  return (
+    <div className="my-2 animate-fade-in">
+      {/* Pill — matches ThinkingIndicator layout exactly */}
+      <button
+        onClick={() => setExpanded((o) => !o)}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-white/70 dark:border-white/10 shadow-sm bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted)/0.8)] transition-all duration-300 cursor-pointer select-none"
+      >
+        {/* Globe + check icon */}
+        <div className="relative shrink-0">
+          <Globe size={14} className="text-[hsl(var(--primary))]" />
+          <Check
+            size={8}
+            strokeWidth={3}
+            className="absolute -bottom-0.5 -right-1 text-green-500"
+          />
+        </div>
+
+        {/* Label — same text-sm as ThinkingIndicator */}
+        <span className="text-sm text-[hsl(var(--muted-foreground))]">
+          Searched the web
+        </span>
+
+        {/* Source count badge */}
+        {sources.length > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-[10px] font-semibold">
+            {sources.length} source{sources.length !== 1 ? "s" : ""}
+          </span>
+        )}
+
+        {/* Chevron */}
+        <ChevronDown
+          size={13}
+          className={`shrink-0 ml-1 text-[hsl(var(--muted-foreground)/0.5)] transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* Expandable content */}
+      <div
+        className={`
+          overflow-hidden transition-all duration-300 ease-out
+          ${expanded ? "max-h-[500px] opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"}
+        `}
+      >
+        <div className="ml-5 pl-3 border-l-2 border-[hsl(var(--primary)/0.2)]">
+          {/* Source links */}
+          {sources.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {sources.map((source, i) => (
+                <a
+                  key={i}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[11px] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary)/0.3)] transition-colors"
+                >
+                  <Globe size={10} className="shrink-0 opacity-60" />
+                  <span className="truncate max-w-[160px]">{source.title}</span>
+                  <ExternalLink size={9} className="shrink-0 opacity-40" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Search result images */}
+          {parsedResult.images.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 mb-2">
+              {parsedResult.images.map((image) => (
+                <SearchResultImage key={image.url} image={image} />
+              ))}
+            </div>
+          )}
+
+          {/* Raw result text (truncated) */}
+          <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-lg p-2.5 bg-[hsl(var(--muted)/0.3)]">
+            <p className="text-[11px] leading-relaxed text-[hsl(var(--muted-foreground)/0.8)] whitespace-pre-wrap break-words">
+              {parsedResult.text.length > 800
+                ? parsedResult.text.slice(0, 800) + "…"
+                : parsedResult.text}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ToolResultCard({ toolName, result }: ToolResultProps) {
-  const parsedResult = toolName === "web_search"
-    ? parseSearchResult(result)
-    : { text: result, images: [] };
+  // Web search gets special minimal treatment
+  if (toolName === "web_search") {
+    return <WebSearchResultCard result={result} />;
+  }
+
   const icon =
-    toolName === "web_search" ? (
-      <Globe size={14} className="text-blue-400" />
-    ) : toolName === "web_fetch" ? (
+    toolName === "web_fetch" ? (
       <FileText size={14} className="text-green-400" />
     ) : (
       <ExternalLink size={14} className="text-[hsl(var(--primary))]" />
     );
 
   const label =
-    toolName === "web_search"
-      ? "Web Search"
-      : toolName === "web_fetch"
-        ? "Page Content"
-        : toolName;
+    toolName === "web_fetch"
+      ? "Page Content"
+      : toolName;
 
   return (
     <div className="tool-card px-3 py-2 my-2 text-xs bg-white/55 dark:bg-white/5">
@@ -80,14 +197,7 @@ export default function ToolResultCard({ toolName, result }: ToolResultProps) {
         {icon}
         <span className="font-medium uppercase tracking-wider">{label}</span>
       </div>
-      <p className="text-[hsl(var(--muted-foreground))] line-clamp-2">{parsedResult.text}</p>
-      {parsedResult.images.length > 0 ? (
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {parsedResult.images.map((image) => (
-            <SearchResultImage key={image.url} image={image} />
-          ))}
-        </div>
-      ) : null}
+      <p className="text-[hsl(var(--muted-foreground))] line-clamp-2">{result}</p>
     </div>
   );
 }

@@ -6,7 +6,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
 import rehypeKatex from "rehype-katex";
+import katex from "katex";
 import "katex/dist/katex.min.css";
 import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
 import { ChatMessage } from "./types";
@@ -97,20 +99,117 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
   );
 }
 
+function extractText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(extractText).join("");
+  if (value && typeof value === "object" && "props" in value) {
+    const props = (value as { props?: { children?: unknown } }).props;
+    if (props?.children) return extractText(props.children);
+  }
+  return "";
+}
+
+function preprocessLaTeX(content: string): string {
+  if (!content) return content;
+
+  let text = content;
+
+  // 1. Escape currency dollar signs (e.g. $50, $100.00, $5M) so remark-math doesn't treat them as math delimiters
+  text = text.replace(/(^|\s)\$(\d+(?:[.,]\d+)?(?:k|m|b|t)?)(?=\s|[.,;:!?]|$)/gi, "$1\\$$2");
+
+  // 2. Un-backtick math that was wrapped in inline code:
+  // e.g. `$P_\ell = |I_\ell|^2 R_0$` -> $P_\ell = |I_\ell|^2 R_0$
+  // or `$$ ... $$` -> $$ ... $$
+  text = text.replace(/`(\${1,2}[^`]+?\${1,2})`/g, "$1");
+
+  // Also un-backtick LaTeX brackets: `\[ ... \]` or `\( ... \)`
+  text = text.replace(/`(\\\[[\s\S]+?\\\])`/g, "$1");
+  text = text.replace(/`(\\\([\s\S]+?\\\))`/g, "$1");
+
+  // Also handle inline code containing obvious LaTeX formulas without dollar signs:
+  // e.g. `\sqrt{a^2 + b^2}` -> $\sqrt{a^2 + b^2}$
+  text = text.replace(
+    /`(\\(?:frac|sqrt|sum|int|prod|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|tau|phi|omega|ell|partial|nabla|infty|times|cdot|pm|approx|neq|leq|geq|in|subset|forall|exists|mathbf|mathrm|text|left|right)\b[^`\n]*?)`/g,
+    "$$$1$$"
+  );
+
+  // 3. Replace \[ ... \] with $$ ... $$ for display math
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
+
+  // 4. Replace \( ... \) with $ ... $ for inline math
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
+
+  // 5. Convert ```math code blocks to $$ block math
+  text = text.replace(/```(?:math)\s*\n([\s\S]*?)\n```/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
+
+  // 6. Wrap unadorned LaTeX environments (align, equation, matrix, etc.) in $$ if not already
+  text = text.replace(
+    /(?:^|\n)(\\begin\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\}[\s\S]*?\\end\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\})(?:\n|$)/g,
+    "\n\n$$\n$1\n$$\n\n"
+  );
+
+  // 7. Normalize <br> variants so rehype-raw can parse them
+  text = text.replace(/<br\s*\/?>/gi, "<br />");
+
+  return text;
+}
+
 const memoizedRemarkPlugins = [remarkGfm, remarkMath];
-const memoizedRehypePlugins = [[rehypeHighlight, { ignoreMissing: true }], rehypeKatex] as any;
+const memoizedRehypePlugins = [
+  rehypeRaw,
+  [rehypeHighlight, { ignoreMissing: true }],
+  [rehypeKatex, { throwOnError: false }],
+] as any;
 
 const memoizedComponents: Components = {
   pre: ({ children }: any) => <>{children}</>,
   code: ({ className, children, ...rest }: any) => {
     const isBlock = /language-(\w+)/.test(className || "");
     if (isBlock) {
+      const match = /language-(\w+)/.exec(className || "");
+      const lang = match ? match[1].toLowerCase() : "";
+      if (lang === "math") {
+        const raw = extractText(children).trim();
+        try {
+          const html = katex.renderToString(raw, { displayMode: true, throwOnError: false });
+          return (
+            <div
+              className="my-3 overflow-x-auto text-center"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          );
+        } catch {
+          // fall through to CodeBlock
+        }
+      }
       return (
         <CodeBlock className={className}>
           {children}
         </CodeBlock>
       );
     }
+
+    const raw = typeof children === "string" ? children.trim() : "";
+    // Safety net: if inline code still contains math delimiters or starts with LaTeX command, render with KaTeX
+    if (
+      raw &&
+      ((raw.startsWith("$") && raw.endsWith("$") && raw.length > 2) ||
+        /^\\(frac|sqrt|sum|int|partial|nabla|infty)\b/.test(raw))
+    ) {
+      const math = raw.replace(/^\$+|\$+$/g, "").trim();
+      try {
+        const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
+        return (
+          <span
+            className="inline-math inline-block align-middle"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+      } catch {
+        // Fallback to normal code tag
+      }
+    }
+
     return (
       <code
         className="bg-white/65 dark:bg-black/45 text-on-surface px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/20 break-words"
@@ -201,6 +300,8 @@ const MessageRow = memo((
     streamingThinking?: string;
     onRegenerate?: (messageId: string) => void;
   }) => {
+  const processedContent = useMemo(() => preprocessLaTeX(msg.content), [msg.content]);
+
   return (
     <div className="message-enter group relative">
       {msg.role === "user" ? (
@@ -304,28 +405,28 @@ const MessageRow = memo((
                 ))}
 
                 {(msg.content || streamingThinking || msg.thinking) && (
-                  <div className="glass-panel p-4 sm:p-5 rounded-[1.5rem] rounded-bl-md transition-colors duration-300">
+                  <div className="py-1 transition-colors duration-300">
 
-                {/* Show thinking block if this is the streaming message with thinking, or a saved message with thinking */}
-                {(streamingThinking || msg.thinking) && (
-                  <ThinkingBlock
-                    content={streamingThinking || msg.thinking || ""}
-                    isStreaming={!!streamingThinking}
-                  />
+                    {/* Show thinking block if this is the streaming message with thinking, or a saved message with thinking */}
+                    {(streamingThinking || msg.thinking) && (
+                      <ThinkingBlock
+                        content={streamingThinking || msg.thinking || ""}
+                        isStreaming={!!streamingThinking}
+                      />
+                    )}
+                    <div className="prose dark:prose-invert max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={memoizedRemarkPlugins}
+                        rehypePlugins={memoizedRehypePlugins}
+                        components={memoizedComponents}
+                      >
+                        {processedContent}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                 )}
-                <div className="prose dark:prose-invert max-w-none">
-                  <ReactMarkdown
-                    remarkPlugins={memoizedRemarkPlugins}
-                    rehypePlugins={memoizedRehypePlugins}
-                    components={memoizedComponents}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
               </div>
-            )}
             </div>
-          </div>
           )}
 
           {/* Copy button */}
@@ -421,12 +522,22 @@ export default function MessageArea({
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
 
   const allMessages = useMemo(() => {
-    const msgs = [...messages];
+    // Strip XML tool calls (complete or partial during streaming) from visibility
+    const stripToolCalls = (text: string) => {
+      if (!text || !text.includes("<tool_call>")) return text;
+      return text.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/g, "").trim();
+    };
+
+    const msgs = messages.map(m => ({
+      ...m,
+      content: stripToolCalls(m.content),
+    }));
+
     if (streamingText || streamingThinking) {
       msgs.push({
         id: "__streaming__",
         role: "assistant",
-        content: streamingText || "",
+        content: stripToolCalls(streamingText || ""),
       });
     }
     return msgs;
@@ -564,8 +675,8 @@ export default function MessageArea({
         components={{
           Footer: () => (
             <div className="max-w-3xl mx-auto space-y-1">
-              {/* Tool results during streaming */}
-              {toolResults?.map((tr, i) => (
+              {/* Tool results — only show before text starts streaming */}
+              {!streamingText && toolResults?.map((tr, i) => (
                 <ToolResultCard key={`tr-${i}`} toolName={tr.tool} result={tr.result} />
               ))}
 

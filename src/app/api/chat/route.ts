@@ -854,7 +854,6 @@ export async function POST(req: NextRequest) {
             let buffer = "";
             let currentToolUse: ToolUseBlock | null = null;
             let toolUseInputJson = "";
-            let stopReason = "";
 
             while (true) {
               const { done, value } = await reader.read();
@@ -953,10 +952,6 @@ export async function POST(req: NextRequest) {
                     currentToolUse = null;
                     toolUseInputJson = "";
                   }
-
-                  if (event.type === "message_delta") {
-                    stopReason = event.delta?.stop_reason || "";
-                  }
                 } catch {
                   // Skip unparseable events
                 }
@@ -974,6 +969,53 @@ export async function POST(req: NextRequest) {
               toolUseBlocks.push(currentToolUse);
               currentToolUse = null;
               toolUseInputJson = "";
+            }
+
+            // ── Parse XML-style tool calls from text ──
+            // Some models (Nvidia, etc.) emit tool calls as raw XML text
+            // instead of structured tool_use blocks. Detect and convert them.
+            const xmlToolCallRegex = /<tool_call>\s*<function=(\w+)>\s*([\s\S]*?)\s*<\/tool_call>/g;
+            let xmlMatch;
+            while ((xmlMatch = xmlToolCallRegex.exec(fullAssistantContent)) !== null) {
+              const fnName = xmlMatch[1];
+              const paramsBlock = xmlMatch[2];
+
+              // Parse parameters: <parameter=name> value or <parameter=name>"value"
+              const params: Record<string, string> = {};
+              const paramRegex = /<parameter=(\w+)>\s*([\s\S]*?)(?=<parameter=|$)/g;
+              let paramMatch;
+              while ((paramMatch = paramRegex.exec(paramsBlock)) !== null) {
+                params[paramMatch[1]] = paramMatch[2].trim().replace(/^["']|["']$/g, "");
+              }
+
+              // If no structured params found, treat the whole block as query
+              if (Object.keys(params).length === 0) {
+                const rawValue = paramsBlock.replace(/<parameter=\w+>/g, "").trim().replace(/^["']|["']$/g, "");
+                if (rawValue) params.query = rawValue;
+              }
+
+              toolUseBlocks.push({
+                id: `xml-tool-${uuid()}`,
+                name: fnName,
+                input: params,
+              });
+
+              // Send tool_use_start event to client so the UI shows the indicator
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "tool_use_start",
+                    tool: fnName,
+                  })}\n\n`
+                )
+              );
+            }
+
+            // Strip XML tool calls from the text content so it isn't shown
+            if (xmlToolCallRegex.test(fullAssistantContent) || fullAssistantContent.includes("<tool_call>")) {
+              fullAssistantContent = fullAssistantContent
+                .replace(/<tool_call>\s*<function=\w+>\s*[\s\S]*?<\/tool_call>/g, "")
+                .trim();
             }
 
             // If model wants to use tools, execute them and continue
