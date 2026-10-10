@@ -39,19 +39,15 @@ export async function streamNvidiaChatCompletion({
     extraBody.reasoning_budget = 16384;
     maxTokens = 16384;
   }
-  try {
-    return await streamOpenAiCompatible({
-      apiUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
-      apiKey,
-      model,
-      messages,
-      system,
-      tools,
-      maxTokens,
-      extraBody,
-      signal: requestSignal,
-    });
-  } catch (error) {
-    throw error;
-  }
+  return await streamOpenAiCompatible({
+    apiUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
+    apiKey,
+    model,
+    messages,
+    system,
+    tools,
+    maxTokens,
+    extraBody,
+    signal: requestSignal,
+  });
 }

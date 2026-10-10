@@ -783,7 +783,7 @@ export async function POST(req: NextRequest) {
                 await reserveChatSpend(user.id);
                 spendReserved = true;
               }
-              if (model.startsWith("nvidia/") || model.startsWith("z-ai/")) {
+              if (model.startsWith("nvidia/")) {
                 const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
                 return await streamNvidiaChatCompletion({
                   model,

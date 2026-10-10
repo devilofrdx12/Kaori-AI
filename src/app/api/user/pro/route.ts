@@ -12,6 +12,10 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
   } catch (err) {
     if (err instanceof Response) return err;
+    return new Response(JSON.stringify({ error: "CSRF check failed" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const user = await getSessionUser();

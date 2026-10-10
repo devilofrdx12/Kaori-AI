@@ -146,7 +146,6 @@ const MODEL_COST_PER_1K_OUTPUT: Record<string, number> = {
 
   // Nvidia NIM / DeepSeek
   "nvidia/": 0.001,
-  "z-ai/": 0.001,
   "deepseek-ai/": 0.0014,
   "deepseek": 0.0014,          // catch-all for deepseek variants
 };

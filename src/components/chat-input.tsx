@@ -8,7 +8,7 @@ import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
   { id: "deep" as const, label: "Deep Research", description: "Gemini 3.5 Flash · multi-source", icon: BrainCircuit },
-  { id: "thinking" as const, label: "Thinking", description: "GLM 5.2 · long reasoning", icon: Sparkles },
+  { id: "thinking" as const, label: "Thinking", description: "Nemotron Ultra · long reasoning", icon: Sparkles },
 ];
 
 const VOICE_LANGUAGES = [
