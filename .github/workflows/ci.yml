@@ -155,7 +155,7 @@ jobs:
       always()
       && github.event_name == 'push'
       && github.actor != 'dependabot[bot]'
-      && (needs.lint.outputs.outcome == 'failure' || needs.security.outputs.outcome == 'failure')
+      && needs.lint.outputs.outcome == 'failure'
     outputs:
       fixes_applied: ${{ steps.commit-fixes.outputs.fixes_applied }}
       lint_fixed: ${{ steps.fix-lint.outputs.fixed }}
@@ -198,19 +198,11 @@ jobs:
             echo "ESLint auto-fixes applied."
           fi
 
-      - name: Auto-fix security vulnerabilities
+      - name: Auto-fix security vulnerabilities (disabled)
         id: fix-security
-        if: needs.security.outputs.outcome == 'failure'
         run: |
-          echo "Attempting to auto-fix security vulnerabilities..."
-          npm audit fix --force 2>&1 || true
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "fixed=false" >> $GITHUB_OUTPUT
-            echo "No security fixes were possible automatically."
-          else
-            echo "fixed=true" >> $GITHUB_OUTPUT
-            echo "Security vulnerabilities auto-fixed."
-          fi
+          echo "Security auto-fix is disabled to prevent breaking dependencies."
+          echo "fixed=false" >> $GITHUB_OUTPUT
 
       - name: Commit and push fixes
         id: commit-fixes
