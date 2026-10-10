@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { findUserById } from "./db";
 
 function requireServerSecret(name: "JWT_SECRET" | "JWT_REFRESH_SECRET"): string {
@@ -26,8 +27,8 @@ function getJwtRefreshSecret(): string {
   return _jwtRefreshSecret;
 }
 
-const ACCESS_COOKIE = "kaori_access";
-const REFRESH_COOKIE = "kaori_refresh";
+export const ACCESS_COOKIE = "kaori_access";
+export const REFRESH_COOKIE = "kaori_refresh";
 
 export const ACCESS_TTL = 15 * 60; // 15 minutes
 export const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
@@ -66,12 +67,29 @@ export function hashPasswordResetCode(email: string, otp: string): string {
     .digest("hex");
 }
 
-const COOKIE_BASE = {
+export const COOKIE_BASE = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
   path: "/",
 };
+
+export function setAuthCookiesOnResponse(
+  response: NextResponse,
+  accessToken: string,
+  refreshTokenRaw: string
+) {
+  response.cookies.set(ACCESS_COOKIE, accessToken, {
+    ...COOKIE_BASE,
+    sameSite: "lax",
+    maxAge: ACCESS_TTL,
+  });
+  response.cookies.set(REFRESH_COOKIE, refreshTokenRaw, {
+    ...COOKIE_BASE,
+    sameSite: "lax",
+    maxAge: REFRESH_TTL,
+  });
+}
 
 export async function setAuthCookies(accessToken: string, refreshTokenRaw: string) {
   const cookieStore = await cookies();

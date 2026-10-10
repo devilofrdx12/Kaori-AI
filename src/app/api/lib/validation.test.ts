@@ -57,7 +57,7 @@ test("vision capability is enforced from a server-owned model list", () => {
   assert.equal(modelSupportsVision("nvidia/nemotron-3-ultra-550b-a55b"), false);
 });
 
-test("GLM 5.2 is accepted as a supported text reasoning model", () => {
-  assert.equal(validateModel("z-ai/glm-5.2"), "z-ai/glm-5.2");
-  assert.equal(modelSupportsVision("z-ai/glm-5.2"), false);
+test("Nemotron reasoning model is accepted as a supported text reasoning model", () => {
+  assert.equal(validateModel("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"), "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning");
+  assert.equal(modelSupportsVision("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"), true);
 });

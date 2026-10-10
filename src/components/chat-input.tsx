@@ -7,7 +7,7 @@ import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
-  { id: "deep" as const, label: "Deep Research", description: "Nemotron Ultra · multi-source", icon: BrainCircuit },
+  { id: "deep" as const, label: "Deep Research", description: "Gemini 3.5 Flash · multi-source", icon: BrainCircuit },
   { id: "thinking" as const, label: "Thinking", description: "GLM 5.2 · long reasoning", icon: Sparkles },
 ];
 
@@ -426,8 +426,8 @@ export default function ChatInput({
                           onClick={() => {
                             const nextMode = selected ? "auto" : option.id;
                             setFeatureMode(nextMode);
-                            if (nextMode === "deep") onModelChange("nvidia/nemotron-3-ultra-550b-a55b");
-                            if (nextMode === "thinking") onModelChange("z-ai/glm-5.2");
+                            if (nextMode === "deep") onModelChange("gemini-3.5-flash");
+                            if (nextMode === "thinking") onModelChange("nvidia/nemotron-3-ultra-550b-a55b");
                             setShowFeatureMenu(false);
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${selected ? "bg-primary/10 text-primary" : "text-on-surface hover:bg-black/[0.04] dark:hover:bg-white/[0.07]"}`}

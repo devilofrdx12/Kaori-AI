@@ -30,26 +30,9 @@ export async function streamNvidiaChatCompletion({
   }
 
   const extraBody: Record<string, unknown> = {};
-  let requestSignal = signal;
-  let startupTimer: ReturnType<typeof setTimeout> | undefined;
-  let startupController: AbortController | undefined;
-  let forwardAbort: (() => void) | undefined;
+  const requestSignal = signal;
 
-  if (model === "z-ai/glm-5.2") {
-    // GLM 5.2 can spend a long time reasoning before its final answer.
-    // Streaming plus a larger output budget prevents valid responses from
-    // being cut off while keeping usage below NVIDIA's 32K hard limit.
-    maxTokens = 16384;
-    startupController = new AbortController();
-    forwardAbort = () => startupController?.abort(signal?.reason);
-    if (signal?.aborted) forwardAbort();
-    else signal?.addEventListener("abort", forwardAbort, { once: true });
-    startupTimer = setTimeout(
-      () => startupController?.abort(new Error("GLM 5.2 startup timeout")),
-      150_000
-    );
-    requestSignal = startupController.signal;
-  } else if (model.startsWith("deepseek-ai/") && !model.includes("flash")) {
+  if (model.startsWith("deepseek-ai/") && !model.includes("flash")) {
     extraBody.reasoning_effort = model.endsWith("-pro") ? "max" : "high";
   } else if (model.includes("reasoning")) {
     extraBody.chat_template_kwargs = { enable_thinking: true };
@@ -69,12 +52,6 @@ export async function streamNvidiaChatCompletion({
       signal: requestSignal,
     });
   } catch (error) {
-    if (model === "z-ai/glm-5.2" && startupController?.signal.aborted && !signal?.aborted) {
-      throw new Error("GLM 5.2 is temporarily unavailable (startup timeout).");
-    }
     throw error;
-  } finally {
-    if (startupTimer) clearTimeout(startupTimer);
-    if (forwardAbort && signal) signal.removeEventListener("abort", forwardAbort);
   }
 }

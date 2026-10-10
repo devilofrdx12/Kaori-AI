@@ -40,8 +40,8 @@ test("OpenAI-compatible model uses openai/ rate ($0.0005/1K)", () => {
   assert.ok(Math.abs(cost - 0.0005) < 0.0002, `Cost ${cost} should be ~$0.0005`);
 });
 
-test("Z-AI GLM model uses z-ai/ rate ($0.001/1K)", () => {
-  const cost = estimateChatCostUsd("z-ai/glm-5.2", 4000);
+test("Nvidia Nemotron model uses nvidia/ rate ($0.001/1K)", () => {
+  const cost = estimateChatCostUsd("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", 4000);
   assert.ok(Math.abs(cost - 0.001) < 0.0001, `Cost ${cost} should be ~$0.001`);
 });
 

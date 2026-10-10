@@ -31,6 +31,21 @@ const AJAX_HEADERS: HeadersInit = {
   "X-Requested-With": "XMLHttpRequest",
 };
 
+async function fetchJsonSafe<T>(url: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(url, {
+      credentials: "include",
+      ...init,
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text) return null;
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 function getStoredValue(key: string, fallback: string) {
   if (typeof window === "undefined") return fallback;
   return localStorage.getItem(key) || fallback;
@@ -198,26 +213,24 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     if (!isOpen) return;
 
     let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      fetch("/api/user/pro", { headers: AJAX_HEADERS })
-        .then((r) => r.json())
+    const timeoutId = window.setTimeout(async () => {
+      fetchJsonSafe<{ is_pro: boolean }>("/api/user/pro", { headers: AJAX_HEADERS })
         .then((data) => {
           if (!cancelled && data && typeof data.is_pro === "boolean") {
             setIsPro(data.is_pro);
           }
         })
-        .catch(console.error);
+        .catch(() => {});
 
       setUsageLoading(true);
-      fetch("/api/user/usage", { headers: AJAX_HEADERS })
-        .then((r) => r.json())
+      fetchJsonSafe<UsageData>("/api/user/usage", { headers: AJAX_HEADERS })
         .then((data) => {
           if (!cancelled && data && typeof data.messagesToday === "number") {
             setUsageData(data);
             setIsPro(data.isPro);
           }
         })
-        .catch(console.error)
+        .catch(() => {})
         .finally(() => {
           if (!cancelled) setUsageLoading(false);
         });
@@ -670,12 +683,29 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                   <div className="space-y-3">
                     <div className="settings-glass-card flex flex-col gap-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
-                          G
+                        <div className="w-10 h-10 rounded-full bg-white dark:bg-white/10 border border-black/5 dark:border-white/10 flex items-center justify-center shadow-sm">
+                          <svg className="h-5 w-5" viewBox="0 0 24 24">
+                            <path
+                              fill="#4285F4"
+                              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                            />
+                            <path
+                              fill="#34A853"
+                              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                            />
+                            <path
+                              fill="#FBBC05"
+                              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                            />
+                            <path
+                              fill="#EA4335"
+                              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                            />
+                          </svg>
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Google</div>
-                          <div className="text-sm text-neutral-500">Drive & Gmail access</div>
+                          <div className="text-sm text-neutral-500">Account sync & single sign-on</div>
                         </div>
                       </div>
                       <a href="/api/auth/google" className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-blue-500 px-4 text-sm font-medium text-white hover-lift active-press hover:bg-blue-600 sm:w-auto">

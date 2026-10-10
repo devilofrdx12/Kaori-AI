@@ -33,21 +33,33 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    requireAjax(req);
-  } catch (err) {
-    if (err instanceof Response) return err;
-  }
+    try {
+      requireAjax(req);
+    } catch (err) {
+      if (err instanceof Response) return err;
+      return new Response(JSON.stringify({ error: "CSRF check failed" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
-  const user = await getSessionUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
+    const user = await getSessionUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ is_pro: user.is_pro }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    logger.error({ err }, "[GET /api/user/pro] Error");
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  return new Response(JSON.stringify({ is_pro: user.is_pro }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
 }

@@ -157,8 +157,7 @@ test("EP: all allowed models are accepted", () => {
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "nvidia/llama-3.1-nemotron-70b-instruct",
-    "deepseek-ai/deepseek-v4-flash-0731",
-    "z-ai/glm-5.2",
+    "deepseek-ai/deepseek-v4-flash-0731"
   ];
   for (const model of allowedModels) {
     assert.equal(validateModel(model), model, `Model ${model} should be accepted`);
