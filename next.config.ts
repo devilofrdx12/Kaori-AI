@@ -42,7 +42,7 @@ if (!isDevelopment) {
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: __dirname,
+    root: import.meta.dirname,
   },
   productionBrowserSourceMaps: false,
   serverExternalPackages: ["pino", "pino-pretty", "pdfmake", "pdfkit"],
