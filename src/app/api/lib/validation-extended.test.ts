@@ -153,6 +153,7 @@ test("EP: unknown model falls back to gemini-3.5-flash", () => {
 test("EP: all allowed models are accepted", () => {
   const allowedModels = [
     "openai/gpt-oss-120b",
+    "gemini-3.8-flash",
     "gemini-3.5-flash",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",

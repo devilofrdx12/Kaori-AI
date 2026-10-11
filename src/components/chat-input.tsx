@@ -7,7 +7,7 @@ import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
-  { id: "deep" as const, label: "Deep Research", description: "Gemini 3.5 Flash · multi-source", icon: BrainCircuit },
+  { id: "deep" as const, label: "Deep Research", description: "Gemini 3.8 Flash · multi-source", icon: BrainCircuit },
   { id: "thinking" as const, label: "Thinking", description: "Nemotron Ultra · long reasoning", icon: Sparkles },
 ];
 
@@ -161,7 +161,7 @@ export default function ChatInput({
     if (hasImage) {
       const currentModel = MODEL_OPTIONS.find((m) => m.id === model);
       if (!currentModel?.supportsVision) {
-        onModelChange("gemini-3.5-flash");
+        onModelChange("gemini-3.8-flash");
       }
     }
   };
@@ -426,7 +426,7 @@ export default function ChatInput({
                           onClick={() => {
                             const nextMode = selected ? "auto" : option.id;
                             setFeatureMode(nextMode);
-                            if (nextMode === "deep") onModelChange("gemini-3.5-flash");
+                            if (nextMode === "deep") onModelChange("gemini-3.8-flash");
                             if (nextMode === "thinking") onModelChange("nvidia/nemotron-3-ultra-550b-a55b");
                             setShowFeatureMenu(false);
                           }}

@@ -15,7 +15,7 @@ test("web and image search preserve the selected model", () => {
 test("explicit specialist modes use their advertised models", () => {
   assert.equal(
     resolveModelForFeatureMode(GROQ_MODEL, "deep"),
-    "gemini-3.5-flash"
+    "gemini-3.8-flash"
   );
   assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "thinking"), "nvidia/nemotron-3-ultra-550b-a55b");
 });

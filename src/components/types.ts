@@ -73,6 +73,15 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsThinking: false,
   },
   {
+    id: "gemini-3.8-flash",
+    label: "Gemini 3.8 Flash",
+    provider: "google",
+    description: "Google's newest reasoning Flash model with multimodal vision",
+    badge: "Reasoning & Vision",
+    supportsVision: true,
+    supportsThinking: true,
+  },
+  {
     id: "gemini-3.5-flash",
     label: "Gemini 3.5 Flash",
     provider: "google",
