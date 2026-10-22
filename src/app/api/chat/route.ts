@@ -44,6 +44,130 @@ import {
 export const maxDuration = 300;
 
 const MAX_CHAT_REQUEST_BYTES = 12 * 1024 * 1024;
+const MAX_PROVIDER_HISTORY_CHARS = 80_000;
+const MAX_PROVIDER_HISTORY_MESSAGES = 24;
+
+function compactProviderHistory(messages: KaoriMessage[]): KaoriMessage[] {
+  const compacted: KaoriMessage[] = [];
+  let remainingChars = MAX_PROVIDER_HISTORY_CHARS;
+  const recentMessages = messages.slice(-MAX_PROVIDER_HISTORY_MESSAGES);
+
+  for (let index = recentMessages.length - 1; index >= 0 && remainingChars > 0; index -= 1) {
+    const message = recentMessages[index];
+    const isLatestMessage = index === recentMessages.length - 1;
+    const blocks = Array.isArray(message.content) ? message.content : [];
+    const images = isLatestMessage
+      ? blocks.filter((block): block is Extract<KaoriContentBlock, { type: "image" }> => block.type === "image")
+      : [];
+    const text = typeof message.content === "string"
+      ? message.content
+      : blocks
+        .filter((block): block is Extract<KaoriContentBlock, { type: "text" }> => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+    if (!text.trim() && images.length === 0) continue;
+
+    const limit = Math.min(remainingChars, isLatestMessage ? 48_000 : 12_000);
+    const boundedText = text.length <= limit
+      ? text
+      : `${text.slice(0, Math.floor(limit * 0.6))}\n[Earlier context omitted to fit the model request.]\n${text.slice(-Math.floor(limit * 0.4))}`;
+    remainingChars -= boundedText.length;
+
+    compacted.unshift({
+      role: message.role,
+      content: images.length > 0
+        ? [...images, ...(boundedText ? [{ type: "text" as const, text: boundedText }] : [])]
+        : boundedText,
+    });
+  }
+
+  return compacted;
+}
+
+function createReasoningSummaryParser(
+  onSummary: (text: string) => void,
+  onAnswer: (text: string) => void
+) {
+  const summaryOpen = "<reasoning_summary>";
+  const summaryClose = "</reasoning_summary>";
+  const answerOpen = "<final_answer>";
+  const answerClose = "</final_answer>";
+  let phase: "prefix" | "summary" | "answer_prefix" | "answer" | "passthrough" | "done" = "prefix";
+  let buffer = "";
+
+  const emitBeforePartialMarker = (marker: string, emit: (text: string) => void) => {
+    let held = Math.min(buffer.length, marker.length - 1);
+    while (held > 0 && !marker.startsWith(buffer.slice(-held))) held -= 1;
+    const safeLength = buffer.length - held;
+    if (safeLength > 0) emit(buffer.slice(0, safeLength));
+    buffer = buffer.slice(safeLength);
+  };
+
+  const push = (chunk: string) => {
+    buffer += chunk;
+    while (buffer) {
+      if (phase === "prefix") {
+        if (summaryOpen.startsWith(buffer) && buffer.length < summaryOpen.length) return;
+        if (buffer.startsWith(summaryOpen)) {
+          buffer = buffer.slice(summaryOpen.length);
+          phase = "summary";
+          continue;
+        }
+        phase = "passthrough";
+        continue;
+      }
+      if (phase === "summary") {
+        const closeAt = buffer.indexOf(summaryClose);
+        if (closeAt >= 0) {
+          onSummary(buffer.slice(0, closeAt));
+          buffer = buffer.slice(closeAt + summaryClose.length);
+          phase = "answer_prefix";
+          continue;
+        }
+        emitBeforePartialMarker(summaryClose, onSummary);
+        return;
+      }
+      if (phase === "answer_prefix") {
+        if (answerOpen.startsWith(buffer) && buffer.length < answerOpen.length) return;
+        if (buffer.startsWith(answerOpen)) {
+          buffer = buffer.slice(answerOpen.length);
+          phase = "answer";
+          continue;
+        }
+        // Some providers may omit the optional answer tag; preserve their answer.
+        phase = "passthrough";
+        continue;
+      }
+      if (phase === "answer") {
+        const closeAt = buffer.indexOf(answerClose);
+        if (closeAt >= 0) {
+          onAnswer(buffer.slice(0, closeAt));
+          buffer = "";
+          phase = "done";
+          return;
+        }
+        emitBeforePartialMarker(answerClose, onAnswer);
+        return;
+      }
+      if (phase === "passthrough") {
+        onAnswer(buffer);
+        buffer = "";
+        return;
+      }
+      return;
+    }
+  };
+
+  return {
+    push,
+    flush() {
+      if (!buffer) return;
+      if (phase === "summary") onSummary(buffer);
+      else if (phase !== "done") onAnswer(buffer);
+      buffer = "";
+    },
+  };
+}
 
 async function persistAssistantMessageWithRetry({
   chatId,
@@ -187,6 +311,37 @@ function splitSearchEvidence(snippet: string): string[] {
     .map((chunk) => chunk.trim())
     .filter(Boolean);
   return (chunks.length > 0 ? chunks : [snippet.trim()]).slice(0, 3);
+}
+
+async function readProviderText(response: Response): Promise<string> {
+  if (!response.body) throw new Error("Model stream was empty");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const event = JSON.parse(data) as StreamEvent & { error?: string };
+        if (event.type === "error") throw new Error(event.error || "Model stream failed");
+        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          text += event.delta.text || "";
+        }
+      } catch (error) {
+        if (error instanceof SyntaxError) continue;
+        throw error;
+      }
+    }
+  }
+  return text.trim();
 }
 
 function buildAppActionProposal(tool: ToolUseBlock, overrides?: Partial<AppActionProposal>): AppActionProposal {
@@ -393,7 +548,6 @@ async function executeToolCall(
       if (!lastPdfBase64) return "Error: No PDF was found in the recent upload context.";
       const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
       if (!apiKey) return "Error: Google API key not configured.";
-      if (userId) await reserveChatSpend(userId);
 
       const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
         method: "POST",
@@ -524,10 +678,16 @@ export async function POST(req: NextRequest) {
       ? ""
       : validateMessage(message);
     const validatedModel = validateModel(model);
-    const featureMode = requestedFeatureMode === "web" || requestedFeatureMode === "deep" || requestedFeatureMode === "thinking"
+    const featureMode = requestedFeatureMode === "web" || requestedFeatureMode === "deep" || requestedFeatureMode === "thinking" || requestedFeatureMode === "council"
       ? requestedFeatureMode
       : "auto";
     const hasImages = validatedFiles.some((file) => file.type.startsWith("image/"));
+    if (featureMode === "council" && hasImages) {
+      return new Response(
+        JSON.stringify({ error: "Model Council currently supports text and extracted PDF text, but not image uploads." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
     if (hasImages && !modelSupportsVision(validatedModel)) {
       return new Response(
         JSON.stringify({
@@ -582,16 +742,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Handle message edit (truncation) ──
-    if (editMessageId) {
-      await deleteMessagesFrom(chatId, user.id, editMessageId);
-    }
-
-    // ── Save user message (encrypted) ──
+    // ── Save user message (idempotent across edits and network reconnect retries) ──
     const clientMessageId = typeof messageId === "string" && idPattern.test(messageId)
       ? messageId
       : null;
     const userMsgId = editMessageId || clientMessageId || uuid();
+    if (editMessageId || clientMessageId) {
+      await deleteMessagesFrom(chatId, user.id, userMsgId);
+    }
     await insertMessage({
       id: userMsgId,
       conversation_id: chatId,
@@ -633,14 +791,14 @@ export async function POST(req: NextRequest) {
     // ── Build message history from DB ──
     const dbMessages = await getConversationMessages(chatId, user.id);
     const attachments = await getConversationAttachments(chatId, user.id);
-    const latestAttachmentMessageId = attachments.at(-1)?.message_id;
     const attachmentsByMessage = new Map<string, typeof attachments>();
     for (const attachment of attachments) {
       const list = attachmentsByMessage.get(attachment.message_id) || [];
       list.push(attachment);
       attachmentsByMessage.set(attachment.message_id, list);
     }
-    const anthropicMessages: KaoriMessage[] = dbMessages.map((m) => {
+    const anthropicMessages: KaoriMessage[] = dbMessages.map((m, idx) => {
+      const isCurrentTurn = idx === dbMessages.length - 1;
       const decrypted = decryptContent(m.content);
       let content: any = decrypted;
       try {
@@ -648,13 +806,19 @@ export async function POST(req: NextRequest) {
           content = JSON.parse(decrypted);
         }
       } catch { }
-      const messageAttachments = m.id === latestAttachmentMessageId
-        ? attachmentsByMessage.get(m.id) || []
-        : [];
-      if (messageAttachments.length > 0) {
+      const storedAttachments = attachmentsByMessage.get(m.id) || [];
+      const includeImageBlocks =
+        isCurrentTurn && hasImages &&
+        modelSupportsVision(validatedModel) &&
+        storedAttachments.length > 0;
+
+      if (includeImageBlocks) {
         const textContent = typeof content === "string" ? content : "";
+        const promptText = isCurrentTurn && hasImages
+          ? `${buildVisionGuidance(textContent)}\n\n${textContent}`.trim()
+          : textContent || "[Attached image]";
         content = [
-          ...messageAttachments.map((attachment): KaoriContentBlock => ({
+          ...storedAttachments.map((attachment): KaoriContentBlock => ({
             type: "image",
             source: {
               type: "base64",
@@ -663,8 +827,11 @@ export async function POST(req: NextRequest) {
               detail: attachment.detail,
             },
           })),
-          { type: "text", text: `${buildVisionGuidance(textContent)}\n\n${textContent}` } as KaoriContentBlock,
+          { type: "text", text: promptText } as KaoriContentBlock,
         ];
+      } else if (typeof content === "string" && !content.trim() && storedAttachments.length > 0) {
+        // Prevent historical image-only messages from becoming invalid empty strings
+        content = `[Attached image(s): ${storedAttachments.map((a) => a.filename).join(", ")}]`;
       }
       return {
         role: m.role as "user" | "assistant",
@@ -703,6 +870,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Keep provider payloads bounded as conversations grow. Historical images and
+    // tool-call scaffolding are not resent; users can reattach an image for follow-up.
+    const providerMessages = compactProviderHistory(anthropicMessages);
+    anthropicMessages.splice(0, anthropicMessages.length, ...providerMessages);
+
     // ── Dynamic system prompt ──
     const [project, memories] = await Promise.all([
       conv.project_id ? findProject(conv.project_id, user.id) : Promise.resolve(null),
@@ -719,7 +891,7 @@ export async function POST(req: NextRequest) {
     } else if (featureMode === "deep") {
       contextSections.push("<feature_mode>DEEP RESEARCH: Use web_search with two or three distinct queries, compare independent sources, and use web_fetch only for the one or two most important direct pages. Produce a careful cited synthesis.</feature_mode>");
     } else if (featureMode === "thinking") {
-      contextSections.push("<feature_mode>THINKING: Deliberate carefully, check assumptions, and solve the task step by step internally. Give the user a clear conclusion and concise reasoning. Do not browse unless current external information is required.</feature_mode>");
+      contextSections.push("<feature_mode>REASONING SUMMARY: Work through the task privately. Do not reveal hidden chain-of-thought, private scratch work, token-by-token deliberation, or personal judgments about the user. Start your response with exactly <reasoning_summary>, then give one or two concise sentences explaining the high-level approach and key factors, then </reasoning_summary><final_answer>, then the complete helpful answer, and end with </final_answer>. Keep the summary brief and user-facing. Do not browse unless current external information is required.</feature_mode>");
     }
     if (project?.instructions) {
       contextSections.push([
@@ -749,6 +921,9 @@ export async function POST(req: NextRequest) {
         let spendReserved = false;
         let fullAssistantContent = "";
         let totalOutputChars = 0;
+        let councilEstimatedCostUsd = 0;
+        let councilFallbackModel: string | null = null;
+        let councilSynthesisModel: string | null = null;
         let activeModel = "";
         try {
           if (memories.length > 0) {
@@ -767,6 +942,7 @@ export async function POST(req: NextRequest) {
           let shouldContinue = true;
           let toolRounds = 0;
           let forceAnswer = false;
+          let councilPrepared = false;
 
           while (shouldContinue) {
             shouldContinue = false;
@@ -777,7 +953,7 @@ export async function POST(req: NextRequest) {
             activeModel = resolvedModel;
             let response;
 
-            const attemptStream = async (model: string) => {
+            const attemptStream = async (model: string, streamMessages: KaoriMessage[] = currentMessages) => {
               const activeTools = forceAnswer ? [] : TOOL_DEFINITIONS;
               if (!spendReserved) {
                 await reserveChatSpend(user.id);
@@ -787,7 +963,7 @@ export async function POST(req: NextRequest) {
                 const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
                 return await streamNvidiaChatCompletion({
                   model,
-                  messages: currentMessages,
+                  messages: streamMessages,
                   system: systemPrompt,
                   tools: activeTools,
                   maxTokens: 4096,
@@ -797,7 +973,7 @@ export async function POST(req: NextRequest) {
                 const { streamNvidiaChatCompletion } = await import("../lib/nvidia");
                 return await streamNvidiaChatCompletion({
                   model: model.startsWith("deepseek-ai/") ? model : `deepseek-ai/${model}`,
-                  messages: currentMessages,
+                  messages: streamMessages,
                   system: systemPrompt,
                   tools: activeTools,
                   maxTokens: 4096,
@@ -806,7 +982,7 @@ export async function POST(req: NextRequest) {
               } else if (model.startsWith("gemini-")) {
                 return await streamGeminiChatCompletion({
                   model,
-                  messages: currentMessages,
+                  messages: streamMessages,
                   system: systemPrompt,
                   tools: activeTools,
                   maxTokens: 8192,
@@ -814,7 +990,7 @@ export async function POST(req: NextRequest) {
               } else if (model.startsWith("llama-") || model.startsWith("mixtral-") || model.startsWith("meta-llama/") || model.startsWith("openai/") || model.startsWith("qwen/")) {
                 return await streamGroqChatCompletion({
                   model,
-                  messages: currentMessages,
+                  messages: streamMessages,
                   system: systemPrompt,
                   tools: activeTools,
                   maxTokens: 4096,
@@ -824,26 +1000,304 @@ export async function POST(req: NextRequest) {
               }
             };
 
-            try {
-              response = await attemptStream(resolvedModel);
-            } catch (err: any) {
-              const errMsg = err.message || "";
-              const isRateLimit = /quota|rate limit|resourceexhausted|429/i.test(errMsg);
-              const isOverloaded = /500|502|503|504|overload(?:ed)?|high demand|unavailable|at capacity|server busy/i.test(errMsg);
-
-              if (isRateLimit || isOverloaded) {
-                const reason = isRateLimit ? "rate-limited" : "temporarily unavailable";
-                logger.warn(
-                  { userId: user.id, model: resolvedModel, reason },
-                  "Selected AI model unavailable; preserving model affinity"
-                );
-                throw new Error(
-                  `The selected model (${resolvedModel}) is ${reason}. ` +
-                  "Your request was not switched to another model. Please retry shortly."
-                );
+            if (featureMode === "council" && !councilPrepared) {
+              councilPrepared = true;
+              const promptRefiner = { model: "openai/gpt-oss-120b", label: "GPT-OSS · Prompt Refiner", role: "prompt-refiner" as const };
+              const promptRefinerReady = Boolean(process.env.GROQ_API_KEY?.trim());
+              const participants = [
+                { model: "gemini-3.8-flash", label: "Gemini 3.8 Flash", role: "answer-model" as const, ready: Boolean(process.env.GOOGLE_GENERATIVE_AI_KEY?.trim()) },
+                { model: "nvidia/nemotron-3-ultra-550b-a55b", label: "Nemotron 3 Ultra", role: "answer-model" as const, ready: Boolean((process.env.NVIDIA_API_KEY_ULTRA || process.env.NVIDIA_API_KEY || "").trim()) },
+              ].filter((participant) => participant.ready);
+              if (!promptRefinerReady) {
+                throw new Error("Model Council prompt refinement requires the Groq API key for GPT-OSS. Check the server configuration.");
+              }
+              if (participants.length < 2) {
+                throw new Error("Model Council needs both Gemini and Nemotron configured so they can collaborate. Check the Google and NVIDIA server API keys.");
               }
 
-              throw err;
+              const emitCouncilStatus = (payload: Record<string, unknown>) => {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "council_status", ...payload })}\n\n`));
+              };
+              emitCouncilStatus({
+                phase: "refine",
+                message: "GPT-OSS is refining your prompt without adding factual details…",
+                models: [
+                  { model: promptRefiner.model, label: promptRefiner.label, role: promptRefiner.role, status: "refining" },
+                  ...participants.map(({ model, label, role }) => ({ model, label, role, status: "waiting" })),
+                ],
+                activities: [{
+                  id: `prompt-refinement:${promptRefiner.model}`,
+                  model: promptRefiner.model,
+                  label: promptRefiner.label,
+                  kind: "prompt-refinement",
+                  status: "working",
+                }],
+              });
+
+              // Reserve once before concurrent providers so a single request doesn't reserve
+              // the per-chat budget multiple times due to a race between model calls.
+              if (!spendReserved) {
+                await reserveChatSpend(user.id);
+                spendReserved = true;
+              }
+              forceAnswer = true;
+              const councilHistory: KaoriMessage[] = currentMessages
+                .slice(-8)
+                .map((message) => ({
+                  role: message.role,
+                  content: Array.isArray(message.content)
+                    ? message.content.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n")
+                    : message.content,
+                }))
+                .filter((message) => typeof message.content === "string" && message.content.trim().length > 0);
+              const originalRequest = typeof councilHistory[councilHistory.length - 1]?.content === "string"
+                ? councilHistory[councilHistory.length - 1].content as string
+                : validatedMessage;
+              const refinementMessages: KaoriMessage[] = [
+                ...councilHistory,
+                {
+                  role: "user",
+                  content: [
+                    "PROMPT OPTIMIZER TASK — Rewrite the immediately preceding user request as a clearer, more complete instruction for other AI models to answer. You are a prompt refiner only: do not answer the request, research it, or add factual claims.",
+                    "Preserve the user's exact goal, intent, named entities, constraints, and requested format. Make the prompt clearer and more complete by organizing applicable details such as objective, context, scope, audience, steps, output format, and quality/verification criteria. Add useful task instructions only when they are directly implied by the original request; do not add unrelated requirements or overcomplicate simple requests. Never invent factual claims, requirements, preferences, examples, context, or assumptions. Separate provided facts from unknowns. If an important detail is genuinely ambiguous, preserve that ambiguity and instruct the answer models to ask or state uncertainty instead of guessing.",
+                    "Before returning, silently check that the rewrite is faithful, precise, complete, concise, and contains no unsupported factual additions. Fix any issue you find. Do not output this checklist or your analysis.",
+                    "Return only the rewritten prompt, with no preface, answer, analysis, or commentary.",
+                    "<original_request>", originalRequest, "</original_request>",
+                  ].join("\n\n"),
+                },
+              ];
+              const refinementResponse = await attemptStream(promptRefiner.model, refinementMessages);
+              const refinedPrompt = (await readProviderText(refinementResponse)).trim();
+              if (!refinedPrompt) throw new Error("GPT-OSS could not refine this prompt. Please retry.");
+              totalOutputChars += refinedPrompt.length;
+              councilEstimatedCostUsd += estimateChatCostUsd(promptRefiner.model, refinedPrompt.length);
+              emitCouncilStatus({
+                phase: "refine",
+                model: promptRefiner.model,
+                status: "ready",
+                message: "GPT-OSS refined the prompt. Gemini and Nemotron are preparing independent answers…",
+                activity: {
+                  id: `prompt-refinement:${promptRefiner.model}`,
+                  model: promptRefiner.model,
+                  label: promptRefiner.label,
+                  kind: "prompt-refinement",
+                  status: "complete",
+                  content: refinedPrompt.slice(0, 6000),
+                  truncated: refinedPrompt.length > 6000,
+                },
+              });
+              const answerTask = [
+                "Answer the user's original request. The GPT-OSS prompt below is an editing aid, not a source of facts or authority. The original request is authoritative if anything differs.",
+                "Use the refinement to improve clarity and coverage, but do not treat its added wording as evidence. Do not invent missing facts; ask a clarifying question or state uncertainty where needed.",
+                "<original_request>", originalRequest, "</original_request>",
+                "<refined_prompt>", refinedPrompt.slice(0, 12000), "</refined_prompt>",
+              ].join("\n\n");
+              const priorContext = councilHistory.slice(0, -1);
+              currentMessages.splice(0, currentMessages.length, ...priorContext, { role: "user", content: answerTask });
+              emitCouncilStatus({
+                phase: "consulting",
+                message: "Gemini and Nemotron are drafting answers from the refined prompt…",
+                models: [
+                  { model: promptRefiner.model, label: promptRefiner.label, role: promptRefiner.role, status: "ready" },
+                  ...participants.map(({ model, label, role }) => ({ model, label, role, status: "working" })),
+                ],
+                activities: participants.map(({ model, label }) => ({
+                  id: `draft:${model}`,
+                  model,
+                  label,
+                  kind: "draft",
+                  status: "working",
+                })),
+              });
+              const drafts = await Promise.all(participants.map(async (participant) => {
+                try {
+                  const response = await attemptStream(participant.model);
+                  const text = await readProviderText(response);
+                  if (!text) throw new Error("The model returned an empty answer");
+                  totalOutputChars += text.length;
+                  councilEstimatedCostUsd += estimateChatCostUsd(participant.model, text.length);
+                  emitCouncilStatus({
+                    phase: "consulting",
+                    model: participant.model,
+                    status: "ready",
+                    activity: {
+                      id: `draft:${participant.model}`,
+                      model: participant.model,
+                      label: participant.label,
+                      kind: "draft",
+                      status: "complete",
+                      content: text.slice(0, 6000),
+                      truncated: text.length > 6000,
+                    },
+                  });
+                  return { ...participant, text, error: undefined };
+                } catch (error) {
+                  logger.warn({ error, userId: user.id, model: participant.model }, "Council participant failed");
+                  emitCouncilStatus({
+                    phase: "consulting",
+                    model: participant.model,
+                    status: "unavailable",
+                    activity: {
+                      id: `draft:${participant.model}`,
+                      model: participant.model,
+                      label: participant.label,
+                      kind: "draft",
+                      status: "unavailable",
+                    },
+                  });
+                  return { ...participant, text: "", error: "Model unavailable" };
+                }
+              }));
+              const successfulDrafts = drafts.filter((draft) => draft.text);
+              if (successfulDrafts.length < 2) {
+                throw new Error("Fewer than two models responded. Check provider availability and try again.");
+              }
+              councilSynthesisModel = successfulDrafts.some((draft) => draft.model === resolvedModel)
+                ? resolvedModel
+                : successfulDrafts[0].model;
+              councilFallbackModel = successfulDrafts.find((draft) => draft.model !== councilSynthesisModel)?.model ?? councilSynthesisModel;
+
+              emitCouncilStatus({
+                phase: "review",
+                message: "Each model is reviewing the other models’ drafts…",
+                models: [
+                  { model: promptRefiner.model, label: promptRefiner.label, role: promptRefiner.role, status: "ready" },
+                  ...drafts.map((draft) => ({
+                    model: draft.model,
+                    label: draft.label,
+                    role: draft.role,
+                    status: draft.error ? "unavailable" : "reviewing",
+                  })),
+                ],
+                activities: successfulDrafts.map(({ model, label }) => ({
+                  id: `peer-review:${model}`,
+                  model,
+                  label,
+                  kind: "peer-review",
+                  status: "working",
+                })),
+              });
+              const draftText = successfulDrafts.map(({ label, text }) =>
+                `### ${label}\n${text.slice(0, 6000)}`
+              ).join("\n\n");
+              const peerReviews = await Promise.all(successfulDrafts.map(async (reviewer) => {
+                const peerDrafts = successfulDrafts.filter((draft) => draft.model !== reviewer.model);
+                const reviewMessages: KaoriMessage[] = [
+                  ...councilHistory,
+                  {
+                    role: "user",
+                    content: [
+                      `MODEL COUNCIL PEER REVIEW — You are ${reviewer.label}. Review the other models’ independent drafts below.`,
+                      "Return exactly two tagged sections: <reasoning_summary> one or two concise sentences describing your high-level review approach and key factors </reasoning_summary> and <peer_review> a concise user-visible review note (at most 180 words) calling out useful points, concrete factual or reasoning issues, important omissions, and one specific improvement for the final answer </peer_review>. State conclusions only; do not reveal private chain-of-thought, hidden scratch work, or token-by-token deliberation. Do not write the final answer yet.",
+                      "\n\nPEER DRAFTS:\n",
+                      peerDrafts.map(({ label, text }) => `### ${label}\n${text.slice(0, 4000)}`).join("\n\n"),
+                    ].join("\n\n"),
+                  },
+                ];
+
+                try {
+                  const response = await attemptStream(reviewer.model, reviewMessages);
+                  const text = await readProviderText(response);
+                  if (!text) throw new Error("The model returned an empty peer review");
+                  const summaryMatch = text.match(/<reasoning_summary>\s*([\s\S]*?)\s*<\/reasoning_summary>/i);
+                  const reviewMatch = text.match(/<peer_review>\s*([\s\S]*?)\s*<\/peer_review>/i);
+                  const reasoningSummary = summaryMatch?.[1]?.trim().slice(0, 1200);
+                  const reviewNote = (reviewMatch?.[1]?.trim() || text.replace(/<\/?(?:reasoning_summary|peer_review)>/gi, "").trim()).slice(0, 3000);
+                  totalOutputChars += text.length;
+                  councilEstimatedCostUsd += estimateChatCostUsd(reviewer.model, text.length);
+                  emitCouncilStatus({
+                    phase: "review",
+                    model: reviewer.model,
+                    status: "ready",
+                    activity: {
+                      id: `peer-review:${reviewer.model}`,
+                      model: reviewer.model,
+                      label: reviewer.label,
+                      kind: "peer-review",
+                      status: "complete",
+                      content: reviewNote,
+                      summary: reasoningSummary,
+                      truncated: text.length > 4200,
+                    },
+                  });
+                  return { ...reviewer, review: [reasoningSummary ? `Reasoning summary: ${reasoningSummary}` : "", reviewNote].filter(Boolean).join("\n\n"), error: undefined };
+                } catch (error) {
+                  logger.warn({ error, userId: user.id, model: reviewer.model }, "Council peer review failed");
+                  emitCouncilStatus({
+                    phase: "review",
+                    model: reviewer.model,
+                    status: "unavailable",
+                    activity: {
+                      id: `peer-review:${reviewer.model}`,
+                      model: reviewer.model,
+                      label: reviewer.label,
+                      kind: "peer-review",
+                      status: "unavailable",
+                    },
+                  });
+                  return { ...reviewer, review: "", error: "Peer review unavailable" };
+                }
+              }));
+              const successfulPeerReviews = peerReviews.filter((review) => review.review);
+              const peerReviewText = successfulPeerReviews.length > 0
+                ? successfulPeerReviews.map(({ label, review }) => `### Peer review from ${label}\n${review.slice(0, 3000)}`).join("\n\n")
+                : "No peer-review notes were returned; synthesize from the independent drafts only.";
+              currentMessages.push({
+                role: "user",
+                content: [
+                  "MODEL COUNCIL SYNTHESIS: GPT-OSS only refined the prompt; it did not answer or review the request. Gemini and Nemotron drafted answers, then reviewed each other’s drafts. Compare those drafts and peer-review notes critically. Check factual claims against the original user context, resolve disagreements carefully, and preserve useful nuance. Do not merely average the drafts or copy unsupported claims. Treat both the GPT-OSS refined prompt and review notes as aids, not as factual authority. Now provide one clear, accurate, complete answer. If uncertainty remains, say so. Do not claim live verification unless a tool actually performed it.",
+                  "\n\nINDEPENDENT DRAFTS:\n",
+                  draftText,
+                  "\n\nPEER-REVIEW NOTES:\n",
+                  peerReviewText,
+                ].join(""),
+              });
+              emitCouncilStatus({
+                phase: "synthesis",
+                message: "The selected model is synthesizing the drafts and peer reviews…",
+                models: [
+                  { model: promptRefiner.model, label: promptRefiner.label, role: promptRefiner.role, status: "ready" },
+                  ...drafts.map(({ model, label, role, error }) => ({ model, label, role, status: error ? "unavailable" : "ready" })),
+                ],
+              });
+            }
+
+            try {
+              const responseModel = featureMode === "council" && councilSynthesisModel
+                ? councilSynthesisModel
+                : resolvedModel;
+              activeModel = responseModel;
+              response = await attemptStream(responseModel);
+            } catch (err: any) {
+              const responseModel = featureMode === "council" && councilSynthesisModel
+                ? councilSynthesisModel
+                : resolvedModel;
+              if (featureMode === "council" && councilFallbackModel && councilFallbackModel !== responseModel) {
+                logger.warn(
+                  { userId: user.id, requestedModel: responseModel, fallbackModel: councilFallbackModel },
+                  "Council synthesis model unavailable; using a responding council model"
+                );
+                activeModel = councilFallbackModel;
+                response = await attemptStream(councilFallbackModel);
+              } else {
+                const errMsg = err.message || "";
+                const isRateLimit = /quota|rate limit|resourceexhausted|429/i.test(errMsg);
+                const isOverloaded = /500|502|503|504|overload(?:ed)?|high demand|unavailable|at capacity|server busy/i.test(errMsg);
+
+                if (isRateLimit || isOverloaded) {
+                  const reason = isRateLimit ? "rate-limited" : "temporarily unavailable";
+                  logger.warn(
+                    { userId: user.id, model: responseModel, reason },
+                    "Selected AI model unavailable; preserving model affinity"
+                  );
+                  throw new Error(
+                    `The selected model (${responseModel}) is ${reason}. ` +
+                    "Your request was not switched to another model. Please retry shortly."
+                  );
+                }
+
+                throw err;
+              }
             }
 
             if (!response) {
@@ -854,6 +1308,19 @@ export async function POST(req: NextRequest) {
             let buffer = "";
             let currentToolUse: ToolUseBlock | null = null;
             let toolUseInputJson = "";
+            const emitAnswerText = (text: string) => {
+              if (!text) return;
+              fullAssistantContent += text;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text })}\n\n`));
+            };
+            const reasoningSummaryParser = featureMode === "thinking"
+              ? createReasoningSummaryParser(
+                (text) => {
+                  if (text) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "thinking_delta", text })}\n\n`));
+                },
+                emitAnswerText
+              )
+              : null;
 
             while (true) {
               const { done, value } = await reader.read();
@@ -895,16 +1362,8 @@ export async function POST(req: NextRequest) {
                   if (event.type === "content_block_delta") {
                     if (event.delta?.type === "text_delta") {
                       const text = event.delta.text || "";
-                      fullAssistantContent += text;
-
-                      controller.enqueue(
-                        encoder.encode(
-                          `data: ${JSON.stringify({
-                            type: "text",
-                            text,
-                          })}\n\n`
-                        )
-                      );
+                      if (reasoningSummaryParser) reasoningSummaryParser.push(text);
+                      else emitAnswerText(text);
                     }
 
                     if (event.delta?.type === "input_json_delta") {
@@ -912,16 +1371,8 @@ export async function POST(req: NextRequest) {
                     }
                   }
 
-                  if (event.type === "thinking_delta") {
-                    controller.enqueue(
-                      encoder.encode(
-                        `data: ${JSON.stringify({
-                          type: "thinking_delta",
-                          text: event.delta?.text || (event as any).text || "",
-                        })}\n\n`
-                      )
-                    );
-                  }
+                  // Provider-native reasoning fields can contain hidden chain-of-thought.
+                  // Only the concise, explicitly user-facing summary is displayed.
 
                   if ((event.type === "content_block_extra" || event.extra_content) && currentToolUse) {
                     const extra = event.extra_content || (event as any).extra_content;
@@ -957,6 +1408,8 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
+
+            reasoningSummaryParser?.flush();
 
             if (currentToolUse) {
               try {
@@ -1011,7 +1464,8 @@ export async function POST(req: NextRequest) {
               );
             }
 
-            // Strip XML tool calls from the text content so it isn't shown
+            // Reset regex lastIndex before testing, and strip XML tool calls from stored text
+            xmlToolCallRegex.lastIndex = 0;
             if (xmlToolCallRegex.test(fullAssistantContent) || fullAssistantContent.includes("<tool_call>")) {
               fullAssistantContent = fullAssistantContent
                 .replace(/<tool_call>\s*<function=\w+>\s*[\s\S]*?<\/tool_call>/g, "")
@@ -1152,6 +1606,9 @@ export async function POST(req: NextRequest) {
                       baseUrl: trustedAppOrigin,
                       cookieHeader: req.headers.get("cookie") || undefined,
                     });
+                    if (tool.name === "analyze_pdf_visuals") {
+                      totalOutputChars += result.length;
+                    }
                     const resultScan = scanText(result, "tool_result");
 
                     if (resultScan.verdict !== "SAFE") {
@@ -1201,6 +1658,7 @@ export async function POST(req: NextRequest) {
                 conversation_id: chatId,
                 role: "user",
                 content: encryptContent(JSON.stringify(toolResults)),
+                tool_use_id: toolUseBlocks[0]?.id || "tool_result",
               });
 
               totalOutputChars += fullAssistantContent.length;
@@ -1237,7 +1695,9 @@ export async function POST(req: NextRequest) {
               // Refund the flat $0.10 reserve first.
               await refundChatSpend(user.id);
               // Record estimated actual cost based on model and output length.
-              const estimatedCost = estimateChatCostUsd(activeModel, totalOutputChars);
+              const estimatedCost = featureMode === "council"
+                ? councilEstimatedCostUsd + estimateChatCostUsd(activeModel, fullAssistantContent.length)
+                : estimateChatCostUsd(activeModel, totalOutputChars);
               await recordSpend(user.id, estimatedCost);
             } catch (spendErr) {
               logger.warn(

@@ -172,6 +172,35 @@ export async function updateUserProStatus(id: string, isPro: boolean) {
   await run("UPDATE users SET is_pro = ? WHERE id = ?", [isPro ? 1 : 0, id]);
 }
 
+export async function deleteUserAccount(userId: string) {
+  const db = await getDb();
+  await db.batch(
+    [
+      { sql: "DELETE FROM message_attachments WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)", args: [userId] },
+      { sql: "DELETE FROM conversations WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM memory_events WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM user_memories WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM memory_settings WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM projects WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM oauth_tokens WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM refresh_tokens WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM password_reset_tokens WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM scheduled_tasks WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM monitors WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM prompt_templates WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM study_sessions WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM rate_limits WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM quartzwall_events WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM tasks WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM snippets WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM documents WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM users WHERE id = ?", args: [userId] },
+    ],
+    "write"
+  );
+}
+
 // CONVERSATION HELPERS
 
 export type DBConversation = {
@@ -273,7 +302,15 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string, userId: string): Promise<void> {
-  await run("DELETE FROM projects WHERE id = ? AND user_id = ?", [id, userId]);
+  const db = await getDb();
+  await db.batch(
+    [
+      { sql: "UPDATE conversations SET project_id = NULL WHERE project_id = ? AND user_id = ?", args: [id, userId] },
+      { sql: "DELETE FROM user_memories WHERE project_id = ? AND user_id = ?", args: [id, userId] },
+      { sql: "DELETE FROM projects WHERE id = ? AND user_id = ?", args: [id, userId] },
+    ],
+    "write"
+  );
 }
 
 export async function getProjectConversationCount(projectId: string, userId: string): Promise<number> {
@@ -333,6 +370,7 @@ export async function deleteConversation(id: string, userId: string) {
   const db = await getDb();
   await db.batch(
     [
+      { sql: "DELETE FROM message_attachments WHERE conversation_id = ? AND user_id = ?", args: [id, userId] },
       { sql: "DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE id = ? AND user_id = ?)", args: [id, userId] },
       { sql: "DELETE FROM conversations WHERE id = ? AND user_id = ?", args: [id, userId] },
     ],
@@ -341,7 +379,15 @@ export async function deleteConversation(id: string, userId: string) {
 }
 
 export async function deleteUserConversations(userId: string) {
-  await run("DELETE FROM conversations WHERE user_id = ?", [userId]);
+  const db = await getDb();
+  await db.batch(
+    [
+      { sql: "DELETE FROM message_attachments WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)", args: [userId] },
+      { sql: "DELETE FROM conversations WHERE user_id = ?", args: [userId] },
+    ],
+    "write"
+  );
 }
 
 // MESSAGE HELPERS
@@ -402,6 +448,23 @@ export async function deleteMessagesFrom(conversationId: string, userId: string,
   );
 
   if (targetMsg) {
+    await run(
+      `DELETE FROM message_attachments
+       WHERE conversation_id = ? AND user_id = ?
+         AND message_id IN (
+           SELECT id FROM messages
+           WHERE conversation_id = ?
+             AND (created_at > ? OR (created_at = ? AND rowid >= ?))
+         )`,
+      [
+        conversationId,
+        userId,
+        conversationId,
+        targetMsg.created_at,
+        targetMsg.created_at,
+        targetMsg.row_id,
+      ]
+    );
     await run(
       `DELETE FROM messages
        WHERE conversation_id = ?

@@ -147,11 +147,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    try {
-      requireAjax(req);
-    } catch (err) {
-      if (err instanceof Response) return err;
-    }
+    requireAjax(req);
 
     const user = await getSessionUser();
     if (!user) {
@@ -189,6 +185,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       updatedAt: new Date(updated.updated_at * 1000).toISOString(),
     });
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     if (error instanceof RequestBodyError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
@@ -200,22 +197,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     requireAjax(req);
-  } catch (err) {
+
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const conv = await findConversation(id, user.id);
+
+    if (!conv || conv.user_id !== user.id) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+    }
+
+    await deleteConversation(id, user.id);
+    return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
     if (err instanceof Response) return err;
+    logger.error({ err, route: "DELETE /api/chats/[id]" }, "Chat deletion failed");
+    return NextResponse.json({ error: "Unable to delete this chat right now." }, { status: 500 });
   }
-
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id } = await params;
-  const conv = await findConversation(id, user.id);
-
-  if (!conv || conv.user_id !== user.id) {
-    return NextResponse.json({ error: "Chat not found" }, { status: 404 });
-  }
-
-  await deleteConversation(id, user.id);
-  return NextResponse.json({ ok: true });
 }

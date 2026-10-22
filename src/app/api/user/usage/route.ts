@@ -39,32 +39,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Count today's messages
-    const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+    // Align daily boundary to UTC midnight (matching spend-guard.ts)
+    const now = new Date();
+    const todayStart = Math.floor(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000
+    );
+
+    // Count today's direct user messages (excluding tool_result continuation turns where tool_use_id is set)
     const msgResult = await db.execute({
       sql: `SELECT COUNT(*) as count FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
-            WHERE c.user_id = ? AND m.role = 'user' AND m.created_at >= ?`,
+            WHERE c.user_id = ? AND m.role = 'user' AND m.tool_use_id IS NULL AND m.created_at >= ?`,
       args: [sessionUser.id, todayStart],
     });
-    const messagesCount = mapRows<{ count: number }>(msgResult)[0]?.count || 0;
+    const messagesCount = Number(mapRows<{ count: number }>(msgResult)[0]?.count || 0);
 
-    // Count total tool uses today (messages with role = 'tool')
+    // Count total tool uses today from QUARTZWALL tool policy logs and tool messages
     const toolResult = await db.execute({
-      sql: `SELECT COUNT(*) as count FROM messages m
-            JOIN conversations c ON m.conversation_id = c.id
-            WHERE c.user_id = ? AND m.role = 'tool' AND m.created_at >= ?`,
+      sql: `SELECT COUNT(*) as count FROM quartzwall_events
+            WHERE user_id = ? AND type = 'TOOL_CALL_POLICY' AND verdict != 'BLOCKED' AND created_at >= ?`,
       args: [sessionUser.id, todayStart],
     });
-    const toolsUsed = mapRows<{ count: number }>(toolResult)[0]?.count || 0;
+    const toolsUsed = Number(mapRows<{ count: number }>(toolResult)[0]?.count || 0);
 
     const dailyLimit = parseFloat(process.env.DAILY_SPEND_LIMIT_USD || "2.00");
 
     // Reset spend if day rolled over
-    const now = new Date();
-    const today = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000);
     let dailySpend = typeof user.daily_spend_usd === "number" ? user.daily_spend_usd : 0;
-    if (!user.spend_reset_date || user.spend_reset_date < today) {
+    if (!user.spend_reset_date || user.spend_reset_date < todayStart) {
       dailySpend = 0;
     }
 

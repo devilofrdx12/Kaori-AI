@@ -12,6 +12,7 @@ import katex from "katex";
 import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
 import { ChatMessage } from "./types";
 import CodeBlock from "./code-block";
+import ToolResultCard from "./tool-result-card";
 import type { Components } from "react-markdown";
 
 /* ── Collapsible thinking block (Claude-style) ── */
@@ -55,7 +56,7 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
 
         {/* Label */}
         <span className="font-medium text-[hsl(var(--muted-foreground))]">
-          {isStreaming ? "Thinking…" : `Thought for ${wordCount} words`}
+          {isStreaming ? "Preparing a reasoning summary…" : `Reasoning summary · ${wordCount} words`}
         </span>
 
         {/* Spacer */}
@@ -389,6 +390,17 @@ export const MessageRow = memo((
           {(msg.content || streamingThinking || msg.thinking || (msg.toolResults && msg.toolResults.length > 0)) && (
             <div className="flex flex-col">
               <div className="flex-1 min-w-0">
+                {msg.toolResults && msg.toolResults.length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {msg.toolResults.map((tr, i) => (
+                      <ToolResultCard
+                        key={`${msg.id}-tr-${i}`}
+                        toolName={tr.toolName}
+                        result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
+                      />
+                    ))}
+                  </div>
+                )}
                 {(msg.content || streamingThinking || msg.thinking) && (
                   <div className="py-1 transition-colors duration-300">
 

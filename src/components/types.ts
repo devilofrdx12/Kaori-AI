@@ -10,7 +10,7 @@ export type UploadFile = {
 };
 
 export type ImageDetail = "fast" | "balanced" | "high";
-export type ChatFeatureMode = "auto" | "web" | "deep" | "thinking";
+export type ChatFeatureMode = "auto" | "web" | "deep" | "thinking" | "council";
 
 export type MessageMode = "chat" | "image";
 

@@ -16,14 +16,20 @@ export default function ChatHeader({
 }) {
 
   return (
-    <header className="h-14 sm:h-16 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-white/50 dark:border-white/[0.06] bg-white/45 dark:bg-neutral-950/30 backdrop-blur-xl backdrop-saturate-[1.8] z-20 transition-colors duration-300">
+    <header
+      id="chat-header"
+      role="banner"
+      className="h-14 sm:h-16 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-white/50 dark:border-white/[0.06] bg-white/45 dark:bg-neutral-950/30 backdrop-blur-xl backdrop-saturate-[1.8] z-20 transition-colors duration-300"
+    >
       {/* Left side */}
       <div className="flex items-center gap-2">
         {!sidebarOpen && (
           <button
+            id="sidebar-toggle"
             onClick={onToggleSidebar}
             title="Toggle Sidebar"
-            className="h-10 w-10 sm:h-11 sm:w-11 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 hover-lift active-press text-secondary hover:text-on-surface"
+            aria-label="Toggle sidebar"
+            className="h-10 w-10 sm:h-11 sm:w-11 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 hover-lift active-press text-secondary hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <Menu size={18} />
           </button>
@@ -41,9 +47,12 @@ export default function ChatHeader({
 
       {/* Right side — toggle avatar */}
       <button
+        id="avatar-toggle"
         onClick={onToggleAvatar}
-        className="h-10 w-10 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 hover-lift active-press text-secondary hover:text-on-surface"
+        className="h-10 w-10 grid place-items-center rounded-xl hover:bg-white/65 dark:hover:bg-white/10 hover-lift active-press text-secondary hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         title={showAvatar ? "Hide Kaori" : "Show Kaori"}
+        aria-label={showAvatar ? "Hide Kaori avatar" : "Show Kaori avatar"}
+        aria-pressed={showAvatar}
       >
         {showAvatar ? (
           <EyeOff size={18} />

@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check, Upload, Search, BrainCircuit, Sparkles } from "lucide-react";
+import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check, Upload, Search, BrainCircuit, Sparkles, Network } from "lucide-react";
 import ModelSelector from "./model-selector";
 import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
 
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
   { id: "deep" as const, label: "Deep Research", description: "Gemini 3.8 Flash · multi-source", icon: BrainCircuit },
-  { id: "thinking" as const, label: "Thinking", description: "Nemotron Ultra · long reasoning", icon: Sparkles },
+  { id: "thinking" as const, label: "Reasoning summary", description: "Show a concise rationale · works with your selected model", icon: Sparkles },
+  { id: "council" as const, label: "Model Council", description: "3 models cross-review, then synthesize", icon: Network },
 ];
 
 const VOICE_LANGUAGES = [
@@ -427,7 +428,6 @@ export default function ChatInput({
                             const nextMode = selected ? "auto" : option.id;
                             setFeatureMode(nextMode);
                             if (nextMode === "deep") onModelChange("gemini-3.8-flash");
-                            if (nextMode === "thinking") onModelChange("nvidia/nemotron-3-ultra-550b-a55b");
                             setShowFeatureMenu(false);
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${selected ? "bg-primary/10 text-primary" : "text-on-surface hover:bg-black/[0.04] dark:hover:bg-white/[0.07]"}`}

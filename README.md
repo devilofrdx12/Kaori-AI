@@ -8,7 +8,7 @@ Kaori AI is an advanced, multi-modal AI assistant built with Next.js and Turso/l
 - **Long-Term Memory System:** Kaori AI remembers user preferences, past conversations, and extracted facts.
 - **Scheduled Tasks & Web Monitors:** Automate background tasks and set up cron-like monitors for web changes.
 - **Productivity & Study Tools:** Integrated task management, code snippet library, and study session tracking.
-- **OAuth Integrations:** Connect your Google account to allow Kaori AI to read your Drive or send Gmails on your behalf.
+- **OAuth Integrations:** Connect Google for one-click Single Sign-On (SSO) and account linking, plus Spotify for hands-free music and playlist playback control.
 - **Pro Tier System:** Built-in support for Pro users with extended limits and capabilities.
 
 ## 🛠️ Tech Stack
@@ -16,7 +16,7 @@ Kaori AI is an advanced, multi-modal AI assistant built with Next.js and Turso/l
 - **Framework:** [Next.js](https://nextjs.org/) (App Router)
 - **Language:** TypeScript
 - **Database:** Turso/libSQL
-- **Authentication:** Custom session-based auth with refresh token rotation + Google OAuth
+- **Authentication:** Custom session-based auth with refresh token rotation + Google OAuth (SSO) & Spotify OAuth
 - **AI Integration:** Anthropic SDK, Groq (via custom adapter)
 
 ## 🗄️ Database Schema Overview (v9)
@@ -28,7 +28,7 @@ The application uses a Turso-hosted libSQL database designed for online deployme
 - **`user_memories`**: The core of the long-term memory system.
 - **`scheduled_tasks` & `monitors`**: Manages active automated actions.
 - **`tasks` & `snippets`**: Drives the productivity suite.
-- **`oauth_tokens`**: Securely stores AES-256-GCM encrypted tokens for external integrations.
+- **`oauth_tokens`**: Securely stores AES-256-GCM encrypted tokens for external integrations (Google & Spotify).
 
 ## 🚀 Getting Started
 
@@ -51,17 +51,25 @@ The application uses a Turso-hosted libSQL database designed for online deployme
    ```
 
 3. **Environment Setup:**
-   Create a `.env.local` file in the root directory and add your API keys:
+   Create a `.env.local` file in the root directory (refer to `.env.example` for all options):
    ```env
    # AI Providers
    ANTHROPIC_API_KEY=your_anthropic_key
    GROQ_API_KEY=your_groq_key
 
-   # Google OAuth (Optional)
+   # Google OAuth (Optional - Single Sign-On & Account Sync)
    GOOGLE_CLIENT_ID=your_google_client_id
    GOOGLE_CLIENT_SECRET=your_google_client_secret
    GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+
+   # Spotify OAuth (Optional - Music Playback Control)
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+   SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/spotify/callback
    ```
+
+   > [!NOTE]
+   > For step-by-step developer console setup guides, cryptographic architecture, scopes, and troubleshooting for Google and Spotify integrations, refer to [**`oauth-readme.md`**](oauth-readme.md).
 
 4. **Initialize Database:**
    Create a Turso database, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then the app will apply `db/schema.sql` automatically on first database access.

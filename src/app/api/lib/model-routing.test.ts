@@ -10,12 +10,13 @@ test("normal chat preserves the selected model", () => {
 
 test("web and image search preserve the selected model", () => {
   assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "web"), GROQ_MODEL);
+  assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "council"), GROQ_MODEL);
 });
 
-test("explicit specialist modes use their advertised models", () => {
+test("deep research uses its specialist model while reasoning summaries preserve selection", () => {
   assert.equal(
     resolveModelForFeatureMode(GROQ_MODEL, "deep"),
     "gemini-3.8-flash"
   );
-  assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "thinking"), "nvidia/nemotron-3-ultra-550b-a55b");
+  assert.equal(resolveModelForFeatureMode(GROQ_MODEL, "thinking"), GROQ_MODEL);
 });

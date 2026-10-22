@@ -32,9 +32,15 @@ export function encrypt(plaintext: string): string {
 /**
  * Decrypt an AES-256-GCM encrypted string.
  * Input: "iv:authTag:ciphertext" (all base64)
+ *
+ * @throws {Error} If the stored string is not in the expected format.
  */
 export function decrypt(stored: string): string {
-  const [ivB64, tagB64, encB64] = stored.split(":");
+  const parts = stored.split(":");
+  if (parts.length !== 3) {
+    throw new Error("Invalid encrypted format: expected iv:authTag:ciphertext");
+  }
+  const [ivB64, tagB64, encB64] = parts;
   const decipher = crypto.createDecipheriv(
     "aes-256-gcm",
     getKey(),

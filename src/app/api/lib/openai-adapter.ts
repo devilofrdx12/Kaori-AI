@@ -270,6 +270,9 @@ export async function streamOpenAiCompatible({
         // If we can't find a specific time, at least show the helpful part of the API message
         userMsg = `Model quota ended. ${apiMsg ? apiMsg : "Please try again later."}`;
       }
+    } else if (resp.status === 413) {
+      logger.warn({ status: resp.status, body: errBody.slice(0, 300) }, "[openai-adapter] Provider rejected oversized request");
+      userMsg = "This request is too large for the selected model. Start a new chat or send fewer/smaller attachments, then try again.";
     } else {
       // Log raw body server-side for debugging, but never expose to users.
       // Raw error bodies can contain internal API URLs, deployment IDs,

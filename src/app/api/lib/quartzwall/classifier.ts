@@ -221,11 +221,26 @@ function classifyAttack(signals: QuartzwallSignal[]): QuartzwallAttackType {
   return "No Attack Detected";
 }
 
+/**
+ * Maximum input length (in characters) that the scanner will process.
+ * Inputs beyond this limit are truncated before regex evaluation to
+ * prevent ReDoS on adversarial payloads.
+ */
+const MAX_SCAN_LENGTH = 100_000;
+
+/**
+ * Scans arbitrary text for prompt-injection signals.
+ *
+ * @param input   - Raw user text, tool output, or any string to evaluate.
+ * @param context - Where the text originates; determines which rule-sets apply.
+ * @returns A structured scan result with verdict, risk score, and signals.
+ */
 export function scanText(
   input: unknown,
   context: QuartzwallScanContext = "user_input"
 ): QuartzwallScanResult {
-  const text = typeof input === "string" ? input : JSON.stringify(input ?? "");
+  const raw = typeof input === "string" ? input : JSON.stringify(input ?? "");
+  const text = raw.length > MAX_SCAN_LENGTH ? raw.slice(0, MAX_SCAN_LENGTH) : raw;
   const normalized = text.normalize("NFKC");
   const signals: QuartzwallSignal[] = [];
   const direct = scoreRegexRules(normalized, CONTROL_PLANE_PATTERNS, signals);
@@ -254,8 +269,13 @@ export function scanText(
   };
 }
 
-export function sanitizeToolResult(result: string) {
-  return result
+/**
+ * Strips known injection patterns from tool output text, replacing them
+ * with safe placeholder strings so the sanitized text can still be presented.
+ */
+export function sanitizeToolResult(result: string): string {
+  const text = result.length > MAX_SCAN_LENGTH ? result.slice(0, MAX_SCAN_LENGTH) : result;
+  return text
     .replace(/<!--[\s\S]*?-->/g, "[QUARTZWALL removed hidden instructions]")
     .replace(/\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above|system|developer)?\s*instructions?\b[\s\S]{0,220}/gi, "[QUARTZWALL removed instruction override]")
     .replace(/\b(reveal|print|show|dump|display|repeat)\b[\s\S]{0,100}\b(system prompt|developer message|hidden instructions|initial instructions)\b[\s\S]{0,180}/gi, "[QUARTZWALL removed control-plane extraction attempt]")
@@ -264,6 +284,10 @@ export function sanitizeToolResult(result: string) {
     .replace(/\b(to the ai|assistant|agent|llm|model)\b[\s\S]{0,240}\b(ignore|override|reveal|exfiltrate|send|open|call)\b[\s\S]{0,240}/gi, "[QUARTZWALL removed indirect prompt injection]");
 }
 
+/**
+ * Quick boolean check: returns `true` if the message would be blocked.
+ * Use {@link scanText} when you need the full risk breakdown.
+ */
 export function detectInjection(message: string): boolean {
   return scanText(message).verdict === "BLOCKED";
 }

@@ -370,27 +370,26 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
 
   const handleDeleteAccount = async () => {
     if (!confirm("Are you sure you want to permanently delete your account? All your data, conversations, and settings will be lost forever.")) return;
-    if (!confirm("This is your FINAL confirmation. Type OK in the next dialog will not appear — clicking OK here will permanently delete everything. Proceed?")) return;
+    if (!confirm("This is your FINAL confirmation. Clicking OK here will permanently delete everything. Proceed?")) return;
 
     try {
-      setStatusMsg("Deleting your account data...");
+      setStatusMsg("Deleting your account and all data...");
 
-      // Delete all chats
-      await fetch("/api/chats", {
+      const res = await fetch("/api/user", {
         method: "DELETE",
+        credentials: "include",
         headers: AJAX_HEADERS,
       });
 
-      // Logout (destroys session)
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: AJAX_HEADERS,
-      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to delete account");
+      }
 
       // Clear all local storage
       localStorage.clear();
 
-      router.replace('/login');
+      router.replace("/login");
     } catch (e: unknown) {
       setStatusMsg(`Error deleting account: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
@@ -781,8 +780,11 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                           )}
                         </div>
                         
-                        <div className="text-[13px] font-medium text-neutral-500 dark:text-neutral-400">
-                          {isPro ? "No daily limit" : "Resets at midnight"}
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-medium text-neutral-500 dark:text-neutral-400">
+                          <span>{isPro ? "No daily limit" : "Resets at 00:00 UTC"}</span>
+                          <span>
+                            {usageData?.messagesToday ?? 0} msgs · {usageData?.toolsUsed ?? 0} tool calls · ${(usageData?.dailySpendUsd ?? 0).toFixed(4)} / ${(usageData?.dailyLimitUsd ?? 2).toFixed(2)}
+                          </span>
                         </div>
                       </div>
 
@@ -797,19 +799,11 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                             Kaori Pro 
                             <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">BETA</span>
                           </div>
-                          <div className="text-sm text-neutral-500">Try Kaori Pro for free during our beta period.</div>
+                          <div className="text-sm text-neutral-500">Pro tier upgrades are managed through administrator provisioning during beta.</div>
                         </div>
-                        <button 
-                          onClick={() => {
-                            setIsPro(true);
-                            setStatusMsg("Welcome to the Kaori Pro Beta!");
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-medium text-white hover-lift active-press hover:brightness-110 sm:w-auto"
-                          title="Join Beta"
-                        >
-                          Join Beta
-                        </button>
+                        <span className="inline-flex h-10 w-full shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/35 px-4 text-xs font-semibold text-neutral-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-neutral-300 sm:w-auto">
+                          Invite Only
+                        </span>
                       </div>
                     </div>
                   )}

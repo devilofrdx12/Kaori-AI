@@ -1,18 +1,15 @@
-export type ModelFeatureMode = "auto" | "web" | "deep" | "thinking";
+export type ModelFeatureMode = "auto" | "web" | "deep" | "thinking" | "council";
 
 const DEEP_RESEARCH_MODEL = "gemini-3.8-flash";
-const THINKING_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
 
 /**
- * Normal chat and web search preserve the user's selected model. Deep and
- * Thinking are explicit specialist modes, so they may deliberately route to
- * their advertised models.
+ * Normal chat, web search, and reasoning summaries preserve the user's
+ * selected model. Deep research is an explicit specialist mode.
  */
 export function resolveModelForFeatureMode(
   selectedModel: string,
   featureMode: ModelFeatureMode
 ): string {
   if (featureMode === "deep") return DEEP_RESEARCH_MODEL;
-  if (featureMode === "thinking") return THINKING_MODEL;
   return selectedModel;
 }

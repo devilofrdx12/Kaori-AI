@@ -43,8 +43,18 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 );
 
 -- ══════════════════════════════════════════
--- CONVERSATIONS + MESSAGES
+-- PROJECTS + CONVERSATIONS + MESSAGES
 -- ══════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  instructions TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
 
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
@@ -54,16 +64,6 @@ CREATE TABLE IF NOT EXISTS conversations (
   provider TEXT NOT NULL DEFAULT 'google',
   model TEXT NOT NULL DEFAULT 'gemini-3.5-flash',
   is_starred INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-
-CREATE TABLE IF NOT EXISTS projects (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT '',
-  instructions TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
@@ -263,8 +263,10 @@ CREATE TABLE IF NOT EXISTS snippets (
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_attachments_message ON message_attachments(message_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_convs_user ON conversations(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_convs_project ON conversations(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON user_memories(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_retrieval ON user_memories(user_id, status, scope, project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_events_user ON memory_events(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, done, due_at);

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Lock, Mail, Sparkles } from "lucide-react";
 import { login } from "@/components/auth";
+import { GrainFlowBackground } from "@/components/grain-flow-background";
 
 const GOOGLE_ERROR_MAP: Record<string, string> = {
   google_auth_failed: "Google sign-in was cancelled or denied.",
@@ -46,23 +47,25 @@ function LoginForm() {
   return (
     <>
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200/80 bg-red-50/90 dark:border-red-900/40 dark:bg-red-950/40 p-3.5 text-sm text-red-700 dark:text-red-300 backdrop-blur-md animate-fade-in">
+        <div className="mb-5 rounded-2xl border border-red-200/80 bg-red-50/90 dark:border-red-900/40 dark:bg-red-950/40 p-3.5 text-sm text-red-700 dark:text-red-300 backdrop-blur-md animate-fade-in">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Email</span>
-          <div className="flex items-center gap-3 rounded-[1rem] border border-white/30 dark:border-white/10 bg-white/40 dark:bg-black/40 px-3 focus-within:ring-2 focus-within:ring-[hsl(var(--primary)/0.4)] backdrop-blur-md shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] transition-all group">
-            <Mail size={17} className="text-[hsl(var(--muted-foreground))] group-focus-within:text-[hsl(var(--primary))] transition-colors" />
+          <span className="mb-1.5 block text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+            Email
+          </span>
+          <div className="flex h-11 sm:h-12 items-center gap-3 rounded-xl sm:rounded-2xl border border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/[0.04] px-3.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-md transition-all focus-within:border-[#ec4899]/50 focus-within:ring-2 focus-within:ring-[#ec4899]/25 group">
+            <Mail size={18} className="text-neutral-400 dark:text-neutral-500 group-focus-within:text-[#ec4899] transition-colors shrink-0" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+              className="h-full w-full bg-transparent text-sm text-neutral-900 dark:text-neutral-100 outline-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
               placeholder="you@example.com"
             />
           </div>
@@ -70,18 +73,18 @@ function LoginForm() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <label htmlFor="login-password" className="text-sm font-medium">
+            <label htmlFor="login-password" className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
               Password
             </label>
             <Link
               href="/forgot-password"
-              className="text-xs font-medium text-[hsl(var(--primary))] hover:underline"
+              className="text-xs font-semibold text-[#ec4899] hover:text-[#db2777] transition-colors"
             >
               Forgot password?
             </Link>
           </div>
-          <div className="flex items-center gap-3 rounded-[1rem] border border-white/30 dark:border-white/10 bg-white/40 dark:bg-black/40 px-3 focus-within:ring-2 focus-within:ring-[hsl(var(--primary)/0.4)] backdrop-blur-md shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.02)] transition-all group">
-            <Lock size={17} className="text-[hsl(var(--muted-foreground))] group-focus-within:text-[hsl(var(--primary))] transition-colors" />
+          <div className="flex h-11 sm:h-12 items-center gap-3 rounded-xl sm:rounded-2xl border border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/[0.04] px-3.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-md transition-all focus-within:border-[#ec4899]/50 focus-within:ring-2 focus-within:ring-[#ec4899]/25 group">
+            <Lock size={18} className="text-neutral-400 dark:text-neutral-500 group-focus-within:text-[#ec4899] transition-colors shrink-0" />
             <input
               id="login-password"
               type="password"
@@ -90,7 +93,7 @@ function LoginForm() {
               required
               minLength={8}
               autoComplete="current-password"
-              className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+              className="h-full w-full bg-transparent text-sm text-neutral-900 dark:text-neutral-100 outline-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
               placeholder="Password"
             />
           </div>
@@ -99,10 +102,10 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-[1rem] bg-[hsl(var(--primary))] text-sm font-semibold text-white shadow-[0_8px_16px_-6px_hsl(var(--primary)/0.5)] transition-all hover-lift active-press hover:bg-[hsl(var(--primary)/0.92)] hover:shadow-[0_12px_20px_-6px_hsl(var(--primary)/0.6)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover-lift-none disabled:active-press-none"
+          className="group relative flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-[#e83b86] text-sm font-semibold text-white shadow-[0_8px_20px_-4px_rgba(232,59,134,0.45)] transition-all hover:bg-[#db2777] hover:shadow-[0_12px_24px_-4px_rgba(232,59,134,0.55)] hover-lift active-press disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Signing in..." : "Sign in"}
-          {!loading && <ArrowRight size={16} />}
+          {!loading && <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />}
         </button>
       </form>
     </>
@@ -111,58 +114,48 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-dvh bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden">
-      {/* Background Decorative Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/20 blur-[150px] pointer-events-none" />
-      <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] rounded-full bg-blue-500/15 blur-[100px] pointer-events-none" />
+    <main className="min-h-dvh relative overflow-x-hidden overflow-y-auto select-none bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+      {/* Interactive WebGL Grain Flow fluid theme background with chromatic aberration text */}
+      <GrainFlowBackground />
 
-      <div className="grid min-h-dvh lg:grid-cols-[1fr_440px] relative z-10">
-        <section className="hidden lg:flex flex-col justify-between border-r border-white/10 dark:border-white/[0.05] bg-white/10 dark:bg-black/10 backdrop-blur-2xl p-10">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary))] text-white shadow-sm">
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <div className="text-sm font-semibold">Kaori AI</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Private workspace assistant</div>
-            </div>
-          </div>
+      {/* Accessible semantic copy for screen readers and SEO */}
+      <div className="sr-only">
+        <h1>Kaori AI — Private workspace assistant</h1>
+        <p>Welcome back. Continue your conversations without losing context.</p>
+        <p>Your chats, connected tools, and model preferences stay protected behind your account.</p>
+        <p>Encrypted conversation storage and session-based access.</p>
+      </div>
 
-          <div className="max-w-xl">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-[hsl(var(--primary))]">
-              Welcome back
-            </p>
-            <h1 className="mt-4 text-5xl font-semibold tracking-tight">
-              Continue your conversations without losing context.
-            </h1>
-            <p className="mt-5 text-base leading-7 text-[hsl(var(--muted-foreground))]">
-              Your chats, connected tools, and model preferences stay protected behind your account.
-            </p>
-          </div>
+      {/* Two-column grid matching Signup page (lg:grid-cols-[1fr_460px]) */}
+      <div className="grid min-h-dvh lg:grid-cols-[1fr_460px] relative z-10 pointer-events-none">
+        {/* Left column is transparent so the WebGL fluid wave & text shines through, with exact border matching signup */}
+        <div className="hidden lg:block border-r border-[hsl(var(--border))] pointer-events-none" />
 
-          <div className="text-xs text-[hsl(var(--muted-foreground))]">
-            Encrypted conversation storage and session-based access.
-          </div>
-        </section>
+        {/* Right column centering the floating card with theme overlay, responsive padding matching signup */}
+        <section className="flex min-h-dvh items-center justify-center px-4 py-8 sm:px-6 sm:py-12 lg:px-5 lg:py-10 relative pointer-events-none">
+          {/* Subtle warm pink ambient glow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#ec4899]/[0.06] to-transparent pointer-events-none" />
 
-        <section className="flex items-center justify-center px-4 sm:px-5 py-10 relative">
-          {/* Glass overlay for the right section */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--primary)/0.08)] to-transparent pointer-events-none" />
-          <div className="w-full max-w-sm animate-fade-in glass-panel p-6 sm:p-10 rounded-3xl shadow-2xl z-10 border border-white/40 dark:border-white/10 bg-white/30 dark:bg-neutral-900/40 backdrop-blur-[24px]">
+          <div className="w-full max-w-sm pointer-events-auto rounded-3xl sm:rounded-[2.25rem] p-6 sm:p-8 lg:p-10 border border-white/50 dark:border-white/10 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-2xl shadow-[0_24px_64px_-12px_rgba(0,0,0,0.08),0_12px_24px_-8px_rgba(0,0,0,0.04)] dark:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] z-10 transition-all duration-300 animate-fade-in animate-[floatY_6s_ease-in-out_infinite] hover:[animation-play-state:paused] relative select-auto transform-gpu will-change-transform">
+            {/* Mobile Header with brand badge (matching signup page) */}
             <div className="mb-6 sm:mb-8 lg:hidden">
-              <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-[hsl(var(--primary))] text-white shadow-sm">
+              <div className="mb-4 sm:mb-5 grid h-12 w-12 place-items-center rounded-xl bg-[#e83b86] text-white shadow-[0_8px_20px_-4px_rgba(232,59,134,0.45)]">
                 <Sparkles size={22} />
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight">Sign in to Kaori</h1>
-              <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Pick up where you left off.
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                Sign in
+              </h1>
+              <p className="mt-1.5 sm:mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+                Use your account credentials to continue.
               </p>
             </div>
 
-            <div className="mb-8 hidden lg:block">
-              <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-              <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+            {/* Desktop Header matching signup page */}
+            <div className="mb-7 hidden lg:block">
+              <h1 className="text-2xl sm:text-[1.75rem] font-bold tracking-tight text-neutral-900 dark:text-white">
+                Sign in
+              </h1>
+              <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400 font-normal">
                 Use your account credentials to continue.
               </p>
             </div>
@@ -171,17 +164,18 @@ export default function LoginPage() {
               <LoginForm />
             </Suspense>
 
-            <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-black/15 to-black/10 dark:via-white/15 dark:to-white/10" />
-              <span className="rounded-full border border-white/50 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-0.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="relative my-5 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-neutral-200/80 dark:border-neutral-800/80" />
+              </div>
+              <span className="relative z-10 rounded-full bg-white/80 dark:bg-neutral-900/80 px-3 py-0.5 text-xs font-medium text-neutral-400 dark:text-neutral-500 border border-white/60 dark:border-white/10 shadow-sm backdrop-blur-md">
                 or
               </span>
-              <div className="h-px flex-1 bg-gradient-to-l from-transparent via-black/15 to-black/10 dark:via-white/15 dark:to-white/10" />
             </div>
 
             <a
               href="/api/auth/google"
-              className="group relative flex h-11 w-full items-center justify-center gap-2.5 rounded-[1rem] border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] px-4 text-sm font-medium text-neutral-800 dark:text-neutral-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all hover-lift active-press hover:bg-white/95 dark:hover:bg-white/[0.12] hover:border-white/60 dark:hover:border-white/20"
+              className="group relative flex h-11 sm:h-12 w-full items-center justify-center gap-2.5 rounded-xl sm:rounded-2xl border border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/[0.08] px-4 text-sm font-semibold text-neutral-800 dark:text-neutral-100 shadow-sm backdrop-blur-md transition-all hover:bg-white/80 dark:hover:bg-white/15 hover-lift active-press"
             >
               <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24">
                 <path
@@ -204,9 +198,9 @@ export default function LoginPage() {
               <span>Continue with Google</span>
             </a>
 
-            <p className="mt-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            <p className="mt-6 text-center text-sm font-medium text-neutral-500 dark:text-neutral-400">
               New to Kaori?{" "}
-              <Link href="/signup" className="font-medium text-[hsl(var(--primary))] hover:underline">
+              <Link href="/signup" className="font-semibold text-[#ec4899] hover:text-[#db2777] hover:underline">
                 Create an account
               </Link>
             </p>
@@ -216,3 +210,5 @@ export default function LoginPage() {
     </main>
   );
 }
+
+

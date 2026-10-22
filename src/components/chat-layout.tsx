@@ -16,6 +16,8 @@ import { ChatThread } from "./chat-types";
 import type { Project } from "@/lib/workspace-api";
 import { me, logout as apiLogout, AuthUser } from "./auth";
 import { Play, Pause, RotateCcw } from "lucide-react";
+import { useNetworkStatus } from "@/hooks/use-network-status";
+import NetworkStatusBanner from "./network-status-banner";
 import {
   listChats,
   createChat,
@@ -80,7 +82,7 @@ function ChatLayoutInner() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [model, setModel] = useState(getInitialModel);
-  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode } | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; messageId?: string } | null>(null);
   const [avatarState, setAvatarState] = useState<{ emotion: AvatarEmotion; speaking: boolean }>({ emotion: "idle", speaking: false });
 
   const [chats, setChats] = useState<ChatThread[]>([]);
@@ -89,6 +91,14 @@ function ChatLayoutInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState("chats");
   const [greeting] = useState(getTimeGreeting);
+  const networkStatus = useNetworkStatus({
+    onReconnect: () => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("online"));
+      }
+    },
+  });
+  const { isOnline, wasOffline } = networkStatus;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -299,6 +309,7 @@ function ChatLayoutInner() {
       return;
     }
 
+    const messageId = crypto.randomUUID();
     const mappedFiles = files ? files.map(f => ({
       url: URL.createObjectURL(f),
       name: f.name,
@@ -307,7 +318,7 @@ function ChatLayoutInner() {
     })) : undefined;
 
     const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: messageId,
       role: "user",
       content: text,
       files: mappedFiles,
@@ -320,11 +331,11 @@ function ChatLayoutInner() {
     }));
 
     if (activeChat && activeChat.messages.length === 0) {
-      const title = buildChatTitle(text);
+      const title = buildChatTitle(text || files?.[0]?.name || "New chat");
       handleRenameChat(activeChatId, title);
     }
 
-    setPendingPrompt({ text, files, imageDetail, featureMode });
+    setPendingPrompt({ text, files, imageDetail, featureMode, messageId });
   }
 
   return (
@@ -368,6 +379,21 @@ function ChatLayoutInner() {
             showAvatar={showAvatar}
             onToggleAvatar={() => setShowAvatar((prev) => !prev)}
           />
+
+          <div className="px-3 sm:px-6 pt-2 shrink-0">
+            <NetworkStatusBanner
+              phase={networkStatus.phase}
+              elapsed={networkStatus.elapsed}
+              maxWaitSeconds={networkStatus.maxWaitSeconds}
+              onCancel={() => {
+                networkStatus.cancel();
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("kaori_cancel_network_wait"));
+                }
+              }}
+              onRetry={() => void networkStatus.reconnectNow()}
+            />
+          </div>
 
           {activeTab === "chats" ? (
             <>

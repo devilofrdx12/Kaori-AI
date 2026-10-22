@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import MessageArea from "./message-area";
 import ChatInput from "./chat-input";
-import { ChatMessage, type ChatFeatureMode, type ImageDetail, type UploadFile } from "./types";
+import { ChatMessage, type ChatFeatureMode, type ImageDetail, type ToolResultData, type UploadFile } from "./types";
 import { ChatThread } from "./chat-types";
-import { sendMessage } from "@/lib/chat-api";
+import type { CouncilStatus } from "./model-council-progress";
+import { sendMessage, type ConnectionStatus } from "@/lib/chat-api";
 import ActionPassport, { type ActionProposal } from "./action-passport";
 
 
@@ -68,7 +69,7 @@ export default function ActiveChatArea({
   setModel: (m: string) => void;
   updateChat: (id: string, updater: (c: ChatThread) => ChatThread) => void;
   onAvatarStateChange: (emotion: any, speaking: boolean) => void;
-  pendingPrompt: { text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode } | null;
+  pendingPrompt: { text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; messageId?: string } | null;
   clearPendingPrompt: () => void;
 }) {
   const [typing, setTyping] = useState(false);
@@ -77,12 +78,16 @@ export default function ActiveChatArea({
   const [toolInProgress, setToolInProgress] = useState<string | null>(null);
   const [toolResults, setToolResults] = useState<{ tool: string; result: string; input?: any }[]>([]);
   const [actionProposals, setActionProposals] = useState<(ActionProposal & { chatId: string })[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("online");
+  const [councilStatus, setCouncilStatus] = useState<CouncilStatus>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (toolInProgress) {
+    if (connectionStatus !== "online") {
+      onAvatarStateChange("thinking", false);
+    } else if (toolInProgress) {
       onAvatarStateChange("shy", false);
     } else if (typing && !streamingText) {
       onAvatarStateChange("thinking", false);
@@ -92,13 +97,13 @@ export default function ActiveChatArea({
       onAvatarStateChange("idle", false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typing, !!streamingText, !!toolInProgress]);
+  }, [typing, !!streamingText, !!toolInProgress, connectionStatus]);
 
   useEffect(() => {
     if (pendingPrompt) {
-      const { text, files, imageDetail, featureMode } = pendingPrompt;
+      const { text, files, imageDetail, featureMode, messageId } = pendingPrompt;
       clearPendingPrompt();
-      handleSendInternal(text, files, true, imageDetail, featureMode);
+      handleSendInternal(text, files, true, imageDetail, featureMode, messageId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPrompt]);
@@ -111,16 +116,29 @@ export default function ActiveChatArea({
         setTyping(false);
         setStreamingText("");
         setToolInProgress(null);
+        setCouncilStatus(null);
+        setConnectionStatus("online");
       }
     };
   }, [activeChat.id]);
+
+  useEffect(() => {
+    const handleCancelWait = () => {
+      if (connectionStatus !== "online") {
+        handleStop();
+      }
+    };
+    window.addEventListener("kaori_cancel_network_wait", handleCancelWait);
+    return () => window.removeEventListener("kaori_cancel_network_wait", handleCancelWait);
+  }, [connectionStatus]);
 
   async function handleSendInternal(
     text: string,
     files?: File[] | null,
     skipLocalAdd = false,
     imageDetail: ImageDetail = "balanced",
-    featureMode: ChatFeatureMode = "auto"
+    featureMode: ChatFeatureMode = "auto",
+    providedMessageId?: string
   ) {
     if (!text && !files?.length) return;
     if (activeChat.id.startsWith("temp-")) {
@@ -129,7 +147,7 @@ export default function ActiveChatArea({
     }
 
     const objectUrls: string[] = [];
-    const userMessageId = crypto.randomUUID();
+    const userMessageId = providedMessageId || crypto.randomUUID();
 
     if (!skipLocalAdd) {
       const mappedFiles = files ? files.map(f => {
@@ -163,6 +181,8 @@ export default function ActiveChatArea({
     setToolInProgress(null);
     setToolResults([]);
     setActionProposals([]);
+    setCouncilStatus(null);
+    setConnectionStatus("online");
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -172,15 +192,23 @@ export default function ActiveChatArea({
       fileData = await Promise.all(files.map((file) => fileToDataUrl(file, imageDetail)));
       updateChat(activeChat.id, (chat) => ({
         ...chat,
-        messages: chat.messages.map((message) =>
-          message.id === userMessageId ? { ...message, files: fileData } : message
-        ),
+        messages: chat.messages.map((message) => {
+          if (message.id !== userMessageId) return message;
+          message.files?.forEach((existingFile) => {
+            if (existingFile.url?.startsWith("blob:")) {
+              URL.revokeObjectURL(existingFile.url);
+            }
+          });
+          return { ...message, files: fileData };
+        }),
       }));
       // Revoke blob URLs now that we have base64 data URLs — prevents memory leak
       for (const url of objectUrls) URL.revokeObjectURL(url);
     }
 
     let fullText = "";
+    let fullThinking = "";
+    const collectedToolResults: ToolResultData[] = [];
     const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
 
     const currentChatId = activeChat.id;
@@ -195,13 +223,24 @@ export default function ActiveChatArea({
         studyMode,
         featureMode,
         signal: controller.signal,
+        onConnectionStatus: (status) => setConnectionStatus(status),
+        onResetStream: () => {
+          fullText = "";
+          fullThinking = "";
+          collectedToolResults.length = 0;
+          setStreamingText("");
+          setStreamingThinking("");
+          setToolInProgress(null);
+          setToolResults([]);
+        },
         onText: (chunk) => {
           fullText += chunk;
           setStreamingText(fullText);
           setToolInProgress(null);
         },
         onThinking: (chunk) => {
-          setStreamingThinking(prev => prev + chunk);
+          fullThinking += chunk;
+          setStreamingThinking(fullThinking);
         },
         onToolStart: (tool) => setToolInProgress(tool),
         onToolExecuting: (tool) => {
@@ -215,14 +254,29 @@ export default function ActiveChatArea({
           );
         },
         onToolResult: (tool, result, input) => {
+          collectedToolResults.push({ toolName: tool, result, input });
           setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
         },
+        onCouncilStatus: (status) => setCouncilStatus((previous) => {
+          const models = status.models || previous?.models?.map((model) =>
+            model.model === status.model ? { ...model, status: status.status || model.status } : model
+          );
+          const activities = [...(previous?.activities ?? [])];
+          for (const activity of [...(status.activities ?? []), ...(status.activity ? [status.activity] : [])]) {
+            const index = activities.findIndex((item) => item.id === activity.id);
+            if (index === -1) activities.push(activity);
+            else activities[index] = activity;
+          }
+          return { ...previous, ...status, models, activities };
+        }),
         onDone: () => {
           const assistantMsg: ChatMessage = {
             id: `assistant-${Date.now()}`,
             role: "assistant",
             content: fullText,
+            thinking: fullThinking || undefined,
+            toolResults: collectedToolResults.length > 0 ? [...collectedToolResults] : undefined,
             timestamp: new Date().toISOString(),
           };
           updateChat(currentChatId, (c) => ({
@@ -235,6 +289,14 @@ export default function ActiveChatArea({
           setStreamingThinking("");
           setToolInProgress(null);
           setToolResults([]);
+          setConnectionStatus("online");
+          setCouncilStatus((previous) => previous ? {
+            ...previous,
+            phase: "complete",
+            progress: 100,
+            message: "Council complete — drafts and peer-review notes remain available below.",
+            models: previous.models?.map((participant) => participant.status === "unavailable" ? participant : { ...participant, status: "ready" }),
+          } : null);
           abortRef.current = null;
         },
         onError: (error) => {
@@ -256,6 +318,12 @@ export default function ActiveChatArea({
           setStreamingText("");
           setStreamingThinking("");
           setToolInProgress(null);
+          setCouncilStatus((previous) => previous ? {
+            ...previous,
+            phase: "error",
+            message: "Council stopped before finishing. Completed drafts and reviews remain available below.",
+          } : null);
+          setConnectionStatus("online");
           abortRef.current = null;
         },
       });
@@ -267,7 +335,7 @@ export default function ActiveChatArea({
   }
 
   async function handleEditSend(messageId: string, text: string, retryFiles?: UploadFile[]) {
-    if (!text) return;
+    if (!text && !retryFiles?.length) return;
 
     const msgIndex = activeChat.messages.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
@@ -294,11 +362,14 @@ export default function ActiveChatArea({
     setToolInProgress(null);
     setToolResults([]);
     setActionProposals([]);
+    setConnectionStatus("online");
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     let fullText = "";
+    let fullThinking = "";
+    const collectedToolResults: ToolResultData[] = [];
     const studyMode = typeof window !== "undefined" && localStorage.getItem("kaori_study_mode") === "true";
     const currentChatId = activeChat.id;
 
@@ -312,12 +383,23 @@ export default function ActiveChatArea({
         studyMode,
         featureMode: "auto" as const,
         signal: controller.signal,
+        onConnectionStatus: (status) => setConnectionStatus(status),
+        onResetStream: () => {
+          fullText = "";
+          fullThinking = "";
+          collectedToolResults.length = 0;
+          setStreamingText("");
+          setStreamingThinking("");
+          setToolInProgress(null);
+          setToolResults([]);
+        },
         onText: (chunk) => {
           fullText += chunk;
           setStreamingText(fullText);
         },
         onThinking: (chunk) => {
-          setStreamingThinking(prev => prev + chunk);
+          fullThinking += chunk;
+          setStreamingThinking(fullThinking);
         },
         onToolStart: (tool) => setToolInProgress(tool),
         onToolExecuting: (tool) => {
@@ -331,6 +413,7 @@ export default function ActiveChatArea({
           );
         },
         onToolResult: (tool, result, input) => {
+          collectedToolResults.push({ toolName: tool, result, input });
           setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
         },
@@ -339,6 +422,8 @@ export default function ActiveChatArea({
             id: `asst-${Date.now()}`,
             role: "assistant",
             content: fullText,
+            thinking: fullThinking || undefined,
+            toolResults: collectedToolResults.length > 0 ? [...collectedToolResults] : undefined,
             timestamp: new Date().toISOString(),
           };
           updateChat(currentChatId, (c) => ({
@@ -350,6 +435,7 @@ export default function ActiveChatArea({
           setStreamingThinking("");
           setToolInProgress(null);
           setToolResults([]);
+          setConnectionStatus("online");
           abortRef.current = null;
         },
         onError: (error) => {
@@ -371,6 +457,7 @@ export default function ActiveChatArea({
           setStreamingText("");
           setStreamingThinking("");
           setToolInProgress(null);
+          setConnectionStatus("online");
           abortRef.current = null;
         },
       });
@@ -386,6 +473,7 @@ export default function ActiveChatArea({
       abortRef.current.abort();
       abortRef.current = null;
       setTyping(false);
+      setConnectionStatus("online");
 
       const msg: ChatMessage = {
         id: `stopped-${Date.now()}`,
@@ -413,10 +501,14 @@ export default function ActiveChatArea({
         typing={typing}
         toolInProgress={toolInProgress}
         toolResults={toolResults}
+        connectionStatus={connectionStatus}
         onEditSubmit={handleEditSend}
         onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files)}
         streamingText={streamingText}
         streamingThinking={streamingThinking}
+        councilStatus={councilStatus}
+        onDismissCouncil={() => setCouncilStatus(null)}
+        onStop={handleStop}
         bottomRef={bottomRef}
       />
       {actionProposals

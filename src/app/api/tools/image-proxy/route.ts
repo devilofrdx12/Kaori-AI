@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "../../lib/auth-utils";
+import { logger } from "../../lib/logger";
 import {
   assertPublicHttpUrl,
   fetchPublicHttpUrl,
@@ -49,8 +50,8 @@ export async function GET(req: NextRequest) {
     }
 
     const bytes = await readResponseBytesWithLimit(response, MAX_IMAGE_BYTES);
-    const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    return new NextResponse(body, {
+
+    return new NextResponse(Buffer.from(bytes), {
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(bytes.byteLength),
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
         "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch {
+  } catch (err) {
+    logger.warn({ err, route: "GET /api/tools/image-proxy" }, "Image proxy request failed");
     return NextResponse.json({ error: "Unable to load image" }, { status: 400 });
   }
 }

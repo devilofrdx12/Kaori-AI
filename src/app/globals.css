@@ -202,8 +202,8 @@ a {
 }
 
 @keyframes floatY {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
 }
 
 @keyframes subtleSway {
@@ -867,4 +867,15 @@ a {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* WebGL Grain Flow cursor follower dot */
+#dot.on {
+  opacity: 1 !important;
+}
+#dot.down {
+  width: 7px !important;
+  height: 7px !important;
+  margin: -3.5px 0 0 -3.5px !important;
+  box-shadow: 0 0 0 4px rgba(252, 71, 120, 0.25) !important;
 }

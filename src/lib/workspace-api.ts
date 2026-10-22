@@ -32,8 +32,27 @@ export type MemorySettings = {
 
 const HEADERS = { "X-Requested-With": "XMLHttpRequest" };
 
+async function silentRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+      headers: HEADERS,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, { ...init, credentials: "include", cache: "no-store" });
+  let response = await fetch(url, { ...init, credentials: "include", cache: "no-store" });
+  if (response.status === 401) {
+    const refreshed = await silentRefresh();
+    if (refreshed) {
+      response = await fetch(url, { ...init, credentials: "include", cache: "no-store" });
+    }
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data as T;

@@ -171,14 +171,14 @@ export async function createStructuredMemory(input: {
   if (!content) throw new Error("Memory content is required");
   assertMemoryIsSafe(content);
   const db = await getDb();
-  const existing = mapRows<DBUserMemory>(await db.execute({
-    sql: "SELECT * FROM user_memories WHERE user_id = ? AND lower(content) = lower(?) AND status IN ('pending','approved') LIMIT 1",
-    args: [input.userId, content],
-  }))[0];
-  // Encrypted rows cannot be compared in SQL, so also check decrypted recent records.
+  // Encrypted rows cannot be compared in SQL; check decrypted managed memories directly.
   const recent = await listManagedMemories(input.userId);
-  const duplicate = existing || recent.find((memory) => normalize(memory.content).toLowerCase() === content.toLowerCase());
-  if (duplicate) return decryptMemory(duplicate);
+  const duplicate = recent.find(
+    (memory) =>
+      (memory.status === "pending" || memory.status === "approved") &&
+      normalize(memory.content).toLowerCase() === content.toLowerCase()
+  );
+  if (duplicate) return duplicate;
 
   const id = randomUUID();
   await db.execute({
@@ -220,12 +220,29 @@ export async function updateStructuredMemory(
   if (!content) throw new Error("Memory content is required");
   assertMemoryIsSafe(content);
   const db = await getDb();
-  await db.execute({
-    sql: `UPDATE user_memories
-      SET content = ?, tags = ?, updated_at = unixepoch()
-      WHERE id = ? AND user_id = ?`,
-    args: [encryptContent(content), JSON.stringify(fields.tags), memoryId, userId],
-  });
+  const embedding = await createEmbedding(content);
+  if (embedding) {
+    await db.execute({
+      sql: `UPDATE user_memories
+        SET content = ?, tags = ?, embedding = ?, embedding_model = ?, updated_at = unixepoch()
+        WHERE id = ? AND user_id = ?`,
+      args: [
+        encryptContent(content),
+        JSON.stringify(fields.tags),
+        JSON.stringify(embedding.values),
+        embedding.model,
+        memoryId,
+        userId,
+      ],
+    });
+  } else {
+    await db.execute({
+      sql: `UPDATE user_memories
+        SET content = ?, tags = ?, embedding = NULL, embedding_model = NULL, updated_at = unixepoch()
+        WHERE id = ? AND user_id = ?`,
+      args: [encryptContent(content), JSON.stringify(fields.tags), memoryId, userId],
+    });
+  }
   const memory = (await listManagedMemories(userId)).find((item) => item.id === memoryId);
   if (!memory) throw new Error("Memory not found");
   return memory;
