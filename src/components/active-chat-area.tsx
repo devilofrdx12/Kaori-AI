@@ -122,10 +122,13 @@ export default function ActiveChatArea({
     };
   }, [activeChat.id]);
 
+  const handleStopRef = useRef(handleStop);
+  handleStopRef.current = handleStop;
+
   useEffect(() => {
     const handleCancelWait = () => {
       if (connectionStatus !== "online") {
-        handleStop();
+        handleStopRef.current();
       }
     };
     window.addEventListener("kaori_cancel_network_wait", handleCancelWait);

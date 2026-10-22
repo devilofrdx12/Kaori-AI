@@ -98,7 +98,6 @@ function ChatLayoutInner() {
       }
     },
   });
-  const { isOnline, wasOffline } = networkStatus;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
