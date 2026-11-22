@@ -41,6 +41,9 @@ if (!isDevelopment) {
 }
 
 const nextConfig: NextConfig = {
+  experimental: {
+    agentUpgrade: "security",
+  },
   turbopack: {
     root: import.meta.dirname,
   },

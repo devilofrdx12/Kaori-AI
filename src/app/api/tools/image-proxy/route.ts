@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Rate limit image proxy requests to prevent scraping abuse
-  const rateCheck = await checkToolRateLimit(user.id, user.is_pro === 1);
+  const rateCheck = await checkToolRateLimit(user.id, Boolean(user.is_pro));
   if (!rateCheck.allowed) {
     return NextResponse.json({ error: "Too many image requests" }, { status: 429 });
   }

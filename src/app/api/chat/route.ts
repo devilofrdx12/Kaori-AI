@@ -946,7 +946,7 @@ export async function POST(req: NextRequest) {
             const attemptStream = async (model: string, streamMessages: KaoriMessage[] = currentMessages) => {
               const activeTools = forceAnswer ? [] : TOOL_DEFINITIONS;
               if (!spendReserved) {
-                await reserveChatSpend(user.id, user.is_pro === 1);
+                await reserveChatSpend(user.id, Boolean(user.is_pro));
                 spendReserved = true;
               }
               if (model.startsWith("nvidia/")) {
@@ -1027,7 +1027,7 @@ export async function POST(req: NextRequest) {
               // Reserve once before concurrent providers so a single request doesn't reserve
               // the per-chat budget multiple times due to a race between model calls.
               if (!spendReserved) {
-                await reserveChatSpend(user.id, user.is_pro === 1);
+                await reserveChatSpend(user.id, Boolean(user.is_pro));
                 spendReserved = true;
               }
               forceAnswer = true;
