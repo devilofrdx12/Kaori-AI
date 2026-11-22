@@ -5,16 +5,17 @@ function readPositiveUsdEnv(name: string, fallback: number) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const DAILY_LIMIT = readPositiveUsdEnv("DAILY_SPEND_LIMIT_USD", 2.0);
-const CHAT_REQUEST_RESERVE_USD = readPositiveUsdEnv("CHAT_REQUEST_RESERVE_USD", 0.1);
+export const DAILY_LIMIT = readPositiveUsdEnv("DAILY_SPEND_LIMIT_USD", 2.0);
+export const DAILY_PRO_LIMIT = readPositiveUsdEnv("DAILY_PRO_SPEND_LIMIT_USD", 25.0);
+export const CHAT_REQUEST_RESERVE_USD = readPositiveUsdEnv("CHAT_REQUEST_RESERVE_USD", 0.1);
 
 function startOfCurrentUtcDay() {
   const now = new Date();
   return Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000);
 }
 
-function spendLimitResponse() {
-  return new Error(`Daily spend limit ($${DAILY_LIMIT.toFixed(2)}) reached. Resets tomorrow.`);
+function spendLimitResponse(limit = DAILY_LIMIT) {
+  return new Error(`Daily spend limit ($${limit.toFixed(2)}) reached. Resets tomorrow.`);
 }
 
 /**
@@ -37,7 +38,7 @@ export async function checkSpend(
   const user = rows[0];
 
   if (!user) return;
-  if (user.is_pro === 1) return;
+  const limit = user.is_pro === 1 ? DAILY_PRO_LIMIT : DAILY_LIMIT;
 
   const today = startOfCurrentUtcDay();
 
@@ -50,8 +51,8 @@ export async function checkSpend(
     user.daily_spend_usd = 0;
   }
 
-  if (user.daily_spend_usd + estimatedCostUsd > DAILY_LIMIT) {
-    throw spendLimitResponse();
+  if (user.daily_spend_usd + estimatedCostUsd > limit) {
+    throw spendLimitResponse(limit);
   }
 }
 
@@ -59,11 +60,12 @@ export async function checkSpend(
  * Atomically reserves budget before a provider call. This prevents concurrent
  * streams from all passing a read-then-write spend check and exceeding the cap.
  */
-export async function reserveSpend(userId: string, estimatedCostUsd: number): Promise<void> {
+export async function reserveSpend(userId: string, estimatedCostUsd: number, isPro = false): Promise<void> {
   if (!Number.isFinite(estimatedCostUsd) || estimatedCostUsd <= 0) return;
 
   const db = await getDb();
   const today = startOfCurrentUtcDay();
+  const limit = isPro ? DAILY_PRO_LIMIT : DAILY_LIMIT;
 
   await db.execute({
     sql: `UPDATE users
@@ -75,17 +77,18 @@ export async function reserveSpend(userId: string, estimatedCostUsd: number): Pr
   const result = await db.execute({
     sql: `UPDATE users
           SET daily_spend_usd = daily_spend_usd + ?
-          WHERE id = ? AND (is_pro = 1 OR daily_spend_usd + ? <= ?)`,
-    args: [estimatedCostUsd, userId, estimatedCostUsd, DAILY_LIMIT],
+          WHERE id = ? AND daily_spend_usd + ? <= ?`,
+    args: [estimatedCostUsd, userId, estimatedCostUsd, limit],
   });
 
   if (result.rowsAffected !== 1) {
-    throw spendLimitResponse();
+    throw spendLimitResponse(limit);
   }
 }
 
-export async function reserveChatSpend(userId: string): Promise<void> {
-  await reserveSpend(userId, Math.min(CHAT_REQUEST_RESERVE_USD, DAILY_LIMIT));
+export async function reserveChatSpend(userId: string, isPro = false): Promise<void> {
+  const limit = isPro ? DAILY_PRO_LIMIT : DAILY_LIMIT;
+  await reserveSpend(userId, Math.min(CHAT_REQUEST_RESERVE_USD, limit), isPro);
 }
 
 /**

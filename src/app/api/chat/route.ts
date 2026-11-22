@@ -20,7 +20,7 @@ import { streamGeminiChatCompletion } from "../lib/gemini";
 import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
-import { checkChatRateLimit } from "../lib/rate-limit";
+import { checkChatRateLimit, checkHeavyChatRateLimit } from "../lib/rate-limit";
 import { reserveChatSpend, refundChatSpend, recordSpend, estimateChatCostUsd } from "../lib/spend-guard";
 import { getTrustedAppOrigin } from "../lib/app-origin";
 import { modelSupportsVision, validateMessage, validateModel, validateUploadFiles } from "../lib/validation";
@@ -39,6 +39,7 @@ import {
   retrieveRelevantMemories,
   suggestMemoriesFromMessage,
 } from "../lib/memory/service";
+import { createReasoningSummaryParser } from "../lib/thinking-parser";
 
 // Hosted reasoning models can have a long cold start before streaming begins.
 export const maxDuration = 300;
@@ -84,105 +85,35 @@ function compactProviderHistory(messages: KaoriMessage[]): KaoriMessage[] {
   return compacted;
 }
 
-function createReasoningSummaryParser(
-  onSummary: (text: string) => void,
-  onAnswer: (text: string) => void
-) {
-  const summaryOpen = "<reasoning_summary>";
-  const summaryClose = "</reasoning_summary>";
-  const answerOpen = "<final_answer>";
-  const answerClose = "</final_answer>";
-  let phase: "prefix" | "summary" | "answer_prefix" | "answer" | "passthrough" | "done" = "prefix";
-  let buffer = "";
-
-  const emitBeforePartialMarker = (marker: string, emit: (text: string) => void) => {
-    let held = Math.min(buffer.length, marker.length - 1);
-    while (held > 0 && !marker.startsWith(buffer.slice(-held))) held -= 1;
-    const safeLength = buffer.length - held;
-    if (safeLength > 0) emit(buffer.slice(0, safeLength));
-    buffer = buffer.slice(safeLength);
-  };
-
-  const push = (chunk: string) => {
-    buffer += chunk;
-    while (buffer) {
-      if (phase === "prefix") {
-        if (summaryOpen.startsWith(buffer) && buffer.length < summaryOpen.length) return;
-        if (buffer.startsWith(summaryOpen)) {
-          buffer = buffer.slice(summaryOpen.length);
-          phase = "summary";
-          continue;
-        }
-        phase = "passthrough";
-        continue;
-      }
-      if (phase === "summary") {
-        const closeAt = buffer.indexOf(summaryClose);
-        if (closeAt >= 0) {
-          onSummary(buffer.slice(0, closeAt));
-          buffer = buffer.slice(closeAt + summaryClose.length);
-          phase = "answer_prefix";
-          continue;
-        }
-        emitBeforePartialMarker(summaryClose, onSummary);
-        return;
-      }
-      if (phase === "answer_prefix") {
-        if (answerOpen.startsWith(buffer) && buffer.length < answerOpen.length) return;
-        if (buffer.startsWith(answerOpen)) {
-          buffer = buffer.slice(answerOpen.length);
-          phase = "answer";
-          continue;
-        }
-        // Some providers may omit the optional answer tag; preserve their answer.
-        phase = "passthrough";
-        continue;
-      }
-      if (phase === "answer") {
-        const closeAt = buffer.indexOf(answerClose);
-        if (closeAt >= 0) {
-          onAnswer(buffer.slice(0, closeAt));
-          buffer = "";
-          phase = "done";
-          return;
-        }
-        emitBeforePartialMarker(answerClose, onAnswer);
-        return;
-      }
-      if (phase === "passthrough") {
-        onAnswer(buffer);
-        buffer = "";
-        return;
-      }
-      return;
-    }
-  };
-
-  return {
-    push,
-    flush() {
-      if (!buffer) return;
-      if (phase === "summary") onSummary(buffer);
-      else if (phase !== "done") onAnswer(buffer);
-      buffer = "";
-    },
-  };
+function stripReasoningFromHistory(content: string): string {
+  return content
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<reasoning_summary>[\s\S]*?<\/reasoning_summary>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "")
+    .replace(/<final_answer>|<\/final_answer>/gi, "")
+    .trim();
 }
 
 async function persistAssistantMessageWithRetry({
   chatId,
   content,
+  thinking,
   userId,
 }: {
   chatId: string;
   content: string;
+  thinking?: string;
   userId: string;
 }) {
+  const payload = thinking
+    ? JSON.stringify([{ type: "thinking", text: thinking }, { type: "text", text: content }])
+    : content;
   const message = {
     id: uuid(),
     conversation_id: chatId,
     role: "assistant" as const,
-    content: encryptContent(content),
+    content: encryptContent(payload),
   };
 
   try {
@@ -270,22 +201,57 @@ function buildQuartzwallBlockReply(scan: ReturnType<typeof scanText>) {
   ].join("\n");
 }
 
-function buildVisionGuidance(message: string) {
+export function buildVisionGuidance(message: string): string {
   const trimmed = message.trim();
-  const isSearchIntent = !trimmed || /\b(?:search|find|identify|who|where|what is|look up|price|buy|reverse|image search|recognize|source)\b/i.test(trimmed);
-  if (isSearchIntent) {
-    return "MANDATORY VISUAL SEARCH: You MUST call web_search before answering. Step 1: Describe what you see in detail (text, logos, brand, model numbers, landmarks, products, colors, shapes). Step 2: Call web_search with precise descriptive terms from the image. Step 3: Answer using ONLY the search results. Do NOT skip the search step. Do NOT answer from memory.";
+
+  // Tier 1: Real-time price, current news, buying options, or external verification explicitly requested
+  if (/\b(?:price|cost|how much|buy|where to buy|stock|current news|release date|verify|source link)\b/i.test(trimmed)) {
+    return [
+      "Vision Task (Grounded External Verification):",
+      "1. Inspect the image for any exact brand name, model number, serial code, publication, or distinctive text.",
+      "2. Call web_search using those EXACT grounded textual anchors (e.g. 'Sony WH-1000XM5 price' or 'ISBN 9780143127741').",
+      "3. Do NOT search vague subjective visual descriptions (like 'black headphones' or 'modern room'). If no model identifier is legible, state that exact pricing/availability requires a visible model code.",
+      "4. Synthesize the verified web information with your direct visual observations.",
+    ].join("\n");
   }
-  if (/\b(?:read|text|ocr|document|receipt|screenshot)\b/i.test(trimmed)) {
-    return "Vision task: transcribe visible text first, preserve layout where relevant, then answer. Clearly mark unreadable or uncertain text.";
+
+  // Tier 2: OCR, Document, Code, Receipt, Invoice, or Error Screen
+  if (/\b(?:read|text|ocr|document|receipt|invoice|bill|code|terminal|stack trace|error|translate)\b/i.test(trimmed)) {
+    return [
+      "Vision Task (Document / Code / OCR):",
+      "1. Transcribe visible text, code, numbers, and layout faithfully directly from the image.",
+      "2. Answer the user's questions directly using direct visual inspection without web search.",
+      "3. If an error message or code problem is shown and the fix requires current external documentation, call web_search with the exact transcribed error string.",
+    ].join("\n");
   }
-  if (/\b(?:chart|graph|plot|axis|legend|table)\b/i.test(trimmed)) {
-    return "Vision task: identify axes, units, legends, labels, and visible values before interpreting the chart or table. Do not invent unreadable values.";
+
+  // Tier 3: Math, Equations, Diagrams, Charts, or Technical Graphs
+  if (/\b(?:solve|math|equation|calculate|chart|graph|plot|axis|legend|table|diagram|schematic)\b/i.test(trimmed)) {
+    return [
+      "Vision Task (Technical / Analytical):",
+      "1. Identify the formulas, axes, units, legends, and visible values directly from the image.",
+      "2. Provide step-by-step reasoning and solution directly from your visual tokens. Do not invent unreadable values.",
+      "3. Do not perform web searches unless current external reference tables or live constants are specifically requested.",
+    ].join("\n");
   }
+
+  // Tier 4: Comparison
   if (/\b(?:compare|difference|both images|these images)\b/i.test(trimmed)) {
-    return "Vision task: analyze images in order, list direct observations for each, then compare them. Separate observation from inference. Use web_search to verify any identifications.";
+    return [
+      "Vision Task (Visual Comparison):",
+      "1. Analyze each image systematically, listing clear direct observations.",
+      "2. Compare and contrast specific visual elements, layout, colors, and features directly.",
+      "3. Only use web_search if comparing specific real-world products or external historical facts.",
+    ].join("\n");
   }
-  return "Vision task: describe direct observations before inference, state uncertainty when details are not legible. You MUST use web_search if there is ANY identifiable object, product, place, or person in the image. Do not guess from training data.";
+
+  // Tier 5: General Vision Observation / Analysis / Critique / Identification
+  return [
+    "Vision Task (Direct Observation & Entity Recognition):",
+    "1. Directly inspect the image: recognize landmarks, architecture, artwork, plants, animals, objects, or style using your native multimodal vision capabilities.",
+    "2. Provide a thorough, insightful, and helpful answer directly from your visual observations.",
+    "3. Only call web_search if the user specifically asked for recent events or external information that cannot be determined from visual observation alone.",
+  ].join("\n");
 }
 
 function buildToolResultPreview(result: string): string {
@@ -733,6 +699,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (featureMode === "council" || featureMode === "deep") {
+      const heavyRateCheck = await checkHeavyChatRateLimit(user.id, user.is_pro);
+      if (!heavyRateCheck.allowed) {
+        return new Response(
+          JSON.stringify({
+            error: `Heavy feature limit reached. Try again in ${heavyRateCheck.retryAfterSec}s.`,
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // ── Ownership check ──
     const conv = await findConversation(chatId, user.id);
     if (!conv || conv.user_id !== user.id) {
@@ -806,6 +784,17 @@ export async function POST(req: NextRequest) {
           content = JSON.parse(decrypted);
         }
       } catch { }
+      if (m.role === "assistant") {
+        if (Array.isArray(content)) {
+          content = content
+            .filter((b: any) => b.type === "text")
+            .map((b: any) => b.text)
+            .join("\n");
+        }
+        if (typeof content === "string") {
+          content = stripReasoningFromHistory(content);
+        }
+      }
       const storedAttachments = attachmentsByMessage.get(m.id) || [];
       const includeImageBlocks =
         isCurrentTurn && hasImages &&
@@ -920,6 +909,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         let spendReserved = false;
         let fullAssistantContent = "";
+        let accumulatedThinking = "";
         let totalOutputChars = 0;
         let councilEstimatedCostUsd = 0;
         let councilFallbackModel: string | null = null;
@@ -956,7 +946,7 @@ export async function POST(req: NextRequest) {
             const attemptStream = async (model: string, streamMessages: KaoriMessage[] = currentMessages) => {
               const activeTools = forceAnswer ? [] : TOOL_DEFINITIONS;
               if (!spendReserved) {
-                await reserveChatSpend(user.id);
+                await reserveChatSpend(user.id, user.is_pro === 1);
                 spendReserved = true;
               }
               if (model.startsWith("nvidia/")) {
@@ -1037,7 +1027,7 @@ export async function POST(req: NextRequest) {
               // Reserve once before concurrent providers so a single request doesn't reserve
               // the per-chat budget multiple times due to a race between model calls.
               if (!spendReserved) {
-                await reserveChatSpend(user.id);
+                await reserveChatSpend(user.id, user.is_pro === 1);
                 spendReserved = true;
               }
               forceAnswer = true;
@@ -1313,14 +1303,15 @@ export async function POST(req: NextRequest) {
               fullAssistantContent += text;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text })}\n\n`));
             };
-            const reasoningSummaryParser = featureMode === "thinking"
-              ? createReasoningSummaryParser(
-                (text) => {
-                  if (text) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "thinking_delta", text })}\n\n`));
-                },
-                emitAnswerText
-              )
-              : null;
+            const emitThinkingText = (text: string) => {
+              if (!text) return;
+              accumulatedThinking += text;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "thinking_delta", text })}\n\n`));
+            };
+            const reasoningSummaryParser = createReasoningSummaryParser(
+              emitThinkingText,
+              emitAnswerText
+            );
 
             while (true) {
               const { done, value } = await reader.read();
@@ -1359,20 +1350,24 @@ export async function POST(req: NextRequest) {
                     }
                   }
 
+                  // Forward provider-native thinking/reasoning tokens to client
+                  if (event.type === "thinking_delta") {
+                    const text = (event as any).text || event.delta?.text || "";
+                    if (text) {
+                      emitThinkingText(text);
+                    }
+                  }
+
                   if (event.type === "content_block_delta") {
                     if (event.delta?.type === "text_delta") {
                       const text = event.delta.text || "";
-                      if (reasoningSummaryParser) reasoningSummaryParser.push(text);
-                      else emitAnswerText(text);
+                      reasoningSummaryParser.push(text);
                     }
 
                     if (event.delta?.type === "input_json_delta") {
                       toolUseInputJson += event.delta.partial_json || "";
                     }
                   }
-
-                  // Provider-native reasoning fields can contain hidden chain-of-thought.
-                  // Only the concise, explicitly user-facing summary is displayed.
 
                   if ((event.type === "content_block_extra" || event.extra_content) && currentToolUse) {
                     const extra = event.extra_content || (event as any).extra_content;
@@ -1423,6 +1418,8 @@ export async function POST(req: NextRequest) {
               currentToolUse = null;
               toolUseInputJson = "";
             }
+
+            reasoningSummaryParser.flush();
 
             // ── Parse XML-style tool calls from text ──
             // Some models (Nvidia, etc.) emit tool calls as raw XML text
@@ -1663,6 +1660,7 @@ export async function POST(req: NextRequest) {
 
               totalOutputChars += fullAssistantContent.length;
               fullAssistantContent = "";
+              accumulatedThinking = "";
               toolUseBlocks = [];
               if (featureMode === "web" || toolRounds >= 2) forceAnswer = true;
               if (toolRounds >= 5) forceAnswer = true;
@@ -1676,6 +1674,7 @@ export async function POST(req: NextRequest) {
               await persistAssistantMessageWithRetry({
                 chatId,
                 content: fullAssistantContent,
+                thinking: accumulatedThinking.trim() || undefined,
                 userId: user.id,
               });
             } catch (persistenceError) {
@@ -1727,11 +1726,14 @@ export async function POST(req: NextRequest) {
           
           if (fullAssistantContent.trim()) {
             try {
+              const payload = accumulatedThinking.trim()
+                ? JSON.stringify([{ type: "thinking", text: accumulatedThinking.trim() }, { type: "text", text: fullAssistantContent }])
+                : fullAssistantContent;
               await insertMessage({
                 id: uuid(),
                 conversation_id: chatId,
                 role: "assistant",
-                content: encryptContent(fullAssistantContent),
+                content: encryptContent(payload),
               });
             } catch (dbErr) {
               logger.error({ dbErr, userId: user.id }, "Failed to save partial message on stream error");

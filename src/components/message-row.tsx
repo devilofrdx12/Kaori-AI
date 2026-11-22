@@ -8,18 +8,29 @@ import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeKatex from "rehype-katex";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import katex from "katex";
-import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download } from "lucide-react";
-import { ChatMessage } from "./types";
+import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download, Globe } from "lucide-react";
+import { ChatMessage, ToolResultData } from "./types";
 import CodeBlock from "./code-block";
 import ToolResultCard from "./tool-result-card";
 import type { Components } from "react-markdown";
 
-/* ── Collapsible thinking block (Claude-style) ── */
-function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+/* ── Collapsible thinking block (Claude-style & matching WebSearchResultCard pill UI) ── */
+export function ThinkingBlock({
+  content,
+  isStreaming,
+  toolResults,
+}: {
+  content?: string;
+  isStreaming?: boolean;
+  toolResults?: ToolResultData[];
+}) {
   const [open, setOpen] = useState(isStreaming ? true : false);
   const [prevIsStreaming, setPrevIsStreaming] = useState(isStreaming);
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
+  const wordCount = (content || "").split(/\s+/).filter(Boolean).length;
+  const webSearchResults = toolResults?.filter((tr) => tr.toolName === "web_search" || tr.toolName === "web_fetch") || [];
+  const hasWebSearch = webSearchResults.length > 0;
 
   // Auto-expand when streaming starts (React 18+ pattern for updating state based on props)
   if (isStreaming !== prevIsStreaming) {
@@ -30,17 +41,16 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
   }
 
   return (
-    <div className="mb-3 animate-fade-in">
+    <div className="my-2 animate-fade-in">
+      {/* Pill — matches WebSearchResultCard & ThinkingIndicator layout exactly */}
       <button
         onClick={() => setOpen((o) => !o)}
         className={`
-          flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl
-          text-xs select-none cursor-pointer
-          transition-all duration-300 ease-out
-          ${isStreaming
-            ? "bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]"
-            : "bg-[hsl(var(--muted)/0.5)] border border-[hsl(var(--border)/0.5)] hover:bg-[hsl(var(--muted)/0.8)]"
-          }
+          flex items-center gap-2 px-4 py-2.5 rounded-2xl
+          border border-white/70 dark:border-white/10 shadow-sm
+          bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted)/0.8)]
+          transition-all duration-300 cursor-pointer select-none
+          ${isStreaming ? "thinking-shimmer" : ""}
         `}
       >
         {/* Animated brain icon */}
@@ -49,24 +59,43 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
             size={14}
             className="text-[hsl(var(--primary))]"
           />
-          {isStreaming && (
+          {isStreaming ? (
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[hsl(var(--primary))] animate-ping" />
+          ) : (
+            <Check
+              size={8}
+              strokeWidth={3}
+              className="absolute -bottom-0.5 -right-1 text-green-500"
+            />
           )}
         </div>
 
         {/* Label */}
-        <span className="font-medium text-[hsl(var(--muted-foreground))]">
-          {isStreaming ? "Preparing a reasoning summary…" : `Reasoning summary · ${wordCount} words`}
+        <span className="text-sm text-[hsl(var(--muted-foreground))]">
+          {isStreaming ? "Thinking…" : "Thought process"}
         </span>
 
-        {/* Spacer */}
-        <span className="flex-1" />
+        {/* Web Search badge */}
+        {hasWebSearch && (
+          <span className="px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-[10px] font-semibold flex items-center gap-1">
+            <Globe size={10} className="shrink-0" />
+            <span>Searched web</span>
+          </span>
+        )}
+
+        {/* Word count badge */}
+        {wordCount > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-[10px] font-semibold">
+            {wordCount} words
+          </span>
+        )}
 
         {/* Chevron */}
         <ChevronDown
           size={13}
-          className={`shrink-0 text-[hsl(var(--muted-foreground)/0.6)] transition-transform duration-300 ${open ? "rotate-180" : ""
-            }`}
+          className={`shrink-0 ml-1 text-[hsl(var(--muted-foreground)/0.5)] transition-transform duration-300 ${
+            open ? "rotate-180" : ""
+          }`}
         />
       </button>
 
@@ -74,22 +103,38 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
       <div
         className={`
           overflow-hidden transition-all duration-300 ease-out
-          ${open ? "max-h-[400px] opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"}
+          ${open ? "max-h-[600px] opacity-100 mt-2" : "max-h-0 opacity-0 mt-0"}
         `}
       >
-        <div className="pl-4 border-l-2 border-[hsl(var(--primary)/0.25)]">
-          <div className={`
-            max-h-80 overflow-y-auto scrollbar-hide rounded-lg p-3
-            bg-[hsl(var(--muted)/0.3)]
-            ${isStreaming ? "thinking-content-stream" : ""}
-          `}>
-            <p className="text-[13px] leading-relaxed text-[hsl(var(--muted-foreground))] whitespace-pre-wrap font-mono">
-              {content}
-              {isStreaming && (
-                <span className="inline-block w-[2px] h-[14px] bg-[hsl(var(--primary))] ml-0.5 align-text-bottom animate-pulse" />
-              )}
-            </p>
-          </div>
+        <div className="ml-5 pl-3 border-l-2 border-[hsl(var(--primary)/0.2)] space-y-2">
+          {/* Web search tool results inside the thinking part UI */}
+          {toolResults && toolResults.length > 0 && (
+            <div className="space-y-1">
+              {toolResults.map((tr, i) => (
+                <ToolResultCard
+                  key={`tb-tr-${i}`}
+                  toolName={tr.toolName}
+                  result={typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Thought process text */}
+          {content ? (
+            <div className={`
+              max-h-80 overflow-y-auto scrollbar-hide rounded-lg p-3
+              bg-[hsl(var(--muted)/0.3)]
+              ${isStreaming ? "thinking-content-stream" : ""}
+            `}>
+              <p className="text-[13px] leading-relaxed text-[hsl(var(--muted-foreground))] whitespace-pre-wrap font-mono">
+                {content}
+                {isStreaming && (
+                  <span className="inline-block w-[2px] h-[14px] bg-[hsl(var(--primary))] ml-0.5 align-text-bottom animate-pulse" />
+                )}
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -151,9 +196,20 @@ function preprocessLaTeX(content: string): string {
   return text;
 }
 
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(defaultSchema.attributes?.code || []), "className"],
+    span: [...(defaultSchema.attributes?.span || []), "className", "style"],
+    div: [...(defaultSchema.attributes?.div || []), "className", "style"],
+  },
+};
+
 const memoizedRemarkPlugins = [remarkGfm, remarkMath];
 const memoizedRehypePlugins = [
   rehypeRaw,
+  [rehypeSanitize, sanitizeSchema],
   [rehypeHighlight, { ignoreMissing: true }],
   [rehypeKatex, { throwOnError: false }],
 ] as any;
@@ -217,7 +273,10 @@ const memoizedComponents: Components = {
     );
   },
   a: ({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
-    const isDownload = href && href.includes('/api/download/');
+    const isDownload = typeof href === "string" && (
+      href.startsWith('/api/download/') ||
+      (typeof window !== "undefined" && href.startsWith(window.location.origin + '/api/download/'))
+    );
     if (isDownload) {
       const handleDownload = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -390,7 +449,8 @@ export const MessageRow = memo((
           {(msg.content || streamingThinking || msg.thinking || (msg.toolResults && msg.toolResults.length > 0)) && (
             <div className="flex flex-col">
               <div className="flex-1 min-w-0">
-                {msg.toolResults && msg.toolResults.length > 0 && (
+                {/* Standalone tool results only when there is no thinking block */}
+                {!streamingThinking && !msg.thinking && msg.toolResults && msg.toolResults.length > 0 && (
                   <div className="mb-2 space-y-1">
                     {msg.toolResults.map((tr, i) => (
                       <ToolResultCard
@@ -409,6 +469,7 @@ export const MessageRow = memo((
                       <ThinkingBlock
                         content={streamingThinking || msg.thinking || ""}
                         isStreaming={!!streamingThinking}
+                        toolResults={msg.toolResults}
                       />
                     )}
                     <div className="prose dark:prose-invert max-w-none">

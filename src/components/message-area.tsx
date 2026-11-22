@@ -48,27 +48,66 @@ export default function MessageArea({
   const [editText, setEditText] = useState("");
 
 
+  // Memoize cleaned historical messages — only recomputes when messages array changes, NOT on every streaming chunk
+  const cleanedHistoricalMessages = useMemo(() => {
+    const stripToolCalls = (text: string) => {
+      if (!text || !text.includes("<tool_call>")) return text;
+      return text.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/g, "").trim();
+    };
+
+    return messages.map((m) => {
+      let content = stripToolCalls(m.content);
+      let thinking = m.thinking;
+      if (!thinking && typeof content === "string") {
+        if (content.includes("<think>")) {
+          const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i);
+          if (thinkMatch) {
+            thinking = thinkMatch[1].trim();
+            content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+          }
+        } else if (content.includes("<reasoning_summary>")) {
+          const summaryMatch = content.match(/<reasoning_summary>([\s\S]*?)<\/reasoning_summary>/i);
+          if (summaryMatch) {
+            thinking = summaryMatch[1].trim();
+            content = content.replace(/<reasoning_summary>[\s\S]*?<\/reasoning_summary>/gi, "").replace(/<final_answer>|<\/final_answer>/gi, "").trim();
+          }
+        }
+      }
+      return {
+        ...m,
+        content,
+        thinking,
+      };
+    });
+  }, [messages]);
+
   const allMessages = useMemo(() => {
+    if (!streamingText && !streamingThinking) {
+      return cleanedHistoricalMessages;
+    }
+
     // Strip XML tool calls (complete or partial during streaming) from visibility
     const stripToolCalls = (text: string) => {
       if (!text || !text.includes("<tool_call>")) return text;
       return text.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/g, "").trim();
     };
 
-    const msgs = messages.map(m => ({
-      ...m,
-      content: stripToolCalls(m.content),
-    }));
-
-    if (streamingText || streamingThinking) {
-      msgs.push({
+    return [
+      ...cleanedHistoricalMessages,
+      {
         id: "__streaming__",
-        role: "assistant",
+        role: "assistant" as const,
         content: stripToolCalls(streamingText || ""),
-      });
-    }
-    return msgs;
-  }, [messages, streamingText, streamingThinking]);
+        thinking: streamingThinking || undefined,
+        toolResults: toolResults && toolResults.length > 0
+          ? toolResults.map((tr) => ({
+              toolName: tr.tool,
+              result: tr.result,
+            }))
+          : undefined,
+      },
+    ];
+  }, [cleanedHistoricalMessages, streamingText, streamingThinking, toolResults]);
 
   
 
@@ -193,8 +232,8 @@ export default function MessageArea({
                 </div>
               )}
 
-              {/* Tool results — only show before text starts streaming */}
-              {!streamingText && toolResults?.map((tr, i) => (
+              {/* Tool results — only show before text or thinking starts streaming */}
+              {!streamingText && !streamingThinking && toolResults?.map((tr, i) => (
                 <ToolResultCard key={`tr-${i}`} toolName={tr.tool} result={tr.result} />
               ))}
 

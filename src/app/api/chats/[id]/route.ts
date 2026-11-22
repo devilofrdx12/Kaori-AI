@@ -63,6 +63,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     for (let i = 0; i < rawMessages.length; i++) {
       const m = rawMessages[i];
       let content = m.content;
+      let thinking: string | undefined = undefined;
       let toolResults = undefined;
       let skip = false;
 
@@ -73,6 +74,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
             if (m.role === "assistant") {
               const textBlocks = parsed.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n");
               content = textBlocks;
+
+              const thinkingBlock = parsed.find((b: any) => b.type === "thinking");
+              if (thinkingBlock && typeof thinkingBlock.text === "string") {
+                thinking = thinkingBlock.text;
+              }
 
               const toolUseBlocks = parsed.filter((b: any) => b.type === "tool_use");
               const toolMap = new Map(toolUseBlocks.map((b: any) => [b.id, b.name]));
@@ -106,6 +112,22 @@ export async function GET(_req: NextRequest, { params }: Params) {
         }
       } catch {}
 
+      if (!thinking && typeof content === "string") {
+        if (content.includes("<think>")) {
+          const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i);
+          if (thinkMatch) {
+            thinking = thinkMatch[1].trim();
+            content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+          }
+        } else if (content.includes("<reasoning_summary>")) {
+          const summaryMatch = content.match(/<reasoning_summary>([\s\S]*?)<\/reasoning_summary>/i);
+          if (summaryMatch) {
+            thinking = summaryMatch[1].trim();
+            content = content.replace(/<reasoning_summary>[\s\S]*?<\/reasoning_summary>/gi, "").replace(/<final_answer>|<\/final_answer>/gi, "").trim();
+          }
+        }
+      }
+
       if (!skip) {
         const files = (attachmentsByMessage.get(m.id) ?? []).map((attachment) => {
           const dataUrl = `data:${attachment.mime_type};base64,${attachment.encrypted_data}`;
@@ -123,6 +145,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
           id: m.id,
           role: m.role,
           content,
+          thinking,
           toolResults,
           files: files.length > 0 ? files : undefined,
           timestamp: new Date(m.created_at * 1000).toISOString(),

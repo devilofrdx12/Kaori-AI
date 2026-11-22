@@ -49,6 +49,11 @@ export function checkChatRateLimit(userId: string, isPro = false) {
   return consumeRateLimit(userId, "chat", 60, isPro ? 60 : 20);
 }
 
+/** Dedicated limit for compute-heavy modes (Council, Deep research) that fan out to multiple models. */
+export function checkHeavyChatRateLimit(userId: string, isPro = false) {
+  return consumeRateLimit(userId, "heavy_chat", 60, isPro ? 10 : 3);
+}
+
 /** Independently limits directly reachable web/tool endpoints. */
 export function checkToolRateLimit(userId: string, isPro = false) {
   return consumeRateLimit(userId, "tool", 60, isPro ? 90 : 30);

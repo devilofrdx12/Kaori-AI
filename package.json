@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/validation-extended.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/model-routing.test.ts src/app/api/lib/spend-guard.test.ts src/app/api/lib/system-prompt.test.ts src/app/api/lib/memory-dto-extended.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts src/app/api/lib/quartzwall/capability-firewall-extended.test.ts src/app/api/lib/quartzwall/classifier.test.ts src/app/api/lib/openai-adapter.test.ts",
+    "test": "tsx --test src/app/api/lib/validation.test.ts src/app/api/lib/validation-extended.test.ts src/app/api/lib/request-body.test.ts src/app/api/lib/model-routing.test.ts src/app/api/lib/spend-guard.test.ts src/app/api/lib/system-prompt.test.ts src/app/api/lib/memory-dto-extended.test.ts src/app/api/lib/quartzwall/capability-firewall.test.ts src/app/api/lib/quartzwall/capability-firewall-extended.test.ts src/app/api/lib/quartzwall/classifier.test.ts src/app/api/lib/openai-adapter.test.ts src/app/api/lib/thinking-parser.test.ts src/components/thinking-block.test.ts src/app/api/lib/vision-guidance.test.ts",
     "migrate": "npx tsx scripts/migrate-json-to-sqlite.ts",
     "backup": "npx tsx scripts/backup-db.ts",
     "postinstall": "node scripts/patch-braces.js"
@@ -43,6 +43,7 @@
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^1.2.0",
     "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^3.0.1",
     "undici": "^8.10.2",

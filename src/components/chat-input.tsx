@@ -311,23 +311,32 @@ export default function ChatInput({
           {filePreviews.length > 0 && (
             <div className="pt-4 sm:pt-5 px-4 sm:px-5 pb-1">
               {filePreviews.some((preview) => preview.isImage) && (
-                <div className="mb-3 flex items-center gap-1 rounded-xl bg-black/[0.035] dark:bg-white/[0.04] p-1 w-fit" aria-label="Image analysis detail">
-                  {(["fast", "balanced", "high"] as ImageDetail[]).map((detail) => (
-                    <button
-                      key={detail}
-                      type="button"
-                      onClick={() => setImageDetail(detail)}
-                      aria-pressed={imageDetail === detail}
-                      className={`rounded-lg px-2.5 py-1.5 text-[11px] capitalize transition-colors ${
-                        imageDetail === detail
-                          ? "bg-white dark:bg-white/10 text-primary shadow-sm"
-                          : "text-secondary hover:text-on-surface"
-                      }`}
-                      title={detail === "high" ? "Preserves small text and document detail" : `${detail} image analysis`}
-                    >
-                      {detail}
-                    </button>
-                  ))}
+                <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 rounded-xl bg-black/[0.035] dark:bg-white/[0.04] p-1 w-fit" aria-label="Image analysis detail">
+                    {(["fast", "balanced", "high"] as ImageDetail[]).map((detail) => (
+                      <button
+                        key={detail}
+                        type="button"
+                        onClick={() => setImageDetail(detail)}
+                        aria-pressed={imageDetail === detail}
+                        className={`rounded-lg px-2.5 py-1.5 text-[11px] capitalize transition-colors ${
+                          imageDetail === detail
+                            ? "bg-white dark:bg-white/10 text-primary shadow-sm"
+                            : "text-secondary hover:text-on-surface"
+                        }`}
+                        title={detail === "high" ? "Preserves small text and document detail" : `${detail} image analysis`}
+                      >
+                        {detail}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Vision Mode Indicator Pill — blends seamlessly with Kaori glassmorphic theme */}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/[0.035] dark:bg-white/[0.04] text-[11px] text-secondary select-none">
+                    <Sparkles size={12} className="text-primary shrink-0 animate-pulse" />
+                    <span className="font-medium text-on-surface/80">Vision Active</span>
+                    <span className="hidden sm:inline text-[10px] text-secondary/60">· OCR & Reasoning</span>
+                  </div>
                 </div>
               )}
               <div className="flex flex-wrap gap-3">

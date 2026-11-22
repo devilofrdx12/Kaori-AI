@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "../../lib/auth-utils";
+import { checkToolRateLimit } from "../../lib/rate-limit";
 import { logger } from "../../lib/logger";
 import {
   assertPublicHttpUrl,
@@ -15,23 +16,25 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
-const ALLOWED_IMAGE_HOSTS = new Set([
-  "avatars.githubusercontent.com",
-  "lh3.googleusercontent.com",
-  "cdn.discordapp.com",
-]);
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Rate limit image proxy requests to prevent scraping abuse
+  const rateCheck = await checkToolRateLimit(user.id, user.is_pro === 1);
+  if (!rateCheck.allowed) {
+    return NextResponse.json({ error: "Too many image requests" }, { status: 429 });
+  }
+
   try {
-    const validated = await assertPublicHttpUrl(req.nextUrl.searchParams.get("url"));
-    
-    // Explicit local allowlist check to break "arbitrary user URL" pattern
-    if (!ALLOWED_IMAGE_HOSTS.has(validated.hostname)) {
-      return NextResponse.json({ error: "Host not allowed" }, { status: 403 });
+    const rawUrl = req.nextUrl.searchParams.get("url");
+    if (!rawUrl) {
+      return NextResponse.json({ error: "Missing image url" }, { status: 400 });
     }
+
+    // Comprehensive SSRF check: DNS pinning, IPv4/IPv6 private IP blocklist, protocol check
+    const validated = await assertPublicHttpUrl(rawUrl);
 
     const response = await fetchPublicHttpUrl(validated, {
       headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif" },

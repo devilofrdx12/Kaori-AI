@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { estimateChatCostUsd } from "./spend-guard";
+import { estimateChatCostUsd, CHAT_REQUEST_RESERVE_USD, DAILY_LIMIT, DAILY_PRO_LIMIT } from "./spend-guard";
 
 // ════════════════════════════════════════════════
 // MODEL COST LOOKUP — EP
@@ -76,4 +76,10 @@ test("unknown model uses conservative fallback rate ($0.001/1K)", () => {
   const cost = estimateChatCostUsd("totally-unknown-model", 4000);
   // 1000 tokens × $0.001/1K = $0.001
   assert.ok(Math.abs(cost - 0.001) < 0.0001, `Cost ${cost} should be ~$0.001 (fallback)`);
+});
+
+test("spend constants are properly defined positive values", () => {
+  assert.ok(typeof CHAT_REQUEST_RESERVE_USD === "number" && CHAT_REQUEST_RESERVE_USD > 0, "CHAT_REQUEST_RESERVE_USD must be positive number");
+  assert.ok(typeof DAILY_LIMIT === "number" && DAILY_LIMIT > 0, "DAILY_LIMIT must be positive number");
+  assert.ok(typeof DAILY_PRO_LIMIT === "number" && DAILY_PRO_LIMIT > DAILY_LIMIT, "DAILY_PRO_LIMIT must be greater than DAILY_LIMIT");
 });
