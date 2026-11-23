@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildVisionGuidance } from "../chat/route";
+import { buildVisionGuidance } from "./vision-guidance";
 
 test("Tier 1: price and buying questions trigger grounded anchor search protocol", () => {
   const result = buildVisionGuidance("How much does this watch cost and where to buy?");
