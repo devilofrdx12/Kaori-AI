@@ -2,7 +2,7 @@
 
 import { Sparkles, Code2, BookOpen, PenLine, ListChecks } from "lucide-react";
 import ChatInput from "./chat-input";
-import type { ChatFeatureMode, ImageDetail } from "./types";
+import type { ChatFeatureMode, ImageDetail, ThinkingCap } from "./types";
 
 export default function EmptyChatState({
   greeting,
@@ -10,12 +10,16 @@ export default function EmptyChatState({
   onSend,
   model,
   setModel,
+  thinkingCap,
+  onThinkingCapChange,
 }: {
   greeting: string;
   userName: string;
-  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) => void;
+  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode, thinkingCap?: ThinkingCap) => void;
   model: string;
   setModel: (m: string) => void;
+  thinkingCap?: ThinkingCap;
+  onThinkingCapChange?: (cap: ThinkingCap) => void;
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 w-full max-w-4xl mx-auto animate-spring-up will-change-transform transform-gpu pb-12 sm:pb-24 overflow-visible lg:rounded-[2rem]">
@@ -36,6 +40,8 @@ export default function EmptyChatState({
           disabled={false}
           model={model}
           onModelChange={setModel}
+          thinkingCap={thinkingCap}
+          onThinkingCapChange={onThinkingCapChange}
           placeholder="How can I help you today?"
         />
       </div>

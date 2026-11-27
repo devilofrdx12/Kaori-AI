@@ -144,6 +144,7 @@ export async function recordSpend(
  */
 const MODEL_COST_PER_1K_OUTPUT: Record<string, number> = {
   // Gemini
+  "gemini-4-hydrogen": 0.0004, // Google AI Studio free tier (tracked at Flash rate to curb abuse)
   "gemini-3.8-flash": 0.0004,
   "gemini-3.5-flash": 0.0004,
   "gemini-2.5-pro": 0.01,

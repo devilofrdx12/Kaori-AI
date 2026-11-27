@@ -13,6 +13,8 @@ Be concise but thorough. Use markdown formatting for better readability:
 - Use **bold** for emphasis
 - Use \`code\` for technical terms
 - Use code blocks with language tags for code
+- Put ASCII/Unicode block diagrams and folder trees inside fenced \`\`\`text code blocks (never inline backticks)
+- Write explanations with inline variables/math ($x(n)$, $\omega_c = \pi/D$) in the bullet or sentence, then place key/multi-operator equations on their own separate line below using $$...$$
 - Use lists and headings for structured information
 - Use > blockquotes for quoting sources
 

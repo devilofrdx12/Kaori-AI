@@ -24,6 +24,11 @@ test("Gemini 3.5 Flash uses its specific rate ($0.0004/1K)", () => {
   assert.ok(Math.abs(cost - 0.0004) < 0.0001, `Cost ${cost} should be ~$0.0004`);
 });
 
+test("Gemini 4 Hydrogen uses its free-tier Flash tracking rate ($0.0004/1K)", () => {
+  const cost = estimateChatCostUsd("gemini-4-hydrogen", 4000);
+  assert.ok(Math.abs(cost - 0.0004) < 0.0001, `Cost ${cost} should be ~$0.0004`);
+});
+
 test("Nvidia models use the nvidia/ prefix rate ($0.001/1K)", () => {
   const cost = estimateChatCostUsd("nvidia/nemotron-3-ultra-550b-a55b", 4000);
   // 1000 tokens * $0.001/1K = $0.001

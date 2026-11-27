@@ -9,7 +9,14 @@ import { saveAs } from "file-saver";
 import { listChats, fetchChat } from "../lib/chat-api";
 import PomodoroTimer from "./pomodoro-timer";
 import SessionManager from "./session-manager";
-import { DEFAULT_MODEL, MODEL_OPTIONS } from "./types";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_THINKING_CAP,
+  MODEL_OPTIONS,
+  THINKING_CAP_OPTIONS,
+  getThinkingCapSelectedTextClass,
+  type ThinkingCap,
+} from "./types";
 
 type Props = {
   isOpen: boolean;
@@ -162,8 +169,8 @@ function CustomSelect({
                   }}
                   className={`flex w-full items-center px-4 py-2.5 text-sm rounded-xl ${
                     value === opt.value
-                      ? "bg-white/60 text-neutral-900 shadow-sm dark:bg-white/15 dark:text-neutral-100 font-medium"
-                      : "text-neutral-600 hover:bg-white/30 dark:text-neutral-400 dark:hover:bg-white/10 font-light"
+                      ? "bg-white/75 text-primary shadow-sm dark:bg-white/12 font-semibold"
+                      : "text-neutral-600 hover:bg-white/40 dark:text-neutral-400 dark:hover:bg-white/10 font-light"
                   } hover-lift active-press`}
                   type="button"
                 >
@@ -195,6 +202,12 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
     const storedModel = getStoredValue("kaori_model", DEFAULT_MODEL);
     return MODEL_OPTIONS.find((option) => option.id === storedModel)?.provider || "groq";
   });
+  const [thinkingCap, setThinkingCap] = useState<ThinkingCap>(() => {
+    const stored = getStoredValue("kaori_thinking_cap", DEFAULT_THINKING_CAP);
+    return THINKING_CAP_OPTIONS.some((option) => option.id === stored)
+      ? (stored as ThinkingCap)
+      : DEFAULT_THINKING_CAP;
+  });
   const [studyMode, setStudyMode] = useState(() => getStoredValue("kaori_study_mode", "false") === "true");
   const [isPro, setIsPro] = useState(false);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
@@ -214,6 +227,15 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
 
     let cancelled = false;
     const timeoutId = window.setTimeout(async () => {
+      const storedModel = getStoredValue("kaori_model", DEFAULT_MODEL);
+      const validModel = MODEL_OPTIONS.some((option) => option.id === storedModel) ? storedModel : DEFAULT_MODEL;
+      setModel(validModel);
+      setProvider(MODEL_OPTIONS.find((option) => option.id === validModel)?.provider || "groq");
+      const storedCap = getStoredValue("kaori_thinking_cap", DEFAULT_THINKING_CAP);
+      if (THINKING_CAP_OPTIONS.some((option) => option.id === storedCap)) {
+        setThinkingCap(storedCap as ThinkingCap);
+      }
+
       fetchJsonSafe<{ is_pro: boolean }>("/api/user/pro", { headers: AJAX_HEADERS })
         .then((data) => {
           if (!cancelled && data && typeof data.is_pro === "boolean") {
@@ -286,6 +308,12 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
     localStorage.setItem("kaori_model", newModel);
+    window.dispatchEvent(new Event("kaori_settings_changed"));
+  };
+
+  const handleThinkingCapChange = (newCap: ThinkingCap) => {
+    setThinkingCap(newCap);
+    localStorage.setItem("kaori_thinking_cap", newCap);
     window.dispatchEvent(new Event("kaori_settings_changed"));
   };
 
@@ -679,7 +707,57 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                     </div>
 
                     <div className="settings-glass-card relative z-10 space-y-4 rounded-2xl border border-white/45 bg-white/30 p-5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-                      {/* Extended thinking removed since we aren't using Opus */}
+                      {(() => {
+                        const selectedOption = MODEL_OPTIONS.find((option) => option.id === model);
+                        const caps = selectedOption?.thinkingCaps;
+                        if (!caps || caps.length === 0) return null;
+                        const activeCap = caps.includes(thinkingCap)
+                          ? thinkingCap
+                          : (selectedOption.defaultThinkingCap ?? DEFAULT_THINKING_CAP);
+                        const activeCapMeta = THINKING_CAP_OPTIONS.find((c) => c.id === activeCap);
+                        return (
+                          <div className="space-y-3 pb-4 border-b border-black/[0.06] dark:border-white/10">
+                            <div className="min-w-0">
+                              <div className="font-medium text-neutral-900 dark:text-neutral-100">Thinking Cap</div>
+                              <div className="text-sm text-neutral-500">
+                                Adjust reasoning depth for {selectedOption.label}.
+                              </div>
+                            </div>
+                            <div
+                              className="grid grid-cols-5 gap-1 rounded-xl border border-white/40 dark:border-white/10 bg-white/25 dark:bg-white/[0.04] backdrop-blur-md p-1"
+                              role="radiogroup"
+                              aria-label="Default thinking cap"
+                            >
+                              {THINKING_CAP_OPTIONS.filter((opt) => caps.includes(opt.id)).map((opt) => {
+                                const selected = activeCap === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() => handleThinkingCapChange(opt.id)}
+                                    className={`rounded-lg px-2 py-1.5 text-xs font-medium transition-all ${
+                                      selected
+                                        ? "bg-white/75 dark:bg-white/15 shadow-sm"
+                                        : "text-neutral-600 dark:text-neutral-400 hover:bg-white/40 dark:hover:bg-white/[0.06] hover:text-neutral-900 dark:hover:text-neutral-100"
+                                    }`}
+                                  >
+                                    <span className={selected ? getThinkingCapSelectedTextClass(opt.id) : ""}>
+                                      {opt.label}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {activeCapMeta && (
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {activeCapMeta.description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
                           <div className="font-medium text-neutral-900 dark:text-neutral-100">Study Mode</div>

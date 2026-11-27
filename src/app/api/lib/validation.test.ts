@@ -5,7 +5,9 @@ import {
   validateMemoryInput,
   validateModel,
   validateProjectInput,
+  validateThinkingCap,
 } from "./validation";
+import { MODEL_OPTIONS, THINKING_CAP_OPTIONS } from "@/components/types";
 import { parseMemoryTags } from "./memory-dto";
 
 test("project input is normalized and bounded", () => {
@@ -61,4 +63,27 @@ test("vision capability is enforced from a server-owned model list", () => {
 test("Nemotron reasoning model is accepted as a supported text reasoning model", () => {
   assert.equal(validateModel("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"), "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning");
   assert.equal(modelSupportsVision("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"), true);
+});
+
+test("Gemini 4 Hydrogen is listed in UI & backend allowlists with adjustable thinking caps", () => {
+  assert.equal(validateModel("gemini-4-hydrogen"), "gemini-4-hydrogen");
+  assert.equal(modelSupportsVision("gemini-4-hydrogen"), true);
+
+  for (const level of ["minimal", "low", "medium", "high", "xhigh"] as const) {
+    assert.equal(validateThinkingCap("gemini-4-hydrogen", level), level);
+  }
+  assert.equal(validateThinkingCap("gemini-4-hydrogen", undefined), "high");
+  assert.equal(validateThinkingCap("gemini-4-hydrogen", "invalid-cap"), "high");
+  assert.equal(validateThinkingCap("openai/gpt-oss-120b", "xhigh"), undefined);
+  assert.equal(validateThinkingCap("gemini-3.5-flash", "high"), undefined);
+
+  const uiModel = MODEL_OPTIONS.find((m) => m.id === "gemini-4-hydrogen");
+  assert.ok(uiModel, "gemini-4-hydrogen should appear in MODEL_OPTIONS");
+  assert.equal(uiModel?.provider, "google");
+  assert.equal(uiModel?.supportsVision, true);
+  assert.equal(uiModel?.supportsThinking, true);
+  assert.deepEqual(
+    uiModel?.thinkingCaps,
+    THINKING_CAP_OPTIONS.map((opt) => opt.id)
+  );
 });

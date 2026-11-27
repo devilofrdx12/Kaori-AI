@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Sparkles, Zap, Brain } from "lucide-react";
+import { ChevronDown, Sparkles, Zap, Brain, Check } from "lucide-react";
 import { MODEL_OPTIONS, ModelOption } from "./types";
 
 export default function ModelSelector({
@@ -37,11 +37,20 @@ export default function ModelSelector({
   return (
     <div ref={ref} className="relative">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className={
           minimal
-            ? "flex min-w-0 items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-secondary hover:text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 max-w-[160px] active:scale-95"
-            : "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-on-surface hover:bg-white/55 dark:hover:bg-white/10 transition-all duration-200 active:scale-95"
+            ? `flex min-w-0 items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 max-w-[170px] active:scale-95 ${
+                open
+                  ? "border-white/55 dark:border-white/10 bg-white/55 dark:bg-white/10 backdrop-blur-md text-on-surface"
+                  : "border-transparent text-secondary hover:text-on-surface hover:border-white/55 dark:hover:border-white/10 hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-md"
+              }`
+            : `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
+                open
+                  ? "border-white/55 dark:border-white/10 bg-white/55 dark:bg-white/10 backdrop-blur-md text-on-surface"
+                  : "border-transparent text-on-surface hover:border-white/55 dark:hover:border-white/10 hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-md"
+              }`
         }
       >
         {!minimal && <div className="shrink-0">{getIcon(current)}</div>}
@@ -51,40 +60,58 @@ export default function ModelSelector({
 
       {open && (
         <div
-          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} left-0 w-[min(18rem,calc(100vw-2rem))] max-h-[13rem] rounded-2xl border border-white/70 dark:border-white/10 bg-white/90 dark:bg-neutral-950/92 backdrop-blur-md backdrop-saturate-150 shadow-2xl z-50 overflow-y-auto overflow-x-hidden animate-fade-in`}
+          role="menu"
+          aria-label="Model options"
+          className={`absolute ${direction === "up" ? "bottom-full mb-2" : "top-full mt-2"} left-0 w-[min(19rem,calc(100vw-2rem))] max-h-[15rem] rounded-2xl border border-white/65 dark:border-white/10 bg-white/75 dark:bg-neutral-950/75 p-1.5 backdrop-blur-2xl backdrop-saturate-150 shadow-2xl z-50 overflow-y-auto overflow-x-hidden animate-fade-in`}
         >
-          {MODEL_OPTIONS.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-                onChange(m.id);
-                setOpen(false);
-              }}
-              className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-white/65 dark:hover:bg-white/10 transition-all duration-200 ${
-                m.id === model ? "bg-white/70 dark:bg-white/10" : ""
-              }`}
-            >
-              <div className="mt-0.5 shrink-0">{getIcon(m)}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-on-surface">
-                    {m.label}
-                  </span>
-                  {m.badge && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">
-                      {m.badge}
+          {MODEL_OPTIONS.map((m) => {
+            const selected = m.id === model;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => {
+                  onChange(m.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2.5 rounded-xl flex items-start gap-2.5 transition-colors ${
+                  selected
+                    ? "bg-white/75 dark:bg-white/10 shadow-sm"
+                    : "hover:bg-white/45 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <div className="mt-0.5 shrink-0">{getIcon(m)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`text-sm ${
+                        selected ? "font-semibold text-primary" : "font-medium text-on-surface"
+                      }`}
+                    >
+                      {m.label}
                     </span>
-                  )}
+                    {m.badge && (
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-white/50 dark:border-white/10 bg-white/45 dark:bg-white/[0.06] ${
+                          selected ? "text-primary" : "text-secondary"
+                        }`}
+                      >
+                        {m.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-secondary mt-0.5">
+                    {m.description}
+                  </p>
                 </div>
-                <p className="text-xs text-secondary mt-0.5">
-                  {m.description}
-                </p>
-              </div>
-              {m.id === model && (
-                <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-              )}
-            </button>
-          ))}
+                {selected && (
+                  <Check size={14} className="shrink-0 text-primary mt-1" />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

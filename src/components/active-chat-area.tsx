@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import MessageArea from "./message-area";
 import ChatInput from "./chat-input";
-import { ChatMessage, type ChatFeatureMode, type ImageDetail, type ToolResultData, type UploadFile } from "./types";
+import { ChatMessage, DEFAULT_THINKING_CAP, type ChatFeatureMode, type ImageDetail, type ThinkingCap, type ToolResultData, type UploadFile } from "./types";
 import { ChatThread } from "./chat-types";
 import type { CouncilStatus } from "./model-council-progress";
 import { sendMessage, type ConnectionStatus } from "@/lib/chat-api";
@@ -92,6 +92,8 @@ export default function ActiveChatArea({
   activeChat,
   model,
   setModel,
+  thinkingCap = DEFAULT_THINKING_CAP,
+  onThinkingCapChange,
   updateChat,
   onAvatarStateChange,
   pendingPrompt,
@@ -100,9 +102,11 @@ export default function ActiveChatArea({
   activeChat: ChatThread;
   model: string;
   setModel: (m: string) => void;
+  thinkingCap?: ThinkingCap;
+  onThinkingCapChange?: (cap: ThinkingCap) => void;
   updateChat: (id: string, updater: (c: ChatThread) => ChatThread) => void;
   onAvatarStateChange: (emotion: any, speaking: boolean) => void;
-  pendingPrompt: { text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; messageId?: string } | null;
+  pendingPrompt: { text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; thinkingCap?: ThinkingCap; messageId?: string } | null;
   clearPendingPrompt: () => void;
 }) {
   const [typing, setTyping] = useState(false);
@@ -134,9 +138,9 @@ export default function ActiveChatArea({
 
   useEffect(() => {
     if (pendingPrompt) {
-      const { text, files, imageDetail, featureMode, messageId } = pendingPrompt;
+      const { text, files, imageDetail, featureMode, thinkingCap: promptThinkingCap, messageId } = pendingPrompt;
       clearPendingPrompt();
-      handleSendInternal(text, files, true, imageDetail, featureMode, messageId);
+      handleSendInternal(text, files, true, imageDetail, featureMode, messageId, promptThinkingCap);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPrompt]);
@@ -174,7 +178,8 @@ export default function ActiveChatArea({
     skipLocalAdd = false,
     imageDetail: ImageDetail = "balanced",
     featureMode: ChatFeatureMode = "auto",
-    providedMessageId?: string
+    providedMessageId?: string,
+    providedThinkingCap?: ThinkingCap
   ) {
     if (!text && !files?.length) return;
     if (activeChat.id.startsWith("temp-")) {
@@ -184,6 +189,7 @@ export default function ActiveChatArea({
 
     const objectUrls: string[] = [];
     const userMessageId = providedMessageId || crypto.randomUUID();
+    const resolvedThinkingCap = providedThinkingCap ?? thinkingCap;
 
     if (!skipLocalAdd) {
       const mappedFiles = files ? files.map(f => {
@@ -203,6 +209,7 @@ export default function ActiveChatArea({
         content: text,
         files: mappedFiles,
         featureMode,
+        thinkingCap: resolvedThinkingCap,
         timestamp: new Date().toISOString(),
       };
       updateChat(activeChat.id, (c) => ({
@@ -259,6 +266,7 @@ export default function ActiveChatArea({
         files: fileData,
         studyMode,
         featureMode,
+        thinkingCap: resolvedThinkingCap,
         signal: controller.signal,
         onConnectionStatus: (status) => setConnectionStatus(status),
         onResetStream: () => {
@@ -354,7 +362,8 @@ export default function ActiveChatArea({
     messageId: string,
     text: string,
     retryFiles?: UploadFile[],
-    featureMode?: ChatFeatureMode
+    featureMode?: ChatFeatureMode,
+    providedThinkingCap?: ThinkingCap
   ) {
     if (!text && !retryFiles?.length) return;
 
@@ -363,6 +372,7 @@ export default function ActiveChatArea({
 
     const existingMsg = activeChat.messages[msgIndex];
     const resolvedFeatureMode: ChatFeatureMode = featureMode ?? existingMsg.featureMode ?? "auto";
+    const resolvedThinkingCap: ThinkingCap = providedThinkingCap ?? existingMsg.thinkingCap ?? thinkingCap;
 
     const newMessages = activeChat.messages.slice(0, msgIndex);
     const editedMsg: ChatMessage = {
@@ -371,6 +381,7 @@ export default function ActiveChatArea({
       content: text,
       files: retryFiles,
       featureMode: resolvedFeatureMode,
+      thinkingCap: resolvedThinkingCap,
       timestamp: new Date().toISOString(),
     };
     newMessages.push(editedMsg);
@@ -408,6 +419,7 @@ export default function ActiveChatArea({
         editMessageId: messageId,
         studyMode,
         featureMode: resolvedFeatureMode,
+        thinkingCap: resolvedThinkingCap,
         signal: controller.signal,
         onConnectionStatus: (status) => setConnectionStatus(status),
         onResetStream: () => {
@@ -532,7 +544,7 @@ export default function ActiveChatArea({
         toolResults={toolResults}
         connectionStatus={connectionStatus}
         onEditSubmit={handleEditSend}
-        onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files, message.featureMode)}
+        onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files, message.featureMode, message.thinkingCap)}
         streamingText={streamingText}
         streamingThinking={streamingThinking}
         councilStatus={councilStatus}
@@ -553,11 +565,13 @@ export default function ActiveChatArea({
         ))}
       <div className="w-full shrink-0 animate-spring-down transition-all will-change-transform transform-gpu duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]">
         <ChatInput
-          onSend={(t, f, detail, feature) => handleSendInternal(t, f, false, detail, feature)}
+          onSend={(t, f, detail, feature, cap) => handleSendInternal(t, f, false, detail, feature, undefined, cap)}
           disabled={typing}
           onStop={handleStop}
           model={model}
           onModelChange={setModel}
+          thinkingCap={thinkingCap}
+          onThinkingCapChange={onThinkingCapChange}
           placeholder="Reply to Kaori"
         />
       </div>

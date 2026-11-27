@@ -1,5 +1,8 @@
+export type ThinkingCap = "minimal" | "low" | "medium" | "high" | "xhigh";
+
 const ALLOWED_MODELS = new Set([
   "openai/gpt-oss-120b",
+  "gemini-4-hydrogen",
   "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
   "gemini-3.7-flash",
@@ -13,6 +16,7 @@ const ALLOWED_MODELS = new Set([
 
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
 const VISION_MODELS = new Set([
+  "gemini-4-hydrogen",
   "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
   "gemini-3.7-flash",
@@ -21,6 +25,14 @@ const VISION_MODELS = new Set([
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
   "deepseek-ai/deepseek-v4-flash-0731",
 ]);
+
+const MODEL_THINKING_CAPS: Record<string, readonly ThinkingCap[]> = {
+  "gemini-4-hydrogen": ["minimal", "low", "medium", "high", "xhigh"],
+};
+
+const DEFAULT_THINKING_CAPS: Record<string, ThinkingCap> = {
+  "gemini-4-hydrogen": "high",
+};
 
 export class InputValidationError extends Error {
   constructor(message: string) {
@@ -184,6 +196,19 @@ export function validateModel(model: unknown): string {
 
 export function modelSupportsVision(model: string): boolean {
   return VISION_MODELS.has(model);
+}
+
+/**
+ * Normalizes a requested thinking cap against what the target model supports,
+ * falling back to the model's default cap or undefined when unsupported.
+ */
+export function validateThinkingCap(model: string, cap: unknown): ThinkingCap | undefined {
+  const allowed = MODEL_THINKING_CAPS[model];
+  if (!allowed) return undefined;
+  if (typeof cap === "string" && (allowed as readonly string[]).includes(cap)) {
+    return cap as ThinkingCap;
+  }
+  return DEFAULT_THINKING_CAPS[model];
 }
 
 export function validateSearchQuery(query: unknown): string {

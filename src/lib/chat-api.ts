@@ -1,4 +1,4 @@
-import { UploadFile, type ChatFeatureMode } from "@/components/types";
+import { UploadFile, type ChatFeatureMode, type ThinkingCap } from "@/components/types";
 import type { ActionProposal } from "@/components/action-passport";
 
 export type ChatThreadSummary = {
@@ -215,6 +215,7 @@ export async function sendMessage({
   editMessageId,
   studyMode,
   featureMode,
+  thinkingCap,
   onText,
   onResetStream,
   onThinking,
@@ -236,6 +237,7 @@ export async function sendMessage({
   editMessageId?: string;
   studyMode?: boolean;
   featureMode?: ChatFeatureMode;
+  thinkingCap?: ThinkingCap;
   onText: (text: string) => void;
   onResetStream?: () => void;
   onThinking?: (chunk: string) => void;
@@ -322,6 +324,7 @@ export async function sendMessage({
         editMessageId: attempt > 0 ? targetUserMsgId : editMessageId,
         studyMode,
         featureMode,
+        thinkingCap,
       });
 
       let res = await fetch("/api/chat", {

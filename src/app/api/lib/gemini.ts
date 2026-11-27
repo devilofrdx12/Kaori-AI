@@ -1,5 +1,6 @@
 import { KaoriMessage, KaoriTool } from "./core-types";
 import { streamOpenAiCompatible } from "./openai-adapter";
+import type { ThinkingCap } from "./validation";
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
@@ -15,6 +16,7 @@ export async function streamGeminiChatCompletion({
   system,
   tools,
   maxTokens = 8192,
+  thinkingCap,
   signal,
 }: {
   model: string;
@@ -22,6 +24,7 @@ export async function streamGeminiChatCompletion({
   system?: string;
   tools?: KaoriTool[];
   maxTokens?: number;
+  thinkingCap?: ThinkingCap;
   signal?: AbortSignal;
 }): Promise<Response> {
   const apiKey = getGeminiKey();
@@ -32,6 +35,10 @@ export async function streamGeminiChatCompletion({
     ? "gemini-flash-lite-latest"
     : model;
 
+  const extraBody: Record<string, unknown> | undefined = thinkingCap
+    ? { reasoning_effort: thinkingCap }
+    : undefined;
+
   try {
     return await streamOpenAiCompatible({
       apiUrl: GEMINI_API_URL,
@@ -41,6 +48,7 @@ export async function streamGeminiChatCompletion({
       system,
       tools,
       maxTokens,
+      extraBody,
       signal,
     });
   } catch (err: any) {

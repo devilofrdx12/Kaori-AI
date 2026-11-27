@@ -1,19 +1,19 @@
 "use client";
 
-import { memo, useState, useMemo, type AnchorHTMLAttributes } from "react";
+import React, { memo, useState, useMemo, type AnchorHTMLAttributes } from "react";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
-import rehypeKatex from "rehype-katex";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import katex from "katex";
 import { Copy, Check, User, Pencil, ChevronDown, Brain, RotateCcw, Download, Globe } from "lucide-react";
 import { ChatMessage, ToolResultData } from "./types";
 import CodeBlock from "./code-block";
 import ToolResultCard from "./tool-result-card";
+import { preprocessMarkdown } from "./markdown-preprocess";
 import type { Components } from "react-markdown";
 
 /* ── Collapsible thinking block (Claude-style & matching WebSearchResultCard pill UI) ── */
@@ -151,56 +151,35 @@ function extractText(value: unknown): string {
   return "";
 }
 
-function preprocessLaTeX(content: string): string {
-  if (!content) return content;
-
-  let text = content;
-
-  // 1. Escape currency dollar signs (e.g. $50, $100.00, $5M) so remark-math doesn't treat them as math delimiters
-  text = text.replace(/(^|\s)\$(\d+(?:[.,]\d+)?(?:k|m|b|t)?)(?=\s|[.,;:!?]|$)/gi, "$1\\$$2");
-
-  // 2. Un-backtick math that was wrapped in inline code:
-  // e.g. `$P_\ell = |I_\ell|^2 R_0$` -> $P_\ell = |I_\ell|^2 R_0$
-  // or `$$ ... $$` -> $$ ... $$
-  text = text.replace(/`(\${1,2}[^`]+?\${1,2})`/g, "$1");
-
-  // Also un-backtick LaTeX brackets: `\[ ... \]` or `\( ... \)`
-  text = text.replace(/`(\\\[[\s\S]+?\\\])`/g, "$1");
-  text = text.replace(/`(\\\([\s\S]+?\\\))`/g, "$1");
-
-  // Also handle inline code containing obvious LaTeX formulas without dollar signs:
-  // e.g. `\sqrt{a^2 + b^2}` -> $\sqrt{a^2 + b^2}$
-  text = text.replace(
-    /`(\\(?:frac|sqrt|sum|int|prod|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|tau|phi|omega|ell|partial|nabla|infty|times|cdot|pm|approx|neq|leq|geq|in|subset|forall|exists|mathbf|mathrm|text|left|right)\b[^`\n]*?)`/g,
-    "$$$1$$"
-  );
-
-  // 3. Replace \[ ... \] with $$ ... $$ for display math
-  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
-
-  // 4. Replace \( ... \) with $ ... $ for inline math
-  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`);
-
-  // 5. Convert ```math code blocks to $$ block math
-  text = text.replace(/```(?:math)\s*\n([\s\S]*?)\n```/g, (_, math) => `\n$$\n${math.trim()}\n$$\n`);
-
-  // 6. Wrap unadorned LaTeX environments (align, equation, matrix, etc.) in $$ if not already
-  text = text.replace(
-    /(?:^|\n)(\\begin\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\}[\s\S]*?\\end\{(?:equation|align|alignat|gather|multline|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\})(?:\n|$)/g,
-    "\n\n$$\n$1\n$$\n\n"
-  );
-
-  // 7. Normalize <br> variants so rehype-raw can parse them
-  text = text.replace(/<br\s*\/?>/gi, "<br />");
-
-  return text;
+function renderKatexMarkup(expr: string, displayMode: boolean): React.ReactElement | null {
+  if (!expr) return null;
+  try {
+    const html = katex.renderToString(expr, {
+      displayMode,
+      throwOnError: false,
+      maxSize: 20,
+      maxExpand: 500,
+    });
+    return (
+      <span
+        className={
+          displayMode
+            ? "math-display-block"
+            : "inline-math"
+        }
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  } catch {
+    return null;
+  }
 }
 
 const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    code: [...(defaultSchema.attributes?.code || []), "className"],
+    code: [["className", /^language-/, "math-inline", "math-display"]],
     span: [...(defaultSchema.attributes?.span || []), "className"],
     div: [...(defaultSchema.attributes?.div || []), "className"],
   },
@@ -210,31 +189,44 @@ const memoizedRemarkPlugins = [remarkGfm, remarkMath];
 const memoizedRehypePlugins = [
   rehypeRaw,
   [rehypeSanitize, sanitizeSchema],
-  [rehypeHighlight, { ignoreMissing: true }],
-  [rehypeKatex, { throwOnError: false, maxSize: 20, maxExpand: 500 }],
+  [rehypeHighlight, { plainText: ["math"] }],
 ] as any;
 
 const memoizedComponents: Components = {
-  pre: ({ children }: any) => <>{children}</>,
-  code: ({ className, children, ...rest }: any) => {
-    const isBlock = /language-(\w+)/.test(className || "");
-    if (isBlock) {
-      const match = /language-(\w+)/.exec(className || "");
-      const lang = match ? match[1].toLowerCase() : "";
-      if (lang === "math") {
-        const raw = extractText(children).trim();
-        try {
-          const html = katex.renderToString(raw, { displayMode: true, throwOnError: false, maxSize: 20, maxExpand: 500 });
-          return (
-            <div
-              className="my-3 overflow-x-auto text-center"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          );
-        } catch {
-          // fall through to CodeBlock
-        }
+  pre: ({ children }: any) => {
+    if (React.isValidElement<{ className?: string; children?: unknown }>(children)) {
+      const childClass = children.props.className || "";
+      const classes = childClass.split(/\s+/);
+      if (classes.includes("language-math") || classes.includes("math-display")) {
+        const rendered = renderKatexMarkup(extractText(children.props.children).trim(), true);
+        if (rendered) return rendered;
       }
+      return (
+        <CodeBlock className={childClass}>
+          {children.props.children}
+        </CodeBlock>
+      );
+    }
+
+    return (
+      <pre className="not-prose my-4 overflow-x-auto rounded-2xl p-4 text-[13px] font-mono leading-[1.65] glass-panel whitespace-pre">
+        {children}
+      </pre>
+    );
+  },
+  code: ({ className, children, ...rest }: any) => {
+    const classes = (className || "").split(/\s+/).filter(Boolean);
+    const textContent = extractText(children);
+    const isMathInline = classes.includes("math-inline");
+    const isMathDisplay = classes.includes("math-display");
+
+    if (isMathInline || isMathDisplay) {
+      const rendered = renderKatexMarkup(textContent.trim(), isMathDisplay);
+      if (rendered) return rendered;
+    }
+
+    const isBlock = classes.some((c: string) => c.startsWith("language-"));
+    if (isBlock || textContent.includes("\n")) {
       return (
         <CodeBlock className={className}>
           {children}
@@ -242,25 +234,16 @@ const memoizedComponents: Components = {
       );
     }
 
-    const raw = typeof children === "string" ? children.trim() : "";
+    const raw = textContent.trim();
     // Safety net: if inline code still contains math delimiters or starts with LaTeX command, render with KaTeX
     if (
       raw &&
       ((raw.startsWith("$") && raw.endsWith("$") && raw.length > 2) ||
-        /^\\(frac|sqrt|sum|int|partial|nabla|infty)\b/.test(raw))
+        /^\\(frac|dfrac|sqrt|sum|int|prod|partial|nabla|infty|boxed)\b/.test(raw))
     ) {
       const math = raw.replace(/^\$+|\$+$/g, "").trim();
-      try {
-        const html = katex.renderToString(math, { displayMode: false, throwOnError: false, maxSize: 20, maxExpand: 500 });
-        return (
-          <span
-            className="inline-math inline-block align-middle"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        );
-      } catch {
-        // Fallback to normal code tag
-      }
+      const rendered = renderKatexMarkup(math, false);
+      if (rendered) return rendered;
     }
 
     return (
@@ -356,7 +339,7 @@ export const MessageRow = memo((
     streamingThinking?: string;
     onRegenerate?: (messageId: string) => void;
   }) => {
-  const processedContent = useMemo(() => preprocessLaTeX(msg.content), [msg.content]);
+  const processedContent = useMemo(() => preprocessMarkdown(msg.content), [msg.content]);
 
   return (
     <div className="message-enter group relative">

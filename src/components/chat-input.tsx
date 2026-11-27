@@ -3,7 +3,15 @@
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import { ArrowUp, Mic, Plus, Square, X, AudioLines, Globe, ChevronDown, Check, Upload, Search, BrainCircuit, Sparkles, Network } from "lucide-react";
 import ModelSelector from "./model-selector";
-import { MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
+import {
+  DEFAULT_THINKING_CAP,
+  MODEL_OPTIONS,
+  THINKING_CAP_OPTIONS,
+  getThinkingCapSelectedTextClass,
+  type ChatFeatureMode,
+  type ImageDetail,
+  type ThinkingCap,
+} from "./types";
 
 const FEATURE_OPTIONS = [
   { id: "web" as const, label: "Web Search", description: "Fast, current answers", icon: Search },
@@ -29,13 +37,17 @@ export default function ChatInput({
   onStop,
   model,
   onModelChange,
+  thinkingCap = DEFAULT_THINKING_CAP,
+  onThinkingCapChange,
   placeholder,
 }: {
-  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) => void;
+  onSend: (text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode, thinkingCap?: ThinkingCap) => void;
   disabled?: boolean;
   onStop?: () => void;
   model: string;
   onModelChange: (id: string) => void;
+  thinkingCap?: ThinkingCap;
+  onThinkingCapChange?: (cap: ThinkingCap) => void;
   placeholder?: string;
 }) {
   const [value, setValue] = useState("");
@@ -43,6 +55,7 @@ export default function ChatInput({
   const [imageDetail, setImageDetail] = useState<ImageDetail>("balanced");
   const [featureMode, setFeatureMode] = useState<ChatFeatureMode>("auto");
   const [showFeatureMenu, setShowFeatureMenu] = useState(false);
+  const [showThinkingCapMenu, setShowThinkingCapMenu] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceLang, setVoiceLang] = useState("en-US");
@@ -54,6 +67,16 @@ export default function ChatInput({
   const fileRef = useRef<HTMLInputElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
   const featureMenuRef = useRef<HTMLDivElement>(null);
+  const thinkingCapMenuRef = useRef<HTMLDivElement>(null);
+
+  const selectedModelOption = useMemo(
+    () => MODEL_OPTIONS.find((m) => m.id === model),
+    [model]
+  );
+  const supportedThinkingCaps = selectedModelOption?.thinkingCaps ?? [];
+  const activeThinkingCap = supportedThinkingCaps.includes(thinkingCap)
+    ? thinkingCap
+    : (selectedModelOption?.defaultThinkingCap ?? DEFAULT_THINKING_CAP);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -62,6 +85,9 @@ export default function ChatInput({
       }
       if (featureMenuRef.current && !featureMenuRef.current.contains(e.target as Node)) {
         setShowFeatureMenu(false);
+      }
+      if (thinkingCapMenuRef.current && !thinkingCapMenuRef.current.contains(e.target as Node)) {
+        setShowThinkingCapMenu(false);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -137,7 +163,13 @@ export default function ChatInput({
   const handleSend = () => {
     const text = value.trim();
     if (!text && !files.length) return;
-    onSend(text, files.length ? files : null, imageDetail, featureMode);
+    onSend(
+      text,
+      files.length ? files : null,
+      imageDetail,
+      featureMode,
+      supportedThinkingCaps.length > 0 ? activeThinkingCap : undefined
+    );
     setValue("");
     setFiles([]);
     setTimeout(() => {
@@ -396,7 +428,7 @@ export default function ChatInput({
           {/* Bottom Toolbar */}
           <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full flex-wrap">
             {/* Left: attach + model */}
-            <div className="flex items-center gap-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1 min-w-0 flex-1 flex-wrap">
               <div ref={featureMenuRef} className="relative z-30 shrink-0">
                 <button
                   type="button"
@@ -471,6 +503,93 @@ export default function ChatInput({
                   minimal
                 />
               </div>
+
+              {supportedThinkingCaps.length > 0 && (
+                <div ref={thinkingCapMenuRef} className="relative z-20 shrink-0 ml-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowThinkingCapMenu((open) => !open)}
+                    aria-expanded={showThinkingCapMenu}
+                    aria-haspopup="menu"
+                    aria-label="Thinking cap"
+                    title="Switch thinking cap depth"
+                    className="flex min-w-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-white/55 dark:border-white/10 bg-white/45 dark:bg-white/[0.05] backdrop-blur-md hover:bg-white/70 dark:hover:bg-white/10 text-secondary transition-all duration-200 active:scale-95"
+                  >
+                    <BrainCircuit
+                      size={13}
+                      className={`shrink-0 ${
+                        activeThinkingCap === "xhigh"
+                          ? "text-violet-500 dark:text-violet-400 drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]"
+                          : activeThinkingCap === "high"
+                          ? "text-primary"
+                          : "text-secondary"
+                      }`}
+                    />
+                    <span className="hidden sm:inline text-secondary font-normal">Cap:</span>
+                    <span className={getThinkingCapSelectedTextClass(activeThinkingCap)}>
+                      {THINKING_CAP_OPTIONS.find((c) => c.id === activeThinkingCap)?.label ?? "High"}
+                    </span>
+                    <ChevronDown size={11} className={`shrink-0 transition-transform ${showThinkingCapMenu ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {showThinkingCapMenu && (
+                    <div
+                      role="menu"
+                      aria-label="Thinking cap options"
+                      className="absolute bottom-full left-0 mb-2 w-60 rounded-2xl border border-white/65 dark:border-white/10 bg-white/75 dark:bg-neutral-950/75 p-1.5 shadow-2xl backdrop-blur-2xl backdrop-saturate-150 animate-fade-in"
+                    >
+                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-secondary">
+                        Thinking Cap
+                      </div>
+                      {THINKING_CAP_OPTIONS.filter((opt) => supportedThinkingCaps.includes(opt.id)).map((opt) => {
+                        const selected = activeThinkingCap === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            onClick={() => {
+                              onThinkingCapChange?.(opt.id);
+                              setShowThinkingCapMenu(false);
+                            }}
+                            className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition-colors ${
+                              selected
+                                ? "bg-white/75 dark:bg-white/10 shadow-sm"
+                                : "text-on-surface hover:bg-white/45 dark:hover:bg-white/[0.06]"
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span
+                                className={`block text-[13px] ${
+                                  selected
+                                    ? getThinkingCapSelectedTextClass(opt.id)
+                                    : "font-medium text-on-surface"
+                                }`}
+                              >
+                                {opt.label}
+                              </span>
+                              <span className="block text-[11px] text-secondary">{opt.description}</span>
+                            </span>
+                            {selected ? (
+                              <Check
+                                size={14}
+                                className={`shrink-0 ${
+                                  opt.id === "xhigh"
+                                    ? "text-violet-500 dark:text-violet-400 drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]"
+                                    : opt.id === "high"
+                                    ? "text-primary"
+                                    : "text-on-surface"
+                                }`}
+                              />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Right: voice + send */}

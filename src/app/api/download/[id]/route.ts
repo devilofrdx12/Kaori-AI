@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocument } from "../../lib/db";
 import { getSessionUser } from "../../lib/auth-utils";
-import { markdownToPdfmake } from "../../lib/pdf-markdown";
+import { generatePdfBuffer } from "../../lib/pdf-generator";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { logger } from "../../lib/logger";
 
@@ -31,42 +31,6 @@ const TEXT_DOCUMENT_FORMATS: Record<string, string> = {
   jsx: "text/plain; charset=utf-8",
   json: "application/json; charset=utf-8",
 };
-
-async function generatePdfBuffer(content: string): Promise<Uint8Array> {
-  // Use require() to avoid ESM default-import interop issues with pdfmake
-  // in the Next.js server bundle (Turbopack strips prototype methods from
-  // the ESM default export in some configurations).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfmake = require("pdfmake");
-  pdfmake.setUrlAccessPolicy(() => false);
-  pdfmake.setLocalAccessPolicy((p: string) =>
-    ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique", "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"].includes(p)
-  );
-  pdfmake.setFonts({
-    Roboto: {
-      normal: "Helvetica",
-      bold: "Helvetica-Bold",
-      italics: "Helvetica-Oblique",
-      bolditalics: "Helvetica-BoldOblique",
-    },
-    Courier: {
-      normal: "Courier",
-      bold: "Courier-Bold",
-      italics: "Courier-Oblique",
-      bolditalics: "Courier-BoldOblique",
-    }
-  });
-  
-  const parsedContent = markdownToPdfmake(content);
-
-  const pdfDoc = pdfmake.createPdf({
-    content: parsedContent,
-    defaultStyle: { font: "Roboto", fontSize: 10, lineHeight: 1.25 },
-    pageMargins: [40, 40, 40, 40],
-  });
-  const buffer = await pdfDoc.getBuffer();
-  return new Uint8Array(buffer);
-}
 
 export async function GET(
   req: NextRequest,

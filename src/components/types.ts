@@ -10,7 +10,28 @@ export type UploadFile = {
 };
 
 export type ImageDetail = "fast" | "balanced" | "high";
+export type ThinkingCap = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type ChatFeatureMode = "auto" | "web" | "deep" | "thinking" | "council";
+
+export const THINKING_CAP_OPTIONS: {
+  id: ThinkingCap;
+  label: string;
+  description: string;
+}[] = [
+  { id: "minimal", label: "Minimal", description: "Fastest responses with minimal thinking" },
+  { id: "low", label: "Low", description: "Light reasoning for straightforward tasks" },
+  { id: "medium", label: "Medium", description: "Balanced reasoning speed and depth" },
+  { id: "high", label: "High", description: "Deep reasoning (Hydrogen default)" },
+  { id: "xhigh", label: "XHigh", description: "Maximum thinking depth for hard problems" },
+];
+
+export const DEFAULT_THINKING_CAP: ThinkingCap = "high";
+
+export function getThinkingCapSelectedTextClass(cap: ThinkingCap): string {
+  if (cap === "xhigh") return "thinking-cap-xhigh-text font-semibold";
+  if (cap === "high") return "text-primary font-semibold";
+  return "text-on-surface";
+}
 
 export type MessageMode = "chat" | "image";
 
@@ -35,6 +56,7 @@ export type ChatMessage = {
   files?: UploadFile[];
   mode?: MessageMode;
   featureMode?: ChatFeatureMode;
+  thinkingCap?: ThinkingCap;
   toolUse?: ToolUseBlock[];
   toolResults?: ToolResultData[];
   thinking?: string;
@@ -52,6 +74,8 @@ export type ModelOption = {
   badge?: string;
   supportsVision: boolean;
   supportsThinking: boolean;
+  thinkingCaps?: ThinkingCap[];
+  defaultThinkingCap?: ThinkingCap;
 };
 
 export const MODEL_OPTIONS: ModelOption[] = [
@@ -63,6 +87,17 @@ export const MODEL_OPTIONS: ModelOption[] = [
     badge: "Fastest",
     supportsVision: false,
     supportsThinking: false,
+  },
+  {
+    id: "gemini-4-hydrogen",
+    label: "Gemini 4 Hydrogen",
+    provider: "google",
+    description: "Google's Gemini 4 workhorse with adjustable thinking cap & vision",
+    badge: "Free · Gemini 4",
+    supportsVision: true,
+    supportsThinking: true,
+    thinkingCaps: ["minimal", "low", "medium", "high", "xhigh"],
+    defaultThinkingCap: "high",
   },
   {
     id: "gemini-flash-lite-latest",

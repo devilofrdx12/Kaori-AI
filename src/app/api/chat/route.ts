@@ -30,7 +30,13 @@ import {
 } from "../lib/spend-guard";
 import { readResponseTextWithLimit } from "../lib/url-safety";
 import { getTrustedAppOrigin } from "../lib/app-origin";
-import { modelSupportsVision, validateMessage, validateModel, validateUploadFiles } from "../lib/validation";
+import {
+  modelSupportsVision,
+  validateMessage,
+  validateModel,
+  validateThinkingCap,
+  validateUploadFiles,
+} from "../lib/validation";
 import { buildVisionGuidance } from "../lib/vision-guidance";
 import {
   logQuartzwallEvent,
@@ -607,6 +613,7 @@ export async function POST(req: NextRequest) {
     const files = requestBody.files;
     const studyMode = requestBody.studyMode === true;
     const requestedFeatureMode = requestBody.featureMode;
+    const requestedThinkingCap = requestBody.thinkingCap;
     const trustedAppOrigin = getTrustedAppOrigin(req);
 
     if (!chatId || (!message && !(Array.isArray(files) && files.length > 0))) {
@@ -635,7 +642,7 @@ export async function POST(req: NextRequest) {
     if (hasImages && !modelSupportsVision(validatedModel)) {
       return new Response(
         JSON.stringify({
-          error: "This model cannot analyze images. Switch to Gemini 3.5 Flash, Nemotron Nano Omni, or DeepSeek V4 Flash.",
+          error: "This model cannot analyze images. Switch to Gemini 4 Hydrogen, Gemini 3.5 Flash, Nemotron Nano Omni, or DeepSeek V4 Flash.",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
@@ -957,6 +964,8 @@ export async function POST(req: NextRequest) {
                   system: systemPrompt,
                   tools: activeTools,
                   maxTokens: 8192,
+                  thinkingCap: validateThinkingCap(model, requestedThinkingCap),
+                  signal: req.signal,
                 });
               } else if (model.startsWith("llama-") || model.startsWith("mixtral-") || model.startsWith("meta-llama/") || model.startsWith("openai/") || model.startsWith("qwen/")) {
                 return await streamGroqChatCompletion({

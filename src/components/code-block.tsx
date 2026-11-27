@@ -25,9 +25,8 @@ export default function CodeBlock({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const codeString = extractText(children).replace(/\n$/, "");
-  const match = /language-(\w+)/.exec(className || "");
-  const language = match ? match[1] : "code";
-  const isInline = !className;
+  const match = /language-([^\s]+)/.exec(className || "");
+  const language = match ? match[1] : "text";
 
   const canPreview = language === "html" || language === "svg";
 
@@ -47,14 +46,6 @@ export default function CodeBlock({
       console.error("Copy failed:", err);
     }
   };
-
-  if (isInline) {
-    return (
-      <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded-lg text-[13px] font-mono text-neutral-800 dark:text-neutral-200 border border-black/5 dark:border-white/[0.08] shadow-sm">
-        {children as React.ReactNode}
-      </code>
-    );
-  }
 
   return (
     <div className="not-prose group relative my-5 sm:my-6 w-full max-w-full !rounded-[1.5rem] sm:!rounded-[1.75rem] overflow-hidden transition-all duration-300 glass-panel">
@@ -116,8 +107,8 @@ export default function CodeBlock({
 
       {/* Code Area */}
       {activeTab === "code" ? (
-        <pre className="relative !bg-transparent !m-0 !p-4 sm:!p-5 !border-none !shadow-none !rounded-none overflow-x-auto text-[13px] sm:text-sm leading-[1.65] font-body text-neutral-900 dark:text-neutral-100">
-          <code className={`${className} hljs font-mono !bg-transparent !p-0`}>
+        <pre className="relative !bg-transparent !m-0 !p-4 sm:!p-5 !border-none !shadow-none !rounded-none overflow-x-auto text-[13px] sm:text-sm leading-[1.65] font-mono whitespace-pre text-neutral-900 dark:text-neutral-100">
+          <code className={`${className || ""} hljs font-mono !bg-transparent !p-0 whitespace-pre`}>
             {children as React.ReactNode}
           </code>
         </pre>

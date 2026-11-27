@@ -11,7 +11,16 @@ import AnimatedAvatar from "./animated-avatar";
 import SettingsModal from "./settings-modal";
 import ProjectsWorkspace from "./projects-workspace";
 import { PomodoroProvider, usePomodoro } from "./pomodoro-context";
-import { ChatMessage, DEFAULT_MODEL, MODEL_OPTIONS, type ChatFeatureMode, type ImageDetail } from "./types";
+import {
+  ChatMessage,
+  DEFAULT_MODEL,
+  DEFAULT_THINKING_CAP,
+  MODEL_OPTIONS,
+  THINKING_CAP_OPTIONS,
+  type ChatFeatureMode,
+  type ImageDetail,
+  type ThinkingCap,
+} from "./types";
 import { ChatThread } from "./chat-types";
 import type { Project } from "@/lib/workspace-api";
 import { me, logout as apiLogout, AuthUser } from "./auth";
@@ -82,7 +91,8 @@ function ChatLayoutInner() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [model, setModel] = useState(getInitialModel);
-  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; messageId?: string } | null>(null);
+  const [thinkingCap, setThinkingCap] = useState<ThinkingCap>(DEFAULT_THINKING_CAP);
+  const [pendingPrompt, setPendingPrompt] = useState<{ text: string; files?: File[] | null; imageDetail?: ImageDetail; featureMode?: ChatFeatureMode; thinkingCap?: ThinkingCap; messageId?: string } | null>(null);
   const [avatarState, setAvatarState] = useState<{ emotion: AvatarEmotion; speaking: boolean }>({ emotion: "idle", speaking: false });
 
   const [chats, setChats] = useState<ChatThread[]>([]);
@@ -119,6 +129,11 @@ function ChatLayoutInner() {
         localStorage.setItem("kaori_model", DEFAULT_MODEL);
       }
 
+      const storedThinkingCap = localStorage.getItem("kaori_thinking_cap");
+      if (storedThinkingCap && THINKING_CAP_OPTIONS.some((option) => option.id === storedThinkingCap)) {
+        setTimeout(() => setThinkingCap(storedThinkingCap as ThinkingCap), 0);
+      }
+
       // Fix hydration mismatch for sidebar by checking window size after initial render
       if (window.innerWidth < 1024) {
         setTimeout(() => setSidebarOpen(false), 0);
@@ -133,10 +148,28 @@ function ChatLayoutInner() {
       if (storedModel && MODEL_OPTIONS.some((option) => option.id === storedModel)) {
         setModel(storedModel);
       }
+      const storedThinkingCap = localStorage.getItem("kaori_thinking_cap");
+      if (storedThinkingCap && THINKING_CAP_OPTIONS.some((option) => option.id === storedThinkingCap)) {
+        setThinkingCap(storedThinkingCap as ThinkingCap);
+      }
     };
     window.addEventListener("kaori_settings_changed", handleSettingsChange);
     return () => window.removeEventListener("kaori_settings_changed", handleSettingsChange);
   }, []);
+
+  const handleModelChange = (nextModel: string) => {
+    setModel(nextModel);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kaori_model", nextModel);
+    }
+  };
+
+  const handleThinkingCapChange = (nextCap: ThinkingCap) => {
+    setThinkingCap(nextCap);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kaori_thinking_cap", nextCap);
+    }
+  };
 
   // Init: check auth + load chats
   useEffect(() => {
@@ -313,8 +346,15 @@ function ChatLayoutInner() {
   }
 
   // ── SEND INITIAL MESSAGE ──
-  async function handleSendInitial(text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) {
+  async function handleSendInitial(
+    text: string,
+    files?: File[] | null,
+    imageDetail?: ImageDetail,
+    featureMode?: ChatFeatureMode,
+    messageThinkingCap?: ThinkingCap
+  ) {
     if (!text && !files?.length) return;
+    const resolvedThinkingCap = messageThinkingCap ?? thinkingCap;
 
     let targetChatId = activeChatId;
     const shouldRename = !activeChat || activeChat.messages.length === 0;
@@ -346,6 +386,7 @@ function ChatLayoutInner() {
       content: text,
       files: mappedFiles,
       featureMode,
+      thinkingCap: resolvedThinkingCap,
       timestamp: new Date().toISOString(),
     };
     updateChat(targetChatId, (c) => ({
@@ -359,7 +400,7 @@ function ChatLayoutInner() {
       handleRenameChat(targetChatId, title);
     }
 
-    setPendingPrompt({ text, files, imageDetail, featureMode, messageId });
+    setPendingPrompt({ text, files, imageDetail, featureMode, thinkingCap: resolvedThinkingCap, messageId });
   }
 
   return (
@@ -427,13 +468,17 @@ function ChatLayoutInner() {
                   userName={user?.name?.split(" ")[0] || ""}
                   onSend={handleSendInitial}
                   model={model}
-                  setModel={setModel}
+                  setModel={handleModelChange}
+                  thinkingCap={thinkingCap}
+                  onThinkingCapChange={handleThinkingCapChange}
                 />
               ) : (
                 <ActiveChatArea
                   activeChat={activeChat!}
                   model={model}
-                  setModel={setModel}
+                  setModel={handleModelChange}
+                  thinkingCap={thinkingCap}
+                  onThinkingCapChange={handleThinkingCapChange}
                   updateChat={updateChat}
                   onAvatarStateChange={(emotion, speaking) => setAvatarState({ emotion, speaking })}
                   pendingPrompt={pendingPrompt}

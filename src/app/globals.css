@@ -330,6 +330,26 @@ a {
   animation: thinking-pulse 2s ease-in-out infinite;
 }
 
+.thinking-cap-xhigh-text {
+  background: linear-gradient(90deg, #7c3aed 0%, #c084fc 45%, #e879f9 55%, #7c3aed 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.32));
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.dark .thinking-cap-xhigh-text {
+  background: linear-gradient(90deg, #a78bfa 0%, #ddd6fe 45%, #f0abfc 55%, #a78bfa 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.45));
+  animation: shimmer 3s ease-in-out infinite;
+}
+
 /* ── CLAUDE BRANDING ── */
 .claude-gradient {
   background: linear-gradient(135deg, hsl(18 65% 59%), hsl(28 80% 65%));
@@ -373,6 +393,29 @@ a {
   border-radius: 4px;
   font-size: 0.85em;
   font-weight: 500;
+}
+
+.prose .math-display-block {
+  display: block;
+  width: 100%;
+  margin: 1rem 0;
+  padding: 0.25rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.prose .math-display-block .katex-display {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  padding: 0.15rem 0.25rem;
+}
+
+.prose li > .math-display-block {
+  margin: 0.85rem 0;
 }
 
 /* ── GLASS EFFECT (OriginOS Vibrant) ── */
