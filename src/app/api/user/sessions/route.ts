@@ -6,6 +6,7 @@ import {
   hashRefreshToken,
   requireAjax,
 } from "../../lib/auth-utils";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 
 type SessionRow = {
   id: string;
@@ -87,7 +88,15 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonBodyWithLimit(req, 16 * 1024);
+  } catch (err) {
+    if (err instanceof RequestBodyError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    throw err;
+  }
   const { sessionId } = body;
 
   if (!sessionId || typeof sessionId !== "string") {

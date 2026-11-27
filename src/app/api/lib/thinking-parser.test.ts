@@ -65,3 +65,34 @@ test("handles chunked streaming of <think> tags", () => {
   assert.equal(summary, "I am thinking deeply");
   assert.equal(answer, "Hello world");
 });
+
+test("handles split <think> marker mid-answer during passthrough without leaking tag prefix", () => {
+  let summary = "";
+  let answer = "";
+  const parser = createReasoningSummaryParser(
+    (s) => { summary += s; },
+    (a) => { answer += a; }
+  );
+
+  parser.push("Sure! <thi");
+  parser.push("nk>Checking details</think>Done.");
+  parser.flush();
+
+  assert.equal(summary, "Checking details");
+  assert.equal(answer, "Sure! Done.");
+});
+
+test("handles case-insensitive <THINK> mid-answer during passthrough", () => {
+  let summary = "";
+  let answer = "";
+  const parser = createReasoningSummaryParser(
+    (s) => { summary += s; },
+    (a) => { answer += a; }
+  );
+
+  parser.push("Intro <THINK>Step 1</think>Outro");
+  parser.flush();
+
+  assert.equal(summary, "Step 1");
+  assert.equal(answer, "Intro Outro");
+});

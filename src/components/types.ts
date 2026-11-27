@@ -34,6 +34,7 @@ export type ChatMessage = {
   image?: string;
   files?: UploadFile[];
   mode?: MessageMode;
+  featureMode?: ChatFeatureMode;
   toolUse?: ToolUseBlock[];
   toolResults?: ToolResultData[];
   thinking?: string;

@@ -118,6 +118,8 @@ const BLOCKED_APP_SCHEMES = new Set([
 ]);
 
 const PRIVATE_KEY_PATTERN = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i;
+const STANDALONE_SECRET_PATTERN =
+  /\b(?:sk-[a-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|nvapi-[0-9A-Za-z_-]{20,}|gsk_[0-9A-Za-z]{20,}|ghp_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,})\b/;
 const SECRET_ASSIGNMENT_PATTERN =
   /\b(api[_ -]?key|client[_ -]?secret|access[_ -]?token|auth[_ -]?token|password|credential)\s*[:=]\s*["']?([^\s"'`]{8,})/gi;
 const PLACEHOLDER_SECRET_PATTERN =
@@ -161,6 +163,7 @@ function userAskedForDocument(userMessage: string) {
 
 function containsExposedSecret(content: string) {
   if (PRIVATE_KEY_PATTERN.test(content)) return true;
+  if (STANDALONE_SECRET_PATTERN.test(content)) return true;
 
   SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
   for (const match of content.matchAll(SECRET_ASSIGNMENT_PATTERN)) {

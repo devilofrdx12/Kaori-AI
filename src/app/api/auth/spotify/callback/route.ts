@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
   const stateCookie = getOAuthStateCookieName("spotify");
 
   if (error) {
-    return NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_auth_failed", req));
+    const response = NextResponse.redirect(buildTrustedAppUrl("/?error=spotify_auth_failed", req));
+    response.cookies.delete(stateCookie);
+    return response;
   }
 
   if (!code || !state) {

@@ -219,3 +219,22 @@ test("analyze_pdf_visuals is a known allowed tool", () => {
   const result = validateToolCall("analyze_pdf_visuals", { file: "test.pdf" }, "Analyze this PDF");
   assert.equal(result.allowed, true);
 });
+
+test("document with standalone provider API keys is blocked (SEC-A09)", () => {
+  const leakedTokens = [
+    "sk-proj-abcdefghijklmnopqrstuvwxyz123456",
+    "AIzaSyDummyGoogleApiKeyValue1234567890",
+    "nvapi-abcdefghijklmnopqrstuvwxyz123456",
+    "gsk_abcdefghijklmnopqrstuvwxyz123456",
+    "ghp_abcdefghijklmnopqrstuvwxyz123456",
+  ];
+  for (const token of leakedTokens) {
+    const res = validateToolCall(
+      "create_document",
+      { filename: "notes.md", format: "md", content: `Here is the key:\n${token}` },
+      "Create a markdown document"
+    );
+    assert.equal(res.allowed, false, `Expected token prefix to be blocked`);
+    assert.ok(res.signals.some((s) => s.label === "sensitive-document-content"));
+  }
+});

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { convertMessages } from "./openai-adapter";
+import { convertMessages, createOpenAiToAnthropicTransform } from "./openai-adapter";
 import { KaoriMessage } from "./core-types";
 
 test("convertMessages: converts simple text user message", () => {
@@ -136,4 +136,58 @@ test("convertMessages: converts multi-turn chat with text, tool_use, and tool_re
 
   assert.equal(result[2].role, "tool");
   assert.equal(result[2].tool_call_id, "call_minutes_789");
+});
+
+test("createOpenAiToAnthropicTransform: preserves parallel tool calls by index and flushes trailing line", async () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const sseChunks = [
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_0", function: { name: "web_search", arguments: '{"que' } }] } }] })}\n\n`,
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 1, id: "call_1", function: { name: "web_fetch", arguments: '{"ur' } }] } }] })}\n\n`,
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'ry":"kaori"}' } }] } }] })}\n\n`,
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 1, function: { arguments: 'l":"https://example.com"}' } }] } }] })}\n\n`,
+    // Deliberately omit trailing newline on final event to test flush()
+    `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] })}`,
+  ];
+
+  const inputStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of sseChunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+
+  const reader = inputStream.pipeThrough(createOpenAiToAnthropicTransform()).getReader();
+  let combined = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    combined += decoder.decode(value, { stream: true });
+  }
+
+  const events = combined
+    .split("\n")
+    .filter((line) => line.startsWith("data: ") && line !== "data: [DONE]")
+    .map((line) => JSON.parse(line.slice(6)));
+
+  const starts = events.filter((e) => e.type === "content_block_start");
+  assert.equal(starts.length, 2);
+  assert.equal(starts[0].index, 0);
+  assert.equal(starts[0].content_block.name, "web_search");
+  assert.equal(starts[1].index, 1);
+  assert.equal(starts[1].content_block.name, "web_fetch");
+
+  const args0 = events
+    .filter((e) => e.type === "content_block_delta" && e.index === 0)
+    .map((e) => e.delta.partial_json)
+    .join("");
+  const args1 = events
+    .filter((e) => e.type === "content_block_delta" && e.index === 1)
+    .map((e) => e.delta.partial_json)
+    .join("");
+
+  assert.deepEqual(JSON.parse(args0), { query: "kaori" });
+  assert.deepEqual(JSON.parse(args1), { url: "https://example.com" });
+  assert.ok(events.some((e) => e.type === "message_delta" && e.delta?.stop_reason === "tool_use"));
 });

@@ -12,8 +12,10 @@ export function createReasoningSummaryParser(
   let buffer = "";
 
   const emitBeforePartialMarker = (marker: string, emit: (text: string) => void) => {
+    const lowerBuffer = buffer.toLowerCase();
+    const lowerMarker = marker.toLowerCase();
     let held = Math.min(buffer.length, marker.length - 1);
-    while (held > 0 && !marker.startsWith(buffer.slice(-held))) held -= 1;
+    while (held > 0 && !lowerMarker.startsWith(lowerBuffer.slice(-held))) held -= 1;
     const safeLength = buffer.length - held;
     if (safeLength > 0) emit(buffer.slice(0, safeLength));
     buffer = buffer.slice(safeLength);
@@ -150,7 +152,7 @@ export function createReasoningSummaryParser(
       }
 
       if (phase === "passthrough") {
-        const thinkIdx = buffer.indexOf("<think>");
+        const thinkIdx = buffer.toLowerCase().indexOf("<think>");
         if (thinkIdx >= 0) {
           if (thinkIdx > 0) {
             onAnswer(buffer.slice(0, thinkIdx));
@@ -161,8 +163,7 @@ export function createReasoningSummaryParser(
           continue;
         }
 
-        onAnswer(buffer);
-        buffer = "";
+        emitBeforePartialMarker("<think>", onAnswer);
         return;
       }
 

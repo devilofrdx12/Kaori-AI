@@ -49,6 +49,8 @@ async function initializeDb(db: Client) {
 
   await addColumnIfMissing(db, "ALTER TABLE conversations ADD COLUMN is_starred INTEGER NOT NULL DEFAULT 0");
   await addColumnIfMissing(db, "ALTER TABLE users ADD COLUMN is_pro INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(db, "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(db, "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");
   await addColumnIfMissing(db, "ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL");
   await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN category TEXT NOT NULL DEFAULT 'fact'");
   await addColumnIfMissing(db, "ALTER TABLE user_memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'");
@@ -134,6 +136,8 @@ export type DBUser = {
   name: string;
   email: string;
   password_hash: string;
+  email_verified: number;
+  token_version: number;
   relationship_xp: number;
   daily_spend_usd: number;
   spend_reset_date: number;
@@ -159,11 +163,12 @@ export async function createUser(user: {
   name: string;
   email: string;
   password_hash: string;
+  email_verified?: number;
 }): Promise<DBUser> {
   await run(
-    `INSERT INTO users (id, name, email, password_hash)
-     VALUES (?, ?, ?, ?)`,
-    [user.id, user.name, user.email, user.password_hash]
+    `INSERT INTO users (id, name, email, password_hash, email_verified)
+     VALUES (?, ?, ?, ?, ?)`,
+    [user.id, user.name, user.email, user.password_hash, user.email_verified ?? 0]
   );
   return (await findUserById(user.id))!;
 }
@@ -565,6 +570,14 @@ export async function findRefreshTokenByHash(
   ]);
 }
 
+export async function findRefreshTokenById(
+  id: string
+): Promise<DBRefreshToken | undefined> {
+  return getOne<DBRefreshToken>("SELECT * FROM refresh_tokens WHERE id = ?", [
+    id,
+  ]);
+}
+
 export async function deleteRefreshToken(id: string) {
   await run("DELETE FROM refresh_tokens WHERE id = ?", [id]);
 }
@@ -621,12 +634,57 @@ export async function deletePasswordResetToken(id: string) {
   await run("DELETE FROM password_reset_tokens WHERE id = ?", [id]);
 }
 
+/**
+ * Atomically consumes a password reset token. Returning false means another
+ * request already used or invalidated it.
+ */
+export async function consumePasswordResetToken(id: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "DELETE FROM password_reset_tokens WHERE id = ?",
+    args: [id],
+  });
+  return Number(result.rowsAffected ?? 0) === 1;
+}
+
 export async function deleteUserPasswordResetTokens(userId: string) {
   await run("DELETE FROM password_reset_tokens WHERE user_id = ?", [userId]);
 }
 
+export async function markUserEmailVerified(userId: string) {
+  await run(
+    "UPDATE users SET email_verified = 1, updated_at = unixepoch() WHERE id = ?",
+    [userId]
+  );
+}
+
 export async function updateUserPassword(userId: string, passwordHash: string) {
-  await run("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
+  await run(
+    "UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = unixepoch() WHERE id = ?",
+    [passwordHash, userId]
+  );
+}
+
+/**
+ * Replaces an unverified user's password hash, bumps token_version, and revokes
+ * existing refresh/reset tokens in one write transaction.
+ */
+export async function invalidateUserCredentialsAndSessions(
+  userId: string,
+  newPasswordHash: string
+) {
+  const db = await getDb();
+  await db.batch(
+    [
+      {
+        sql: "UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = unixepoch() WHERE id = ?",
+        args: [newPasswordHash, userId],
+      },
+      { sql: "DELETE FROM refresh_tokens WHERE user_id = ?", args: [userId] },
+      { sql: "DELETE FROM password_reset_tokens WHERE user_id = ?", args: [userId] },
+    ],
+    "write"
+  );
 }
 
 // OAuth Tokens

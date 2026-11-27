@@ -21,7 +21,14 @@ import { TOOL_DEFINITIONS } from "@/lib/tools";
 import { buildSystemPrompt } from "../lib/system-prompt";
 import { encryptContent, decryptContent } from "../lib/crypto";
 import { checkChatRateLimit, checkHeavyChatRateLimit } from "../lib/rate-limit";
-import { reserveChatSpend, refundChatSpend, recordSpend, estimateChatCostUsd } from "../lib/spend-guard";
+import {
+  CHAT_REQUEST_RESERVE_USD,
+  reserveChatSpend,
+  refundChatSpend,
+  recordSpend,
+  estimateChatCostUsd,
+} from "../lib/spend-guard";
+import { readResponseTextWithLimit } from "../lib/url-safety";
 import { getTrustedAppOrigin } from "../lib/app-origin";
 import { modelSupportsVision, validateMessage, validateModel, validateUploadFiles } from "../lib/validation";
 import { buildVisionGuidance } from "../lib/vision-guidance";
@@ -74,6 +81,18 @@ function compactProviderHistory(messages: KaoriMessage[]): KaoriMessage[] {
       ? text
       : `${text.slice(0, Math.floor(limit * 0.6))}\n[Earlier context omitted to fit the model request.]\n${text.slice(-Math.floor(limit * 0.4))}`;
     remainingChars -= boundedText.length;
+
+    const prev = compacted[0];
+    if (
+      prev &&
+      prev.role === "assistant" &&
+      message.role === "assistant" &&
+      typeof prev.content === "string" &&
+      images.length === 0
+    ) {
+      prev.content = `${boundedText}\n\n${prev.content}`.trim();
+      continue;
+    }
 
     compacted.unshift({
       role: message.role,
@@ -153,6 +172,7 @@ type AppActionProposal = {
 
 type StreamEvent = {
   type?: string;
+  index?: number;
   extra_content?: Record<string, unknown>;
   content_block?: {
     id?: string;
@@ -473,8 +493,12 @@ async function executeToolCall(
               { inline_data: { mime_type: "application/pdf", data: lastPdfBase64 } }
             ]
           }]
-        })
+        }),
+        signal: AbortSignal.timeout(30_000),
       });
+      if (!resp.ok) {
+        return `Error: Vision analysis request failed (${resp.status}).`;
+      }
       const data = await resp.json();
       return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated from vision model.";
     }
@@ -488,9 +512,11 @@ async function executeToolCall(
       const query = `site:open.spotify.com ${toolInput.songName}`;
       const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
       const resp = await fetch(searchUrl, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        signal: AbortSignal.timeout(10_000),
       });
-      const html = await resp.text();
+      if (!resp.ok) return "Could not search Spotify right now.";
+      const html = await readResponseTextWithLimit(resp, 512 * 1024);
       const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)<\/a>/g;
 
       let match;
@@ -515,9 +541,13 @@ async function executeToolCall(
       const duckQuery = `site:youtube.com/watch ${query}`;
       const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(duckQuery)}`;
       const resp = await fetch(searchUrl, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        signal: AbortSignal.timeout(10_000),
       });
-      const html = await resp.text();
+      if (!resp.ok) {
+        return `Found YouTube search: https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+      }
+      const html = await readResponseTextWithLimit(resp, 512 * 1024);
       const resultRegex = /<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)<\/a>/g;
 
       let match;
@@ -856,6 +886,9 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let spendReserved = false;
+        const requestReserveUsd = featureMode === "council"
+          ? CHAT_REQUEST_RESERVE_USD * 3
+          : CHAT_REQUEST_RESERVE_USD;
         let fullAssistantContent = "";
         let accumulatedThinking = "";
         let totalOutputChars = 0;
@@ -894,7 +927,7 @@ export async function POST(req: NextRequest) {
             const attemptStream = async (model: string, streamMessages: KaoriMessage[] = currentMessages) => {
               const activeTools = forceAnswer ? [] : TOOL_DEFINITIONS;
               if (!spendReserved) {
-                await reserveChatSpend(user.id, Boolean(user.is_pro));
+                await reserveChatSpend(user.id, Boolean(user.is_pro), requestReserveUsd);
                 spendReserved = true;
               }
               if (model.startsWith("nvidia/")) {
@@ -975,7 +1008,7 @@ export async function POST(req: NextRequest) {
               // Reserve once before concurrent providers so a single request doesn't reserve
               // the per-chat budget multiple times due to a race between model calls.
               if (!spendReserved) {
-                await reserveChatSpend(user.id, Boolean(user.is_pro));
+                await reserveChatSpend(user.id, Boolean(user.is_pro), requestReserveUsd);
                 spendReserved = true;
               }
               forceAnswer = true;
@@ -1244,8 +1277,15 @@ export async function POST(req: NextRequest) {
             const reader = response.body!.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
-            let currentToolUse: ToolUseBlock | null = null;
-            let toolUseInputJson = "";
+            const activeToolsByIndex = new Map<number, { block: ToolUseBlock; json: string }>();
+            const finalizeToolBlock = (entry: { block: ToolUseBlock; json: string }) => {
+              try {
+                entry.block.input = JSON.parse(entry.json || "{}");
+              } catch {
+                entry.block.input = {};
+              }
+              toolUseBlocks.push(entry.block);
+            };
             const emitAnswerText = (text: string) => {
               if (!text) return;
               fullAssistantContent += text;
@@ -1276,22 +1316,27 @@ export async function POST(req: NextRequest) {
 
                 try {
                   const event = JSON.parse(data) as StreamEvent;
+                  const eventIdx = typeof event.index === "number" ? event.index : 0;
 
                   if (event.type === "content_block_start") {
                     if (event.content_block?.type === "tool_use") {
-                      currentToolUse = {
+                      const existing = activeToolsByIndex.get(eventIdx);
+                      if (existing) {
+                        finalizeToolBlock(existing);
+                      }
+                      const startedTool: ToolUseBlock = {
                         id: event.content_block.id || uuid(),
                         name: event.content_block.name || "unknown",
                         input: {},
                         extra_content: event.content_block.extra_content,
                       };
-                      toolUseInputJson = "";
+                      activeToolsByIndex.set(eventIdx, { block: startedTool, json: "" });
 
                       controller.enqueue(
                         encoder.encode(
                           `data: ${JSON.stringify({
                             type: "tool_use_start",
-                            tool: currentToolUse.name,
+                            tool: startedTool.name,
                           })}\n\n`
                         )
                       );
@@ -1313,38 +1358,44 @@ export async function POST(req: NextRequest) {
                     }
 
                     if (event.delta?.type === "input_json_delta") {
-                      toolUseInputJson += event.delta.partial_json || "";
+                      const active = activeToolsByIndex.get(eventIdx);
+                      if (active) {
+                        active.json += event.delta.partial_json || "";
+                      }
                     }
                   }
 
-                  if ((event.type === "content_block_extra" || event.extra_content) && currentToolUse) {
+                  if ((event.type === "content_block_extra" || event.extra_content) && activeToolsByIndex.size > 0) {
                     const extra = event.extra_content || (event as any).extra_content;
-                    if (extra) {
-                      currentToolUse.extra_content = {
-                        ...(currentToolUse.extra_content || {}),
+                    const target = activeToolsByIndex.get(eventIdx) ?? [...activeToolsByIndex.values()].pop();
+                    if (extra && target) {
+                      target.block.extra_content = {
+                        ...(target.block.extra_content || {}),
                         ...extra,
                       };
                     }
                   }
 
-                  if (event.delta?.extra_content && currentToolUse) {
-                    currentToolUse.extra_content = {
-                      ...(currentToolUse.extra_content || {}),
-                      ...event.delta.extra_content,
-                    };
+                  if (event.delta?.extra_content && activeToolsByIndex.size > 0) {
+                    const target = activeToolsByIndex.get(eventIdx) ?? [...activeToolsByIndex.values()].pop();
+                    if (target) {
+                      target.block.extra_content = {
+                        ...(target.block.extra_content || {}),
+                        ...event.delta.extra_content,
+                      };
+                    }
                   }
 
-                  if (event.type === "content_block_stop" && currentToolUse) {
-                    try {
-                      currentToolUse.input = JSON.parse(
-                        toolUseInputJson || "{}"
-                      );
-                    } catch {
-                      currentToolUse.input = {};
+                  if (event.type === "content_block_stop" && activeToolsByIndex.size > 0) {
+                    if (typeof event.index === "number" && activeToolsByIndex.has(event.index)) {
+                      finalizeToolBlock(activeToolsByIndex.get(event.index)!);
+                      activeToolsByIndex.delete(event.index);
+                    } else {
+                      for (const idx of [...activeToolsByIndex.keys()].sort((a, b) => a - b)) {
+                        finalizeToolBlock(activeToolsByIndex.get(idx)!);
+                      }
+                      activeToolsByIndex.clear();
                     }
-                    toolUseBlocks.push(currentToolUse);
-                    currentToolUse = null;
-                    toolUseInputJson = "";
                   }
                 } catch {
                   // Skip unparseable events
@@ -1352,20 +1403,10 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            reasoningSummaryParser?.flush();
-
-            if (currentToolUse) {
-              try {
-                currentToolUse.input = JSON.parse(
-                  toolUseInputJson || "{}"
-                );
-              } catch {
-                currentToolUse.input = {};
-              }
-              toolUseBlocks.push(currentToolUse);
-              currentToolUse = null;
-              toolUseInputJson = "";
+            for (const idx of [...activeToolsByIndex.keys()].sort((a, b) => a - b)) {
+              finalizeToolBlock(activeToolsByIndex.get(idx)!);
             }
+            activeToolsByIndex.clear();
 
             reasoningSummaryParser.flush();
 
@@ -1440,11 +1481,14 @@ export async function POST(req: NextRequest) {
                 role: "assistant",
                 content: assistantContent,
               });
+              const dbAssistantContent = accumulatedThinking.trim()
+                ? [{ type: "thinking" as const, text: accumulatedThinking.trim() }, ...assistantContent]
+                : assistantContent;
               await insertMessage({
                 id: uuid(),
                 conversation_id: chatId,
                 role: "assistant",
-                content: encryptContent(JSON.stringify(assistantContent)),
+                content: encryptContent(JSON.stringify(dbAssistantContent)),
               });
 
               // Execute tools and add results
@@ -1565,13 +1609,10 @@ export async function POST(req: NextRequest) {
                         reason: resultScan.reason,
                         toolName: tool.name,
                         signals: resultScan.signals,
-                        metadata: { sanitized: resultScan.verdict === "BLOCKED" },
+                        metadata: { sanitized: true },
                       });
-                    }
-
-                    if (resultScan.verdict === "BLOCKED") {
                       logger.warn(
-                        { userId: user.id, tool: tool.name, risk: resultScan.risk },
+                        { userId: user.id, tool: tool.name, risk: resultScan.risk, verdict: resultScan.verdict },
                         "QUARTZWALL sanitized tool result"
                       );
                       result = `${sanitizeToolResult(result)}\n\n[QUARTZWALL: indirect prompt injection removed before model context.]`;
@@ -1611,7 +1652,6 @@ export async function POST(req: NextRequest) {
               accumulatedThinking = "";
               toolUseBlocks = [];
               if (featureMode === "web" || toolRounds >= 2) forceAnswer = true;
-              if (toolRounds >= 5) forceAnswer = true;
               shouldContinue = true;
             }
           }
@@ -1639,8 +1679,8 @@ export async function POST(req: NextRequest) {
           if (spendReserved) {
             totalOutputChars += fullAssistantContent.length;
             try {
-              // Refund the flat $0.10 reserve first.
-              await refundChatSpend(user.id);
+              // Refund the reserved amount first.
+              await refundChatSpend(user.id, Boolean(user.is_pro), requestReserveUsd);
               // Record estimated actual cost based on model and output length.
               const estimatedCost = featureMode === "council"
                 ? councilEstimatedCostUsd + estimateChatCostUsd(activeModel, fullAssistantContent.length)
@@ -1669,7 +1709,7 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (err: any) {
           if (spendReserved) {
-            await refundChatSpend(user.id);
+            await refundChatSpend(user.id, Boolean(user.is_pro), requestReserveUsd);
           }
           
           if (fullAssistantContent.trim()) {

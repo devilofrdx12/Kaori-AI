@@ -345,13 +345,37 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
 
       // Export all chats
       for (const chat of chats) {
-        const fullChat = await fetchChat(chat.id);
-        let mdContent = `# ${chat.title}\n\n`;
-        for (const msg of fullChat.messages) {
-          mdContent += `**${msg.role === 'user' ? 'You' : 'Kaori'}**:\n${msg.content}\n\n---\n\n`;
+        try {
+          const fullChat = await fetchChat(chat.id);
+          let mdContent = `# ${chat.title}\n\n`;
+          for (const msg of fullChat.messages || []) {
+            mdContent += `**${msg.role === 'user' ? 'You' : 'Kaori'}**:\n${msg.content}\n\n---\n\n`;
+          }
+          chatFolder?.file(`${chat.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${chat.id.substring(0, 8)}.md`, mdContent);
+        } catch (err) {
+          console.error(`Failed to export chat ${chat.id}:`, err);
         }
-        chatFolder?.file(`${chat.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${chat.id.substring(0, 8)}.md`, mdContent);
       }
+
+      // Export memories and projects
+      const [memoriesData, projectsData] = await Promise.all([
+        fetchJsonSafe<unknown>("/api/memories/export", {
+          credentials: "include",
+          headers: AJAX_HEADERS,
+        }),
+        fetchJsonSafe<unknown>("/api/projects", {
+          credentials: "include",
+          headers: AJAX_HEADERS,
+        }),
+      ]);
+      chatFolder?.file(
+        "memories.json",
+        JSON.stringify(memoriesData ?? { error: "Unable to export memories" }, null, 2)
+      );
+      chatFolder?.file(
+        "projects.json",
+        JSON.stringify(projectsData ?? { error: "Unable to export projects" }, null, 2)
+      );
 
       // Export settings
       const settings: Record<string, string | null> = {};

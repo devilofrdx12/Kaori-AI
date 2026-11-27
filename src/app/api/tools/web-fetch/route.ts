@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { sanitizeToolResult, scanText } from "../../lib/quartzwall";
 import { checkToolRateLimit } from "../../lib/rate-limit";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 import {
   assertPublicHttpUrl,
   fetchPublicHttpUrl,
@@ -211,7 +212,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { url } = await req.json().catch(() => ({}));
+    const { url } = await readJsonBodyWithLimit(req, 16 * 1024);
     const validated = await assertPublicHttpUrl(url);
     // Construct a read-only base URL for resolving relative links/images in HTML.
     // This is NOT used for fetching — fetchPublicHttpUrl uses the frozen href.
@@ -292,6 +293,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: unknown) {
+    if (err instanceof RequestBodyError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     const message = err instanceof Error ? err.message : "";
     const safeMessages = new Set([
       "Invalid URL",

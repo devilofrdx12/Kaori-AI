@@ -3,6 +3,7 @@ import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { validateSearchQuery } from "../../lib/validation";
 import { readResponseTextWithLimit } from "../../lib/url-safety";
 import { checkToolRateLimit } from "../../lib/rate-limit";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 
 const MAX_SEARCH_RESPONSE_BYTES = 1 * 1024 * 1024;
 
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { query, queries, topic: requestedTopic, time_range: requestedTimeRange } = await req.json().catch(() => ({}));
+    const { query, queries, topic: requestedTopic, time_range: requestedTimeRange } = await readJsonBodyWithLimit(req, 32 * 1024);
     const validatedQuery = validateSearchQuery(query);
     const queryList = [
       validatedQuery,
@@ -318,6 +319,9 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (err) {
+    if (err instanceof RequestBodyError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     const message = err instanceof Error ? err.message : "";
     const safeMessages = new Set(["Query is required", "Query too long (max 300 characters)"]);
     return NextResponse.json(

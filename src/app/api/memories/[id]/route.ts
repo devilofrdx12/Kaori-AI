@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { deleteUserMemory } from "../../lib/db";
 import { requireMemoryOwner } from "../../lib/ownership";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 import { InputValidationError, validateMemoryInput } from "../../lib/validation";
 import { memoryDto } from "../../lib/memory-dto";
 import { setMemoryStatus, updateStructuredMemory, type MemoryStatus } from "../../lib/memory/service";
@@ -15,7 +16,7 @@ export async function PATCH(req: NextRequest, context: Context) {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     await requireMemoryOwner(id, user.id);
-    const body = await req.json().catch(() => ({}));
+    const body = await readJsonBodyWithLimit(req, 64 * 1024);
     const requestedStatus = typeof body.status === "string" ? body.status as MemoryStatus : null;
     if (requestedStatus) {
       if (!["pending", "approved", "rejected", "outdated", "archived"].includes(requestedStatus)) {
@@ -29,6 +30,9 @@ export async function PATCH(req: NextRequest, context: Context) {
     return NextResponse.json(memoryDto(memory));
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof InputValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

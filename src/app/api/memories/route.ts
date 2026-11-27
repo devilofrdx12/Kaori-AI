@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../lib/auth-utils";
 import { createStructuredMemory, listManagedMemories } from "../lib/memory/service";
 import { memoryDto } from "../lib/memory-dto";
+import { readJsonBodyWithLimit, RequestBodyError } from "../lib/request-body";
 import { InputValidationError, validateMemoryInput } from "../lib/validation";
 
 export async function GET() {
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const fields = validateMemoryInput(await req.json().catch(() => ({})));
+    const fields = validateMemoryInput(await readJsonBodyWithLimit(req, 64 * 1024));
     const memory = await createStructuredMemory({
       userId: user.id,
       content: fields.content,
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(memoryDto(memory), { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof InputValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -37,4 +37,5 @@ test("personality core contains web access and visual search directives", () => 
   assert.ok(KAORI_PERSONALITY_CORE.includes("WEB ACCESS DIRECTIVE"), "Should include web directive");
   assert.ok(KAORI_PERSONALITY_CORE.includes("VISUAL SEARCH DIRECTIVE"), "Should include visual directive");
   assert.ok(KAORI_PERSONALITY_CORE.includes("ANTI-HALLUCINATION"), "Should include anti-hallucination rules");
+  assert.ok(!KAORI_PERSONALITY_CORE.includes("NEVER skip the web_search step"), "Should not force unconditional web_search on OCR/math/general vision");
 });

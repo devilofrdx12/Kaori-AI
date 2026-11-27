@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  token_version INTEGER NOT NULL DEFAULT 0,
   relationship_xp INTEGER NOT NULL DEFAULT 0,
   daily_spend_usd REAL NOT NULL DEFAULT 0,
   spend_reset_date INTEGER NOT NULL DEFAULT (unixepoch()),

@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { findUserById } from "./db";
+import { findRefreshTokenById, findUserById } from "./db";
 
 function requireServerSecret(name: "JWT_SECRET" | "JWT_REFRESH_SECRET"): string {
   const value = process.env[name];
@@ -36,10 +36,20 @@ export const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
 export type AuthPayload = {
   userId: string;
   email: string;
+  sid?: string;
+  tv?: number;
 };
 
-export function issueAccessToken(userId: string, email: string): string {
-  return jwt.sign({ userId, email }, getJwtSecret(), { expiresIn: ACCESS_TTL });
+export function issueAccessToken(
+  userId: string,
+  email: string,
+  sessionId?: string,
+  tokenVersion?: number
+): string {
+  const payload: AuthPayload = { userId, email };
+  if (sessionId !== undefined) payload.sid = sessionId;
+  if (tokenVersion !== undefined) payload.tv = tokenVersion;
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TTL });
 }
 
 export function verifyAccessToken(token: string): AuthPayload | null {
@@ -127,6 +137,17 @@ export async function getSessionUser() {
 
   const user = await findUserById(payload.userId);
   if (!user) return null;
+
+  if (typeof payload.tv === "number" && payload.tv !== Number(user.token_version ?? 0)) {
+    return null;
+  }
+
+  if (typeof payload.sid === "string") {
+    const session = await findRefreshTokenById(payload.sid);
+    if (!session || session.user_id !== user.id || session.expires_at < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+  }
 
   return { id: user.id, name: user.name, email: user.email, is_pro: user.is_pro === 1 };
 }

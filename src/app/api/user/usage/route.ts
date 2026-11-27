@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, mapRows } from "../../lib/db";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { logger } from "../../lib/logger";
+import { DAILY_LIMIT, DAILY_PRO_LIMIT } from "../../lib/spend-guard";
 
 type UserRow = {
   daily_spend_usd: number;
@@ -62,7 +63,8 @@ export async function GET(req: NextRequest) {
     });
     const toolsUsed = Number(mapRows<{ count: number }>(toolResult)[0]?.count || 0);
 
-    const dailyLimit = parseFloat(process.env.DAILY_SPEND_LIMIT_USD || "2.00");
+    const isPro = user.is_pro === 1;
+    const dailyLimit = isPro ? DAILY_PRO_LIMIT : DAILY_LIMIT;
 
     // Reset spend if day rolled over
     let dailySpend = typeof user.daily_spend_usd === "number" ? user.daily_spend_usd : 0;
@@ -75,8 +77,8 @@ export async function GET(req: NextRequest) {
       dailySpendUsd: dailySpend,
       dailyLimitUsd: dailyLimit,
       toolsUsed,
-      isPro: user.is_pro === 1,
-      messageLimit: user.is_pro === 1 ? null : 100,
+      isPro,
+      messageLimit: isPro ? null : 100,
     });
   } catch (err) {
     logger.error({ err }, "[GET /api/user/usage] Error");

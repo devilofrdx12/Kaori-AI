@@ -201,8 +201,8 @@ const sanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     code: [...(defaultSchema.attributes?.code || []), "className"],
-    span: [...(defaultSchema.attributes?.span || []), "className", "style"],
-    div: [...(defaultSchema.attributes?.div || []), "className", "style"],
+    span: [...(defaultSchema.attributes?.span || []), "className"],
+    div: [...(defaultSchema.attributes?.div || []), "className"],
   },
 };
 
@@ -211,7 +211,7 @@ const memoizedRehypePlugins = [
   rehypeRaw,
   [rehypeSanitize, sanitizeSchema],
   [rehypeHighlight, { ignoreMissing: true }],
-  [rehypeKatex, { throwOnError: false }],
+  [rehypeKatex, { throwOnError: false, maxSize: 20, maxExpand: 500 }],
 ] as any;
 
 const memoizedComponents: Components = {
@@ -224,7 +224,7 @@ const memoizedComponents: Components = {
       if (lang === "math") {
         const raw = extractText(children).trim();
         try {
-          const html = katex.renderToString(raw, { displayMode: true, throwOnError: false });
+          const html = katex.renderToString(raw, { displayMode: true, throwOnError: false, maxSize: 20, maxExpand: 500 });
           return (
             <div
               className="my-3 overflow-x-auto text-center"
@@ -251,7 +251,7 @@ const memoizedComponents: Components = {
     ) {
       const math = raw.replace(/^\$+|\$+$/g, "").trim();
       try {
-        const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
+        const html = katex.renderToString(math, { displayMode: false, throwOnError: false, maxSize: 20, maxExpand: 500 });
         return (
           <span
             className="inline-math inline-block align-middle"

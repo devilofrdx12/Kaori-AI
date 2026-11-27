@@ -80,12 +80,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Issue tokens
-    const accessToken = issueAccessToken(user.id, user.email);
+    const sessionId = crypto.randomUUID();
+    const accessToken = issueAccessToken(
+      user.id,
+      user.email,
+      sessionId,
+      user.token_version ?? 0
+    );
     const { raw: refreshRaw, hash: refreshHash } = issueRefreshToken();
 
     // Store refresh token
     await insertRefreshToken({
-      id: crypto.randomUUID(),
+      id: sessionId,
       user_id: user.id,
       token_hash: refreshHash,
       expires_at: Math.floor(Date.now() / 1000) + REFRESH_TTL,

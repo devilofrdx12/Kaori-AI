@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../lib/auth-utils";
 import { createProject, getProjectConversationCount, getUserProjects } from "../lib/db";
+import { readJsonBodyWithLimit, RequestBodyError } from "../lib/request-body";
 import { InputValidationError, validateProjectInput } from "../lib/validation";
 
 function projectDto(project: Awaited<ReturnType<typeof createProject>>, chatCount: number) {
@@ -32,11 +33,14 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const fields = validateProjectInput(await req.json().catch(() => ({})));
+    const fields = validateProjectInput(await readJsonBodyWithLimit(req, 64 * 1024));
     const project = await createProject({ id: randomUUID(), user_id: user.id, ...fields });
     return NextResponse.json(projectDto(project, 0), { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof InputValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

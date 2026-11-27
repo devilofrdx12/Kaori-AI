@@ -86,9 +86,13 @@ export async function reserveSpend(userId: string, estimatedCostUsd: number, isP
   }
 }
 
-export async function reserveChatSpend(userId: string, isPro = false): Promise<void> {
+export async function reserveChatSpend(
+  userId: string,
+  isPro = false,
+  reserveUsd = CHAT_REQUEST_RESERVE_USD
+): Promise<void> {
   const limit = isPro ? DAILY_PRO_LIMIT : DAILY_LIMIT;
-  await reserveSpend(userId, Math.min(CHAT_REQUEST_RESERVE_USD, limit), isPro);
+  await reserveSpend(userId, Math.min(reserveUsd, limit), isPro);
 }
 
 /**
@@ -106,8 +110,13 @@ export async function refundSpend(userId: string, refundAmountUsd: number): Prom
   });
 }
 
-export async function refundChatSpend(userId: string): Promise<void> {
-  await refundSpend(userId, Math.min(CHAT_REQUEST_RESERVE_USD, DAILY_LIMIT));
+export async function refundChatSpend(
+  userId: string,
+  isPro = false,
+  reserveUsd = CHAT_REQUEST_RESERVE_USD
+): Promise<void> {
+  const limit = isPro ? DAILY_PRO_LIMIT : DAILY_LIMIT;
+  await refundSpend(userId, Math.min(reserveUsd, limit));
 }
 
 /**

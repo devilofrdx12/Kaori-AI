@@ -497,6 +497,7 @@ export async function sendMessage({
                   onToolResult?.(tr.toolName, tr.result);
                 }
               }
+              if (savedAssistantMsg.thinking) onThinking?.(savedAssistantMsg.thinking);
               onText(savedAssistantMsg.content);
               onConnectionStatus?.("online");
               onDone();

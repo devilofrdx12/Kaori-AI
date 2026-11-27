@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Rate limit by IP
     const ip = getClientIp(req);
-    const rateCheck = await checkAuthRateLimit(ip);
+    const rateCheck = await checkAuthRateLimit(`signup:ip:${ip}`);
     if (!rateCheck.allowed) {
       logger.warn({ ip }, "Auth rate limit hit on signup");
       return NextResponse.json(
@@ -76,11 +76,17 @@ export async function POST(req: NextRequest) {
     });
 
     // Issue tokens
-    const accessToken = issueAccessToken(user.id, user.email);
+    const sessionId = crypto.randomUUID();
+    const accessToken = issueAccessToken(
+      user.id,
+      user.email,
+      sessionId,
+      user.token_version ?? 0
+    );
     const { raw: refreshRaw, hash: refreshHash } = issueRefreshToken();
 
     await insertRefreshToken({
-      id: crypto.randomUUID(),
+      id: sessionId,
       user_id: user.id,
       token_hash: refreshHash,
       expires_at: Math.floor(Date.now() / 1000) + REFRESH_TTL,

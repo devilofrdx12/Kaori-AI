@@ -4,9 +4,13 @@ import crypto from "crypto";
 import { v4 as uuid } from "uuid";
 import {
   findUserByEmail,
+  findUserById,
   createUser,
   upsertOAuthToken,
+  getOAuthToken,
   insertRefreshToken,
+  markUserEmailVerified,
+  invalidateUserCredentialsAndSessions,
 } from "../../../lib/db";
 import { encrypt } from "../../../lib/crypto";
 import { buildTrustedAppUrl } from "../../../lib/app-origin";
@@ -121,6 +125,15 @@ export async function GET(req: NextRequest) {
 
     // --- FLOW 1: LOGIN / SIGN-UP VIA GOOGLE ---
     if (stateUserId === "login") {
+      if (profile.email_verified !== true) {
+        logger.warn({ email }, "Google Sign-In rejected: unverified Google email");
+        const response = NextResponse.redirect(
+          buildTrustedAppUrl("/login?error=google_email_unverified", req)
+        );
+        response.cookies.delete(stateCookie);
+        return response;
+      }
+
       let user = await findUserByEmail(email);
 
       if (!user) {
@@ -134,8 +147,27 @@ export async function GET(req: NextRequest) {
           name: displayName,
           email,
           password_hash: passwordHash,
+          email_verified: 1,
         });
         logger.info({ userId: user.id }, "Auto-created new user account via Google Sign-In");
+      } else {
+        const isVerifiedOrLinked =
+          user.email_verified === 1 || Boolean(await getOAuthToken(user.id, "google"));
+
+        if (!isVerifiedOrLinked) {
+          const replacementSecret = crypto.randomBytes(32).toString("hex");
+          const replacementHash = await bcrypt.hash(replacementSecret, 12);
+          await invalidateUserCredentialsAndSessions(user.id, replacementHash);
+          await markUserEmailVerified(user.id);
+          user = (await findUserById(user.id))!;
+          logger.warn(
+            { userId: user.id },
+            "Reset unverified local account credentials during Google Sign-In"
+          );
+        } else if (user.email_verified !== 1) {
+          await markUserEmailVerified(user.id);
+          user = (await findUserById(user.id))!;
+        }
       }
 
       // Persist encrypted OAuth token for the user
@@ -151,11 +183,17 @@ export async function GET(req: NextRequest) {
 
       // Issue Kaori session tokens
       const ip = getClientIp(req);
-      const accessToken = issueAccessToken(user.id, user.email);
+      const sessionId = crypto.randomUUID();
+      const accessToken = issueAccessToken(
+        user.id,
+        user.email,
+        sessionId,
+        user.token_version ?? 0
+      );
       const { raw: refreshRaw, hash: refreshHash } = issueRefreshToken();
 
       await insertRefreshToken({
-        id: crypto.randomUUID(),
+        id: sessionId,
         user_id: user.id,
         token_hash: refreshHash,
         expires_at: Math.floor(Date.now() / 1000) + REFRESH_TTL,

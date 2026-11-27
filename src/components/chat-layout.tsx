@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Sidebar from "./sidebar";
@@ -87,6 +87,7 @@ function ChatLayoutInner() {
 
   const [chats, setChats] = useState<ChatThread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const pendingNewChatRef = useRef<Promise<string | null> | null>(null);
   const [showAvatar, setShowAvatar] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState("chats");
@@ -197,7 +198,7 @@ function ChatLayoutInner() {
   };
 
   // ── NEW CHAT ──
-  function handleNewChat(projectId: string | null = null) {
+  function handleNewChat(projectId: string | null = null): Promise<string | null> {
     if (window.innerWidth < 1024) setSidebarOpen(false);
 
     // Optimistic UI: Immediately render an empty placeholder chat
@@ -214,17 +215,29 @@ function ChatLayoutInner() {
     setChats((prev) => [thread, ...prev]);
     setActiveChatId(thread.id);
 
-    // Run the actual API creation in the background
-    createChat(undefined, projectId).then((newChat) => {
-      // Swap the temporary local ID with the real database ID
-      setChats((prev) => prev.map(c => c.id === tempId ? { ...c, id: newChat.id, title: newChat.title } : c));
-      setActiveChatId((current) => current === tempId ? newChat.id : current);
-    }).catch((err) => {
-      console.error("Create chat error:", err);
-      // Revert if the server failed
-      setChats((prev) => prev.filter(c => c.id !== tempId));
-      setActiveChatId((current) => current === tempId ? null : current);
-    });
+    // Run the actual API creation in the background and track its promise
+    const creationPromise = createChat(undefined, projectId)
+      .then((newChat) => {
+        // Swap the temporary local ID with the real database ID
+        setChats((prev) => prev.map(c => c.id === tempId ? { ...c, id: newChat.id, title: newChat.title } : c));
+        setActiveChatId((current) => current === tempId ? newChat.id : current);
+        return newChat.id;
+      })
+      .catch((err) => {
+        console.error("Create chat error:", err);
+        // Revert if the server failed
+        setChats((prev) => prev.filter(c => c.id !== tempId));
+        setActiveChatId((current) => current === tempId ? null : current);
+        return null;
+      })
+      .finally(() => {
+        if (pendingNewChatRef.current === creationPromise) {
+          pendingNewChatRef.current = null;
+        }
+      });
+
+    pendingNewChatRef.current = creationPromise;
+    return creationPromise;
   }
 
   function handleStartProjectChat(project: Project) {
@@ -300,12 +313,23 @@ function ChatLayoutInner() {
   }
 
   // ── SEND INITIAL MESSAGE ──
-  function handleSendInitial(text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) {
-    if (!activeChatId || (!text && !files?.length)) return;
+  async function handleSendInitial(text: string, files?: File[] | null, imageDetail?: ImageDetail, featureMode?: ChatFeatureMode) {
+    if (!text && !files?.length) return;
 
-    if (activeChatId.startsWith("temp-")) {
-      console.warn("Please wait a moment for the new chat to initialize on the server.");
-      return;
+    let targetChatId = activeChatId;
+    const shouldRename = !activeChat || activeChat.messages.length === 0;
+    if (!targetChatId || targetChatId.startsWith("temp-")) {
+      const pendingPromise = pendingNewChatRef.current;
+      const resolvedId = pendingPromise ? await pendingPromise.catch(() => null) : null;
+      if (resolvedId && !resolvedId.startsWith("temp-")) {
+        targetChatId = resolvedId;
+      } else {
+        targetChatId = await handleNewChat(activeChat?.projectId ?? null);
+      }
+      if (!targetChatId || targetChatId.startsWith("temp-")) {
+        console.warn("Unable to initialize the new chat on the server. Please try again.");
+        return;
+      }
     }
 
     const messageId = crypto.randomUUID();
@@ -321,17 +345,18 @@ function ChatLayoutInner() {
       role: "user",
       content: text,
       files: mappedFiles,
+      featureMode,
       timestamp: new Date().toISOString(),
     };
-    updateChat(activeChatId, (c) => ({
+    updateChat(targetChatId, (c) => ({
       ...c,
       messages: [...c.messages, userMsg],
       updatedAt: new Date().toISOString(),
     }));
 
-    if (activeChat && activeChat.messages.length === 0) {
+    if (shouldRename) {
       const title = buildChatTitle(text || files?.[0]?.name || "New chat");
-      handleRenameChat(activeChatId, title);
+      handleRenameChat(targetChatId, title);
     }
 
     setPendingPrompt({ text, files, imageDetail, featureMode, messageId });

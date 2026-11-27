@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { deleteProject, findProject, getProjectConversationCount, updateProject } from "../../lib/db";
 import { requireProjectOwner } from "../../lib/ownership";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 import { InputValidationError, validateProjectInput } from "../../lib/validation";
 
 type Context = { params: Promise<{ id: string }> };
@@ -42,11 +43,14 @@ export async function PATCH(req: NextRequest, context: Context) {
     const { id } = await context.params;
     const auth = await authorize(id);
     if (auth.response) return auth.response;
-    const fields = validateProjectInput(await req.json().catch(() => ({})));
+    const fields = validateProjectInput(await readJsonBodyWithLimit(req, 64 * 1024));
     const project = await updateProject(id, auth.user.id, fields);
     return NextResponse.json(dto(project, await getProjectConversationCount(id, auth.user.id)));
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof InputValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -69,9 +69,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const sessionId = crypto.randomUUID();
     const { raw: newRaw, hash: newHash } = issueRefreshToken();
     await insertRefreshToken({
-      id: crypto.randomUUID(),
+      id: sessionId,
       user_id: stored.user_id,
       token_hash: newHash,
       expires_at: Math.floor(Date.now() / 1000) + REFRESH_TTL,
@@ -79,7 +80,12 @@ export async function POST(req: Request) {
       ip: getClientIp(req),
     });
 
-    const newAccess = issueAccessToken(user.id, user.email);
+    const newAccess = issueAccessToken(
+      user.id,
+      user.email,
+      sessionId,
+      user.token_version ?? 0
+    );
     await setAuthCookies(newAccess, newRaw);
 
     logger.info({ userId: user.id }, "Token refreshed");

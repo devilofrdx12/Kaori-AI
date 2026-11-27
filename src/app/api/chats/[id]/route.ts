@@ -114,15 +114,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
       if (!thinking && typeof content === "string") {
         if (content.includes("<think>")) {
-          const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i);
-          if (thinkMatch) {
-            thinking = thinkMatch[1].trim();
+          const matches = [...content.matchAll(/<think>([\s\S]*?)<\/think>/gi)];
+          if (matches.length > 0) {
+            thinking = matches.map((match) => match[1].trim()).filter(Boolean).join("\n\n");
             content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
           }
         } else if (content.includes("<reasoning_summary>")) {
-          const summaryMatch = content.match(/<reasoning_summary>([\s\S]*?)<\/reasoning_summary>/i);
-          if (summaryMatch) {
-            thinking = summaryMatch[1].trim();
+          const matches = [...content.matchAll(/<reasoning_summary>([\s\S]*?)<\/reasoning_summary>/gi)];
+          if (matches.length > 0) {
+            thinking = matches.map((match) => match[1].trim()).filter(Boolean).join("\n\n");
             content = content.replace(/<reasoning_summary>[\s\S]*?<\/reasoning_summary>/gi, "").replace(/<final_answer>|<\/final_answer>/gi, "").trim();
           }
         }
@@ -141,15 +141,28 @@ export async function GET(_req: NextRequest, { params }: Params) {
           };
         });
 
-        parsedMessages.push({
-          id: m.id,
-          role: m.role,
-          content,
-          thinking,
-          toolResults,
-          files: files.length > 0 ? files : undefined,
-          timestamp: new Date(m.created_at * 1000).toISOString(),
-        });
+        const previous = parsedMessages[parsedMessages.length - 1];
+        if (m.role === "assistant" && previous?.role === "assistant" && previous.toolResults?.length) {
+          previous.id = m.id;
+          previous.content = [previous.content, content].filter(Boolean).join("\n\n").trim();
+          if (thinking) {
+            previous.thinking = [previous.thinking, thinking].filter(Boolean).join("\n\n").trim();
+          }
+          if (toolResults?.length) {
+            previous.toolResults = [...previous.toolResults, ...toolResults];
+          }
+          previous.timestamp = new Date(m.created_at * 1000).toISOString();
+        } else {
+          parsedMessages.push({
+            id: m.id,
+            role: m.role,
+            content,
+            thinking,
+            toolResults,
+            files: files.length > 0 ? files : undefined,
+            timestamp: new Date(m.created_at * 1000).toISOString(),
+          });
+        }
       }
     }
 

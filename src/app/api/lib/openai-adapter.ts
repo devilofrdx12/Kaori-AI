@@ -30,6 +30,7 @@ async function verifyStreamStart(response: Response): Promise<ReadableStream<Uin
         }
       } catch (error) {
         if (error instanceof SyntaxError) continue;
+        await reader.cancel().catch(() => {});
         throw error;
       }
 
@@ -72,7 +73,7 @@ function withIdleTimeout(
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
           timedOut = true;
-          void reader.cancel("Provider stream idle timeout");
+          void reader.cancel("Provider stream idle timeout").catch(() => {});
           controller.error(new Error("The AI provider stopped responding. Please retry."));
         }, timeoutMs);
       };
@@ -286,97 +287,7 @@ export async function streamOpenAiCompatible({
 
   const providerStream = await verifyStreamStart(resp);
 
-  // Return a TransformStream that converts OpenAI SSE to Anthropic SSE
-  let buffer = "";
-  let hasToolCalls = false;
-  const decoder = new TextDecoder();
-  const transformStream = new TransformStream({
-    transform(chunk, controller) {
-      buffer += decoder.decode(chunk, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") {
-           controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-           continue;
-        }
-        
-        try {
-          const event = JSON.parse(data);
-          if (event?.error) {
-            controller.error(new Error("The AI provider stopped responding. Please retry."));
-            return;
-          }
-          const delta = event.choices?.[0]?.delta;
-          const finishReason = event.choices?.[0]?.finish_reason;
-          
-          if (delta?.reasoning_content) {
-            // Emit as a special 'thinking' event — UI handles display
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-              type: "thinking_delta",
-              text: delta.reasoning_content
-            })}\n\n`));
-          }
-          
-          if (delta?.content) {
-             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-               type: "content_block_delta",
-               delta: { type: "text_delta", text: delta.content }
-             })}\n\n`));
-          }
-          
-          if (delta?.tool_calls && delta.tool_calls.length > 0) {
-             hasToolCalls = true;
-             for (const tc of delta.tool_calls) {
-               if (tc.function?.name) {
-                 controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                   type: "content_block_start",
-                   content_block: {
-                     type: "tool_use",
-                     id: tc.id || "call_" + Date.now(),
-                     name: tc.function.name,
-                     ...(tc.extra_content ? { extra_content: tc.extra_content } : {})
-                   }
-                 })}\n\n`));
-               }
-               if (tc.extra_content && !tc.function?.name) {
-                 controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                   type: "content_block_extra",
-                   extra_content: tc.extra_content
-                 })}\n\n`));
-               }
-               if (tc.function?.arguments) {
-                 controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                   type: "content_block_delta",
-                   delta: { type: "input_json_delta", partial_json: tc.function.arguments }
-                 })}\n\n`));
-               }
-             }
-          }
-          
-          if (finishReason) {
-              const stopReason = (finishReason === "tool_calls" || (finishReason === "stop" && hasToolCalls))
-                ? "tool_use"
-                : finishReason === "stop"
-                ? "end_turn"
-                : finishReason;
-              
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                type: "content_block_stop"
-              })}\n\n`));
-              
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                type: "message_delta",
-                delta: { stop_reason: stopReason }
-              })}\n\n`));
-           }
-        } catch {}
-      }
-    }
-  });
+  const transformStream = createOpenAiToAnthropicTransform();
 
   return new Response(withIdleTimeout(providerStream).pipeThrough(transformStream), {
     headers: {
@@ -384,5 +295,120 @@ export async function streamOpenAiCompatible({
       "Cache-Control": "no-store, no-cache, max-age=0",
       "Connection": "keep-alive",
     }
+  });
+}
+
+export function createOpenAiToAnthropicTransform(): TransformStream<Uint8Array, Uint8Array> {
+  let buffer = "";
+  let hasToolCalls = false;
+  let lastToolCallIndex = 0;
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  const processLine = (line: string, controller: TransformStreamDefaultController<Uint8Array>) => {
+    if (!line.startsWith("data: ")) return;
+    const data = line.slice(6).trim();
+    if (!data) return;
+    if (data === "[DONE]") {
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      return;
+    }
+
+    try {
+      const event = JSON.parse(data);
+      if (event?.error) {
+        controller.error(new Error("The AI provider stopped responding. Please retry."));
+        return;
+      }
+      const delta = event.choices?.[0]?.delta;
+      const finishReason = event.choices?.[0]?.finish_reason;
+
+      if (delta?.reasoning_content) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: "thinking_delta",
+          text: delta.reasoning_content
+        })}\n\n`));
+      }
+
+      if (delta?.content) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: delta.content }
+        })}\n\n`));
+      }
+
+      if (delta?.tool_calls && delta.tool_calls.length > 0) {
+        hasToolCalls = true;
+        for (const tc of delta.tool_calls) {
+          const tcIndex = typeof tc.index === "number" ? tc.index : lastToolCallIndex;
+          lastToolCallIndex = tcIndex;
+
+          if (tc.function?.name) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: "content_block_start",
+              index: tcIndex,
+              content_block: {
+                type: "tool_use",
+                id: tc.id || `call_${Date.now()}_${tcIndex}`,
+                name: tc.function.name,
+                ...(tc.extra_content ? { extra_content: tc.extra_content } : {})
+              }
+            })}\n\n`));
+          }
+          if (tc.extra_content && !tc.function?.name) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: "content_block_extra",
+              index: tcIndex,
+              extra_content: tc.extra_content
+            })}\n\n`));
+          }
+          if (tc.function?.arguments) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: "content_block_delta",
+              index: tcIndex,
+              delta: { type: "input_json_delta", partial_json: tc.function.arguments }
+            })}\n\n`));
+          }
+        }
+      }
+
+      if (finishReason) {
+        const stopReason = (finishReason === "tool_calls" || (finishReason === "stop" && hasToolCalls))
+          ? "tool_use"
+          : finishReason === "stop"
+          ? "end_turn"
+          : finishReason;
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: "content_block_stop"
+        })}\n\n`));
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: "message_delta",
+          delta: { stop_reason: stopReason }
+        })}\n\n`));
+      }
+    } catch {}
+  };
+
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        processLine(line, controller);
+      }
+    },
+    flush(controller) {
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        for (const line of buffer.split("\n")) {
+          processLine(line, controller);
+        }
+      }
+      buffer = "";
+    },
   });
 }

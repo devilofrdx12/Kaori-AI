@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, requireAjax } from "../../lib/auth-utils";
 import { createStructuredMemory } from "../../lib/memory/service";
+import { readJsonBodyWithLimit, RequestBodyError } from "../../lib/request-body";
 import { validateMemoryInput } from "../../lib/validation";
 import { logger } from "../../lib/logger";
 
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     requireAjax(req);
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const body = await req.json().catch(() => ({}));
+    const body = await readJsonBodyWithLimit(req, 512 * 1024);
     const records = Array.isArray(body.memories) ? body.memories.slice(0, 200) : [];
     if (!records.length) return NextResponse.json({ error: "No memories to import" }, { status: 400 });
     let imported = 0;
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, imported });
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     logger.warn({ error }, "Memory import failed");
     return NextResponse.json({ error: "Memory import failed. Check the file format and try again." }, { status: 400 });
   }

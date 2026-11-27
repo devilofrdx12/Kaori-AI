@@ -11,8 +11,16 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 
 const RESET_CODE_TTL_SECONDS = 10 * 60;
+const MIN_RESPONSE_WINDOW_MS = 350;
 const PASSWORD_RESET_MESSAGE =
   "If an account with that email exists, we have sent a password reset code.";
+
+async function waitRemainingWindow(startedAt: number, minMs = MIN_RESPONSE_WINDOW_MS) {
+  const remaining = minMs - (Date.now() - startedAt);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+  }
+}
 
 function buildResetUrl(req: Request, email: string) {
   const resetUrl = buildTrustedAppUrl("/reset-password", req);
@@ -55,13 +63,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const startedAt = Date.now();
     const user = await findUserByEmail(email);
 
     // SECURITY: Enumeration prevention with timing-attack mitigation.
-    // When the user doesn't exist we add a random delay to make the
-    // response time indistinguishable from the "user found" path.
+    // Enforce a consistent minimum response window across both branches.
     if (!user) {
-      await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
+      await waitRemainingWindow(startedAt);
       return NextResponse.json({ message: PASSWORD_RESET_MESSAGE });
     }
 
@@ -80,8 +88,9 @@ export async function POST(req: NextRequest) {
     });
 
     const resetUrl = buildResetUrl(req, email);
-    
+
     await sendPasswordResetEmail(user.email, otp, resetUrl);
+    await waitRemainingWindow(startedAt);
 
     return NextResponse.json({ message: PASSWORD_RESET_MESSAGE });
   } catch (error) {

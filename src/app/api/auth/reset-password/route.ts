@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findUserByEmail, findPasswordResetTokenByHash, deletePasswordResetToken, updateUserPassword, deleteUserRefreshTokens } from "../../../api/lib/db";
+import {
+  findUserByEmail,
+  findPasswordResetTokenByHash,
+  deletePasswordResetToken,
+  consumePasswordResetToken,
+  updateUserPassword,
+  markUserEmailVerified,
+  deleteUserRefreshTokens,
+} from "../../../api/lib/db";
 import { checkPasswordResetRateLimit } from "../../../api/lib/rate-limit";
 import { validateEmail, validatePassword } from "../../../api/lib/validation";
 import { getClientIp, hashPasswordResetCode, requireAjax } from "../../../api/lib/auth-utils";
@@ -71,9 +79,12 @@ export async function POST(req: NextRequest) {
 
     const newPasswordHash = await bcrypt.hash(password, 12);
 
-    await updateUserPassword(tokenRecord.user_id, newPasswordHash);
+    if (!(await consumePasswordResetToken(tokenRecord.id))) {
+      return NextResponse.json({ error: INVALID_CODE_MESSAGE }, { status: 400 });
+    }
 
-    await deletePasswordResetToken(tokenRecord.id);
+    await updateUserPassword(tokenRecord.user_id, newPasswordHash);
+    await markUserEmailVerified(tokenRecord.user_id);
 
     // SECURITY: Invalidate all existing sessions so the user
     // must log in again with the new password everywhere.

@@ -55,6 +55,39 @@ async function fileToDataUrl(
   return { url: data, name: file.name, type, data, detail };
 }
 
+function mergeCouncilStatus(previous: CouncilStatus, status: NonNullable<CouncilStatus>): CouncilStatus {
+  const models = status.models || previous?.models?.map((m) =>
+    m.model === status.model ? { ...m, status: status.status || m.status } : m
+  );
+  const activities = [...(previous?.activities ?? [])];
+  for (const activity of [...(status.activities ?? []), ...(status.activity ? [status.activity] : [])]) {
+    const index = activities.findIndex((item) => item.id === activity.id);
+    if (index === -1) activities.push(activity);
+    else activities[index] = activity;
+  }
+  return { ...previous, ...status, models, activities };
+}
+
+function finalizeCouncilStatus(previous: CouncilStatus, outcome: "complete" | "error"): CouncilStatus {
+  if (!previous) return null;
+  if (outcome === "complete") {
+    return {
+      ...previous,
+      phase: "complete",
+      progress: 100,
+      message: "Council complete — drafts and peer-review notes remain available below.",
+      models: previous.models?.map((participant) =>
+        participant.status === "unavailable" ? participant : { ...participant, status: "ready" }
+      ),
+    };
+  }
+  return {
+    ...previous,
+    phase: "error",
+    message: "Council stopped before finishing. Completed drafts and reviews remain available below.",
+  };
+}
+
 export default function ActiveChatArea({
   activeChat,
   model,
@@ -169,6 +202,7 @@ export default function ActiveChatArea({
         role: "user",
         content: text,
         files: mappedFiles,
+        featureMode,
         timestamp: new Date().toISOString(),
       };
       updateChat(activeChat.id, (c) => ({
@@ -261,18 +295,7 @@ export default function ActiveChatArea({
           setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
         },
-        onCouncilStatus: (status) => setCouncilStatus((previous) => {
-          const models = status.models || previous?.models?.map((model) =>
-            model.model === status.model ? { ...model, status: status.status || model.status } : model
-          );
-          const activities = [...(previous?.activities ?? [])];
-          for (const activity of [...(status.activities ?? []), ...(status.activity ? [status.activity] : [])]) {
-            const index = activities.findIndex((item) => item.id === activity.id);
-            if (index === -1) activities.push(activity);
-            else activities[index] = activity;
-          }
-          return { ...previous, ...status, models, activities };
-        }),
+        onCouncilStatus: (status) => setCouncilStatus((previous) => mergeCouncilStatus(previous, status)),
         onDone: () => {
           const assistantMsg: ChatMessage = {
             id: `assistant-${Date.now()}`,
@@ -293,13 +316,7 @@ export default function ActiveChatArea({
           setToolInProgress(null);
           setToolResults([]);
           setConnectionStatus("online");
-          setCouncilStatus((previous) => previous ? {
-            ...previous,
-            phase: "complete",
-            progress: 100,
-            message: "Council complete — drafts and peer-review notes remain available below.",
-            models: previous.models?.map((participant) => participant.status === "unavailable" ? participant : { ...participant, status: "ready" }),
-          } : null);
+          setCouncilStatus((previous) => finalizeCouncilStatus(previous, "complete"));
           abortRef.current = null;
         },
         onError: (error) => {
@@ -321,11 +338,7 @@ export default function ActiveChatArea({
           setStreamingText("");
           setStreamingThinking("");
           setToolInProgress(null);
-          setCouncilStatus((previous) => previous ? {
-            ...previous,
-            phase: "error",
-            message: "Council stopped before finishing. Completed drafts and reviews remain available below.",
-          } : null);
+          setCouncilStatus((previous) => finalizeCouncilStatus(previous, "error"));
           setConnectionStatus("online");
           abortRef.current = null;
         },
@@ -337,11 +350,19 @@ export default function ActiveChatArea({
     }
   }
 
-  async function handleEditSend(messageId: string, text: string, retryFiles?: UploadFile[]) {
+  async function handleEditSend(
+    messageId: string,
+    text: string,
+    retryFiles?: UploadFile[],
+    featureMode?: ChatFeatureMode
+  ) {
     if (!text && !retryFiles?.length) return;
 
     const msgIndex = activeChat.messages.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
+
+    const existingMsg = activeChat.messages[msgIndex];
+    const resolvedFeatureMode: ChatFeatureMode = featureMode ?? existingMsg.featureMode ?? "auto";
 
     const newMessages = activeChat.messages.slice(0, msgIndex);
     const editedMsg: ChatMessage = {
@@ -349,6 +370,7 @@ export default function ActiveChatArea({
       role: "user",
       content: text,
       files: retryFiles,
+      featureMode: resolvedFeatureMode,
       timestamp: new Date().toISOString(),
     };
     newMessages.push(editedMsg);
@@ -365,6 +387,7 @@ export default function ActiveChatArea({
     setToolInProgress(null);
     setToolResults([]);
     setActionProposals([]);
+    setCouncilStatus(null);
     setConnectionStatus("online");
 
     const controller = new AbortController();
@@ -384,7 +407,7 @@ export default function ActiveChatArea({
         files: retryFiles,
         editMessageId: messageId,
         studyMode,
-        featureMode: "auto" as const,
+        featureMode: resolvedFeatureMode,
         signal: controller.signal,
         onConnectionStatus: (status) => setConnectionStatus(status),
         onResetStream: () => {
@@ -420,6 +443,7 @@ export default function ActiveChatArea({
           setToolResults((prev) => [...prev, { tool, result, input }]);
           setToolInProgress(null);
         },
+        onCouncilStatus: (status) => setCouncilStatus((previous) => mergeCouncilStatus(previous, status)),
         onDone: () => {
           const assistantMsg: ChatMessage = {
             id: `asst-${Date.now()}`,
@@ -438,6 +462,7 @@ export default function ActiveChatArea({
           setStreamingThinking("");
           setToolInProgress(null);
           setToolResults([]);
+          setCouncilStatus((previous) => finalizeCouncilStatus(previous, "complete"));
           setConnectionStatus("online");
           abortRef.current = null;
         },
@@ -460,6 +485,7 @@ export default function ActiveChatArea({
           setStreamingText("");
           setStreamingThinking("");
           setToolInProgress(null);
+          setCouncilStatus((previous) => finalizeCouncilStatus(previous, "error"));
           setConnectionStatus("online");
           abortRef.current = null;
         },
@@ -506,7 +532,7 @@ export default function ActiveChatArea({
         toolResults={toolResults}
         connectionStatus={connectionStatus}
         onEditSubmit={handleEditSend}
-        onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files)}
+        onRetryMessage={(message) => void handleEditSend(message.id, message.content, message.files, message.featureMode)}
         streamingText={streamingText}
         streamingThinking={streamingThinking}
         councilStatus={councilStatus}
