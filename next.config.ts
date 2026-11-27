@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
+import os from "os";
 
 const isDevelopment = process.env.NODE_ENV === "development";
+
+function getDevNetworkOrigins(): string[] {
+  if (!isDevelopment) return [];
+  const origins = new Set<string>(["localhost", "127.0.0.1"]);
+  const nets = os.networkInterfaces();
+  for (const entries of Object.values(nets)) {
+    for (const entry of entries ?? []) {
+      if (entry.family === "IPv4" && !entry.internal && entry.address) {
+        origins.add(entry.address);
+      }
+    }
+  }
+  return Array.from(origins);
+}
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
@@ -41,6 +56,7 @@ if (!isDevelopment) {
 }
 
 const nextConfig: NextConfig = {
+  ...(isDevelopment ? { allowedDevOrigins: getDevNetworkOrigins() } : {}),
   experimental: {
     agentUpgrade: "security",
   },

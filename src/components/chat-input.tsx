@@ -421,21 +421,21 @@ export default function ChatInput({
             onPaste={handlePaste}
             placeholder={isDragging ? "Drop images here..." : (placeholder || "Reply to Kaori")}
             rows={1}
-            className={`w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-4 sm:px-5 pb-2 min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70 caret-[hsl(var(--primary))] transition-[height] duration-500 ease-[cubic-bezier(0.2,1.2,0.4,1)] will-change-[height] ${filePreviews.length > 0 ? "pt-2" : "pt-4 sm:pt-5"}`}
+            className={`w-full resize-none bg-transparent text-[15px] text-on-surface placeholder:text-secondary outline-none px-3.5 sm:px-5 pb-1.5 sm:pb-2 min-h-[44px] sm:min-h-[54px] max-h-[180px] leading-relaxed font-body disabled:cursor-not-allowed disabled:opacity-70 caret-[hsl(var(--primary))] transition-[height] duration-500 ease-[cubic-bezier(0.2,1.2,0.4,1)] will-change-[height] ${filePreviews.length > 0 ? "pt-2" : "pt-3 sm:pt-5"}`}
             disabled={disabled}
           />
 
           {/* Bottom Toolbar */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full flex-wrap">
+          <div className="flex items-center justify-between gap-1 sm:gap-2 px-2 sm:px-3 pb-2 sm:pb-3 w-full">
             {/* Left: attach + model */}
-            <div className="flex items-center gap-1 min-w-0 flex-1 flex-wrap">
+            <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 flex-1">
               <div ref={featureMenuRef} className="relative z-30 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowFeatureMenu((open) => !open)}
                   aria-expanded={showFeatureMenu}
                   aria-haspopup="menu"
-                  className={`h-10 w-10 grid place-items-center rounded-[1.25rem] hover-lift active-press ${showFeatureMenu || featureMode !== "auto" ? "text-primary bg-primary/10" : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"}`}
+                  className={`h-9 w-9 sm:h-10 sm:w-10 grid place-items-center rounded-[1.25rem] hover-lift active-press ${showFeatureMenu || featureMode !== "auto" ? "text-primary bg-primary/10" : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"}`}
                   title="Add files or choose a feature"
                 >
                   <Plus size={20} strokeWidth={1.5} className={`transition-transform ${showFeatureMenu ? "rotate-45" : ""}`} />
@@ -495,7 +495,7 @@ export default function ChatInput({
                 </button>
               ) : null}
 
-              <div className="relative z-10 min-w-0 ml-1 max-w-[calc(100vw-7.5rem)] sm:max-w-none">
+              <div className="relative z-10 min-w-0 flex-1 sm:flex-initial max-w-[145px] sm:max-w-none">
                 <ModelSelector
                   model={model}
                   onChange={onModelChange}
@@ -513,7 +513,7 @@ export default function ChatInput({
                     aria-haspopup="menu"
                     aria-label="Thinking cap"
                     title="Switch thinking cap depth"
-                    className="flex min-w-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-white/55 dark:border-white/10 bg-white/45 dark:bg-white/[0.05] backdrop-blur-md hover:bg-white/70 dark:hover:bg-white/10 text-secondary transition-all duration-200 active:scale-95"
+                    className="flex min-w-0 items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium border border-white/55 dark:border-white/10 bg-white/45 dark:bg-white/[0.05] backdrop-blur-md hover:bg-white/70 dark:hover:bg-white/10 text-secondary transition-all duration-200 active:scale-95"
                   >
                     <BrainCircuit
                       size={13}
@@ -593,7 +593,7 @@ export default function ChatInput({
             </div>
 
             {/* Right: voice + send */}
-            <div className="flex items-center gap-1 shrink-0 ml-auto self-end sm:self-auto">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
               <div ref={langMenuRef} className="relative hidden sm:block mr-1 z-20">
                 <button
                   onClick={() => setShowLangMenu(!showLangMenu)}
@@ -630,7 +630,7 @@ export default function ChatInput({
 
               <button
                 onClick={startVoice}
-                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${listening
+                className={`h-9 w-9 sm:h-10 sm:w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${listening
                     ? "text-red-400 bg-red-400/10 animate-pulse"
                     : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"
                   }`}
@@ -640,7 +640,7 @@ export default function ChatInput({
               </button>
               <button
                 onClick={toggleVoiceMode}
-                className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${voiceMode
+                className={`h-9 w-9 sm:h-10 sm:w-10 shrink-0 grid place-items-center rounded-[1.25rem] hover-lift active-press ${voiceMode
                     ? "text-green-400 bg-green-400/10 animate-pulse"
                     : "text-secondary hover:text-on-surface hover:bg-white/60 dark:hover:bg-white/10"
                   }`}
@@ -649,12 +649,12 @@ export default function ChatInput({
                 <AudioLines size={18} strokeWidth={1.5} />
               </button>
 
-              <div className="w-px h-6 bg-white/40 dark:bg-white/10 mx-1" />
+              <div className="w-px h-5 sm:h-6 bg-white/40 dark:bg-white/10 mx-0.5 sm:mx-1" />
 
               {disabled ? (
                 <button
                   onClick={onStop}
-                  className="h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] bg-white/55 dark:bg-white/10 text-secondary hover-lift active-press"
+                  className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 grid place-items-center rounded-[1.25rem] bg-white/55 dark:bg-white/10 text-secondary hover-lift active-press"
                   title="Stop generating"
                 >
                   <Square size={14} className="fill-current" />
@@ -663,7 +663,7 @@ export default function ChatInput({
                 <button
                   onClick={handleSend}
                   disabled={disabled || (!value.trim() && !files.length)}
-                  className={`h-10 w-10 shrink-0 grid place-items-center rounded-[1.25rem] transition-all duration-300 ${(!value.trim() && !files.length) || disabled
+                  className={`h-9 w-9 sm:h-10 sm:w-10 shrink-0 grid place-items-center rounded-[1.25rem] transition-all duration-300 ${(!value.trim() && !files.length) || disabled
                       ? "bg-neutral-200 dark:bg-white/5 text-secondary/50 cursor-not-allowed"
                       : "bg-primary text-white shadow-sm hover-lift active-press animate-breathe"
                     }`}

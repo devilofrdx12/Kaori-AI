@@ -41,7 +41,7 @@ export default function ModelSelector({
         onClick={() => setOpen(!open)}
         className={
           minimal
-            ? `flex min-w-0 items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 max-w-[170px] active:scale-95 ${
+            ? `flex w-full min-w-0 items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 max-w-full sm:max-w-[170px] active:scale-95 ${
                 open
                   ? "border-white/55 dark:border-white/10 bg-white/55 dark:bg-white/10 backdrop-blur-md text-on-surface"
                   : "border-transparent text-secondary hover:text-on-surface hover:border-white/55 dark:hover:border-white/10 hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-md"

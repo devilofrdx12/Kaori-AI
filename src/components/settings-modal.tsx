@@ -724,7 +724,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                               </div>
                             </div>
                             <div
-                              className="grid grid-cols-5 gap-1 rounded-xl border border-white/40 dark:border-white/10 bg-white/25 dark:bg-white/[0.04] backdrop-blur-md p-1"
+                              className="flex flex-wrap sm:grid sm:grid-cols-5 gap-1 rounded-xl border border-white/40 dark:border-white/10 bg-white/25 dark:bg-white/[0.04] backdrop-blur-md p-1"
                               role="radiogroup"
                               aria-label="Default thinking cap"
                             >
@@ -737,7 +737,7 @@ export default function SettingsModal({ isOpen, onClose }: Props) {
                                     role="radio"
                                     aria-checked={selected}
                                     onClick={() => handleThinkingCapChange(opt.id)}
-                                    className={`rounded-lg px-2 py-1.5 text-xs font-medium transition-all ${
+                                    className={`flex-1 min-w-[4.75rem] sm:min-w-0 whitespace-nowrap rounded-lg px-2.5 sm:px-2 py-1.5 text-xs font-medium transition-all ${
                                       selected
                                         ? "bg-white/75 dark:bg-white/15 shadow-sm"
                                         : "text-neutral-600 dark:text-neutral-400 hover:bg-white/40 dark:hover:bg-white/[0.06] hover:text-neutral-900 dark:hover:text-neutral-100"
